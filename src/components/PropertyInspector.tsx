@@ -2,11 +2,12 @@
 
 import { useEditorStore } from "@/store/editorStore";
 import { AnimationData, ActionData, CONTAINER_TYPES, ElementNode } from "@/types";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
     Eye, EyeOff, Lock, Unlock, Copy, Trash2, ChevronRight,
     AlignLeft, AlignCenter, AlignRight, AlignJustify,
 } from "lucide-react";
+import AnimationPanel from "./AnimationPanel";
 
 const FONT_FAMILIES = [
     "Inter", "Roboto", "Playfair Display", "Montserrat", "Open Sans",
@@ -1556,60 +1557,24 @@ const PropertyInspector: React.FC = () => {
 
                 {/* ─── ANIMATE TAB ─── */}
                 {activeTab === "animate" && (
-                    <Section title="Animation">
-                        <Field label="Type">
-                            <select
-                                value={el.animation?.type || "none"}
-                                onChange={(e) =>
-                                    setAnim({
-                                        type: e.target.value as AnimationData["type"],
-                                        duration: el.animation?.duration || 0.3,
-                                        delay: el.animation?.delay || 0,
-                                    })
-                                }
-                            >
-                                {["none", "fade", "slide", "scale", "bounce"].map((t) => (
-                                    <option key={t} value={t}>{t}</option>
-                                ))}
-                            </select>
-                        </Field>
-                        {el.animation?.type && el.animation.type !== "none" && (
-                            <>
-                                <Field label="Duration (s)">
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        min="0.1"
-                                        max="5"
-                                        value={el.animation?.duration || 0.3}
-                                        onChange={(e) =>
-                                            setAnim({
-                                                type: el.animation?.type || "fade",
-                                                duration: parseFloat(e.target.value) || 0.3,
-                                                delay: el.animation?.delay || 0,
-                                            })
-                                        }
-                                    />
-                                </Field>
-                                <Field label="Delay (s)">
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        min="0"
-                                        max="5"
-                                        value={el.animation?.delay || 0}
-                                        onChange={(e) =>
-                                            setAnim({
-                                                type: el.animation?.type || "fade",
-                                                duration: el.animation?.duration || 0.3,
-                                                delay: parseFloat(e.target.value) || 0,
-                                            })
-                                        }
-                                    />
-                                </Field>
-                            </>
-                        )}
-                    </Section>
+                    <AnimationPanel
+                        elementId={el.id}
+                        elementType={el.type}
+                        animation={el.animation}
+                        onUpdate={(anim) => setAnim(anim)}
+                        onRemove={() => updateElement(el.id, { animation: { type: "none", trigger: "onLoad", duration: 0.3, delay: 0, easing: "ease-out", iterationCount: 1, direction: "normal", fillMode: "none" } })}
+                        onPreview={() => {
+                            const domEl = document.querySelector(`[data-element-id="${el.id}"]`) as HTMLElement | null;
+                            if (domEl && el.animation && el.animation.type !== "none") {
+                                const a = el.animation;
+                                domEl.style.animation = "none";
+                                void domEl.offsetHeight;
+                                const iterCount = a.iterationCount === "infinite" ? "infinite" : String(a.iterationCount ?? 1);
+                                domEl.style.animation = `${a.type} ${a.duration}s ${a.easing} ${a.delay}s ${iterCount} ${a.direction} ${a.fillMode}`;
+                                setTimeout(() => { domEl.style.animation = ""; }, (a.duration + a.delay + 0.5) * 1000);
+                            }
+                        }}
+                    />
                 )}
             </div>
         </div>
