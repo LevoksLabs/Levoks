@@ -17,6 +17,11 @@ const FloatingToolbar: React.FC = () => {
     const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
     const toolbarRef = useRef<HTMLDivElement>(null);
 
+    // Inline text editing state
+    const [isEditing, setIsEditing] = useState(false);
+    const [editValue, setEditValue] = useState("");
+    const editInputRef = useRef<HTMLInputElement>(null);
+
     const updatePosition = useCallback(() => {
         if (!selectedElementId) {
             setPosition(null);
@@ -71,6 +76,19 @@ const FloatingToolbar: React.FC = () => {
         };
     }, [updatePosition]);
 
+    // Close editing when selection changes
+    useEffect(() => {
+        setIsEditing(false);
+    }, [selectedElementId]);
+
+    // Focus the input when editing starts
+    useEffect(() => {
+        if (isEditing && editInputRef.current) {
+            editInputRef.current.focus();
+            editInputRef.current.select();
+        }
+    }, [isEditing]);
+
     if (!selectedElementId || !position) return null;
     const el = getElement(selectedElementId);
     if (!el) return null;
@@ -80,6 +98,25 @@ const FloatingToolbar: React.FC = () => {
         el.type === "title" ||
         el.type === "paragraph" ||
         el.type === "button";
+
+    const textKey = el.type === "button" ? "label" : "content";
+    const currentText = String(el.props[textKey] || "");
+
+    const startEditing = () => {
+        setEditValue(currentText);
+        setIsEditing(true);
+    };
+
+    const commitEdit = () => {
+        if (editValue !== currentText) {
+            updateElement(el.id, { props: { ...el.props, [textKey]: editValue } });
+        }
+        setIsEditing(false);
+    };
+
+    const cancelEdit = () => {
+        setIsEditing(false);
+    };
 
     return (
         <div
@@ -91,20 +128,40 @@ const FloatingToolbar: React.FC = () => {
                 transform: "translateX(-50%)",
             }}
         >
-            {hasText && (
+            {hasText && !isEditing && (
                 <button
                     className="ft-btn ft-primary"
-                    onClick={() => {
-                        const key = el.type === "button" ? "label" : "content";
-                        const current = String(el.props[key] || "");
-                        const newText = prompt("Edit text:", current);
-                        if (newText !== null) {
-                            updateElement(el.id, { props: { ...el.props, [key]: newText } });
-                        }
-                    }}
+                    onClick={startEditing}
                 >
                     Change Text
                 </button>
+            )}
+            {hasText && isEditing && (
+                <div className="ft-inline-edit" onClick={(e) => e.stopPropagation()}>
+                    <input
+                        ref={editInputRef}
+                        type="text"
+                        className="ft-inline-input"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") commitEdit();
+                            if (e.key === "Escape") cancelEdit();
+                            e.stopPropagation();
+                        }}
+                        onBlur={commitEdit}
+                    />
+                    <button className="ft-btn ft-confirm" onClick={commitEdit} title="Confirm">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <path d="M3 8l3.5 3.5L13 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    </button>
+                    <button className="ft-btn ft-cancel-edit" onClick={cancelEdit} title="Cancel">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        </svg>
+                    </button>
+                </div>
             )}
             <button
                 className="ft-btn"

@@ -746,20 +746,33 @@ const Canvas: React.FC = () => {
                     onPointerDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        const target = e.currentTarget;
+                        target.setPointerCapture(e.pointerId);
                         setIsResizingHeight(true);
-                        resizeStartY.current = e.clientY;
-                        resizeStartH.current = pendingHeight ?? canvasHeight;
+                        const startY = e.clientY;
+                        const startH = pendingHeight ?? canvasHeight;
+                        const scale = zoom / 100;
+                        let raf = 0;
+                        let latestY = e.clientY;
+                        const update = () => {
+                            const dy = (latestY - startY) / scale;
+                            setPendingHeight(Math.max(200, Math.round(startH + dy)));
+                        };
                         const onMove = (ev: PointerEvent) => {
-                            const dy = (ev.clientY - resizeStartY.current) / (zoom / 100);
-                            setPendingHeight(Math.max(200, Math.round(resizeStartH.current + dy)));
+                            latestY = ev.clientY;
+                            cancelAnimationFrame(raf);
+                            raf = requestAnimationFrame(update);
                         };
                         const onUp = () => {
+                            cancelAnimationFrame(raf);
+                            update();
                             setIsResizingHeight(false);
-                            window.removeEventListener("pointermove", onMove);
-                            window.removeEventListener("pointerup", onUp);
+                            target.releasePointerCapture(e.pointerId);
+                            target.removeEventListener("pointermove", onMove);
+                            target.removeEventListener("pointerup", onUp);
                         };
-                        window.addEventListener("pointermove", onMove);
-                        window.addEventListener("pointerup", onUp);
+                        target.addEventListener("pointermove", onMove);
+                        target.addEventListener("pointerup", onUp);
                     }}
                 >
                     <div className="canvas-height-handle-bar" />

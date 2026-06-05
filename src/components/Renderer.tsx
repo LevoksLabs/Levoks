@@ -115,14 +115,15 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ elementId, isRoot, re
     // ─── Animation support ───
     const anim = element.animation;
     const hasAnim = anim && anim.type !== "none";
+    const isTypewriter = hasAnim && anim.type === "typewriter";
 
     const buildAnimStr = useCallback(() => {
-        if (!anim || anim.type === "none") return "";
+        if (!anim || anim.type === "none" || anim.type === "typewriter") return "";
         const iter = anim.iterationCount === "infinite" ? "infinite" : String(anim.iterationCount ?? 1);
         return `${anim.type} ${anim.duration}s ${anim.easing} ${anim.delay}s ${iter} ${anim.direction} ${anim.fillMode}`;
     }, [anim]);
 
-    if (hasAnim && (anim.trigger === "onLoad" || anim.trigger === "continuous")) {
+    if (hasAnim && !isTypewriter && (anim.trigger === "onLoad" || anim.trigger === "continuous")) {
         mergedStyles.animation = buildAnimStr();
     }
 
@@ -186,9 +187,9 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ elementId, isRoot, re
                 textTransform: (element.styles.textTransform as React.CSSProperties["textTransform"]) || "none", letterSpacing: String(element.styles.letterSpacing || "normal"),
                 padding: String(element.styles.padding || "0")
             }}>{String(element.props.label || "Button")}</button>;
-            case "image": return <img src={String(element.props.src || "")} alt={String(element.props.alt || "")} style={{
+            case "image": return <img draggable={false} src={String(element.props.src || "")} alt={String(element.props.alt || "")} style={{
                 width: "100%", height: "100%", objectFit: (String(element.props.objectFit || "cover")) as React.CSSProperties["objectFit"],
-                borderRadius: String(element.styles.borderRadius || "0")
+                borderRadius: String(element.styles.borderRadius || "0"), pointerEvents: "none",
             }} />;
             case "video": return <div className="video-placeholder"><span className="video-icon">▶</span><span>Video Player</span>
                 <span className="video-meta">{element.props.autoplay ? "Autoplay" : ""} {element.props.loop ? "• Loop" : ""} {element.props.muted ? "• Muted" : ""}</span></div>;
@@ -274,6 +275,104 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ elementId, isRoot, re
 
         const cleanups: (() => void)[] = [];
 
+        // ─── Typewriter effect (JS-driven) ───
+        if (isTypewriter) {
+            const textNode = node.querySelector(".el-text-inner, .el-title-inner, .el-paragraph-inner") as HTMLElement | null;
+            if (!textNode) return;
+
+            const fullText = String(element.props.content || "");
+            const speed = anim.textSpeed ?? 50; // ms per character
+            const delay = (anim.delay ?? 0) * 1000;
+
+            let timerId: ReturnType<typeof setTimeout> | null = null;
+            let rafId: number | null = null;
+            let cancelled = false;
+
+            const runTypewriter = () => {
+                if (cancelled) return;
+                let idx = 0;
+                textNode.style.borderRight = "2px solid currentColor";
+                textNode.style.animation = "typewriterCursor 0.7s step-end infinite";
+                textNode.textContent = "";
+
+                const typeNext = () => {
+                    if (cancelled) return;
+                    if (idx <= fullText.length) {
+                        textNode.textContent = fullText.slice(0, idx);
+                        idx++;
+                        timerId = setTimeout(typeNext, speed);
+                    } else {
+                        // Remove cursor after typing finishes
+                        setTimeout(() => {
+                            if (!cancelled) {
+                                textNode.style.borderRight = "";
+                                textNode.style.animation = "";
+                            }
+                        }, 1500);
+                    }
+                };
+                typeNext();
+            };
+
+            const resetText = () => {
+                if (timerId) clearTimeout(timerId);
+                textNode.textContent = fullText;
+                textNode.style.borderRight = "";
+                textNode.style.animation = "";
+            };
+
+            if (anim.trigger === "onLoad" || anim.trigger === "continuous") {
+                timerId = setTimeout(runTypewriter, delay);
+            }
+
+            if (anim.trigger === "onHover") {
+                const onEnter = () => {
+                    resetText();
+                    runTypewriter();
+                };
+                node.addEventListener("mouseenter", onEnter);
+                cleanups.push(() => node.removeEventListener("mouseenter", onEnter));
+            }
+
+            if (anim.trigger === "onClick") {
+                const onClick = () => {
+                    resetText();
+                    runTypewriter();
+                };
+                node.addEventListener("click", onClick);
+                cleanups.push(() => node.removeEventListener("click", onClick));
+            }
+
+            if (anim.trigger === "onScroll") {
+                const observer = new IntersectionObserver(
+                    (entries) => {
+                        entries.forEach((entry) => {
+                            if (entry.isIntersecting) {
+                                runTypewriter();
+                                observer.unobserve(node);
+                            }
+                        });
+                    },
+                    { threshold: (anim.scrollOffset ?? 20) / 100 }
+                );
+                observer.observe(node);
+                cleanups.push(() => observer.disconnect());
+            }
+
+            cleanups.push(() => {
+                cancelled = true;
+                if (timerId) clearTimeout(timerId);
+                if (rafId) cancelAnimationFrame(rafId);
+                // Restore full text
+                textNode.textContent = fullText;
+                textNode.style.borderRight = "";
+                textNode.style.animation = "";
+            });
+
+            return () => cleanups.forEach(fn => fn());
+        }
+
+        // ─── Standard CSS animation triggers ───
         if (anim.trigger === "onHover") {
             const onEnter = () => {
                 node.style.animation = "none";
@@ -316,7 +415,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ elementId, isRoot, re
         }
 
         return () => cleanups.forEach(fn => fn());
-    }, [hasAnim, anim]);
+    }, [hasAnim, anim, isTypewriter, element.props.content]);
 
     const setRef = useCallback((node: HTMLDivElement | null) => {
         (elRef as React.MutableRefObject<HTMLDivElement | null>).current = node;

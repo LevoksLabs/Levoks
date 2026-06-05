@@ -203,6 +203,172 @@ const ColorControl: React.FC<{
     );
 };
 
+// ─── Shadow Control (AE-style light angle + distance) ───
+
+function parseShadowValue(raw: string, isText = false): { enabled: boolean; angle: number; distance: number; blur: number; spread: number; color: string } {
+    const defaults = { enabled: false, angle: 135, distance: 4, blur: 8, spread: 0, color: "rgba(0, 0, 0, 0.25)" };
+    const val = String(raw || "").trim();
+    if (!val || val === "none") return defaults;
+
+    // Try to parse: <offsetX> <offsetY> <blur> [<spread>] <color>
+    // or: <color> <offsetX> <offsetY> <blur> [<spread>]
+    // standard: offsetX offsetY blur [spread] color
+    const numRe = /-?\d+(?:\.\d+)?px/g;
+    const nums: number[] = [];
+    let match;
+    while ((match = numRe.exec(val)) !== null) {
+        nums.push(parseFloat(match[0]));
+    }
+    if (nums.length < 2) return { ...defaults, enabled: val !== "none" };
+
+    const offsetX = nums[0];
+    const offsetY = nums[1];
+    const blur = nums[2] ?? 0;
+    const spread = isText ? 0 : (nums[3] ?? 0);
+
+    // Extract color — everything after the px values
+    const colorMatch = val.match(/(rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}|\b[a-z]+\b)(?:\s*$)/i);
+    const color = colorMatch ? colorMatch[1] : defaults.color;
+
+    // Compute angle and distance from offsets
+    const distance = Math.round(Math.sqrt(offsetX * offsetX + offsetY * offsetY));
+    const angle = Math.round(((Math.atan2(offsetY, offsetX) * 180) / Math.PI + 360) % 360);
+
+    return { enabled: true, angle, distance, blur: Math.round(blur), spread: Math.round(spread), color };
+}
+
+function composeShadow(s: { enabled: boolean; angle: number; distance: number; blur: number; spread: number; color: string }, isText = false): string {
+    if (!s.enabled) return "none";
+    const rad = (s.angle * Math.PI) / 180;
+    const x = Math.round(Math.cos(rad) * s.distance);
+    const y = Math.round(Math.sin(rad) * s.distance);
+    if (isText) {
+        return `${x}px ${y}px ${s.blur}px ${s.color}`;
+    }
+    return `${x}px ${y}px ${s.blur}px ${s.spread}px ${s.color}`;
+}
+
+const ShadowControl: React.FC<{
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    isTextShadow?: boolean;
+}> = ({ label, value, onChange, isTextShadow = false }) => {
+    const shadow = parseShadowValue(value, isTextShadow);
+
+    const update = (patch: Partial<typeof shadow>) => {
+        const next = { ...shadow, ...patch };
+        onChange(composeShadow(next, isTextShadow));
+    };
+
+    const sliderBg = (val: number, min: number, max: number) => {
+        const pct = ((val - min) / (max - min)) * 100;
+        return { background: `linear-gradient(to right, var(--accent, #6366f1) ${pct}%, var(--bg-input, #2a2a35) ${pct}%)` };
+    };
+
+    // Extract hex for the color picker
+    const colorParsed = parseSolidColor(shadow.color, "#000000");
+
+    return (
+        <div className="shadow-control">
+            <div className="shadow-control-header">
+                <span className="shadow-control-label">{label}</span>
+                <label className="toggle-switch toggle-switch-sm">
+                    <input
+                        type="checkbox"
+                        checked={shadow.enabled}
+                        onChange={(e) => {
+                            if (e.target.checked) {
+                                update({ enabled: true });
+                            } else {
+                                onChange("none");
+                            }
+                        }}
+                    />
+                    <span className="toggle-slider" />
+                </label>
+            </div>
+
+            {shadow.enabled && (
+                <div className="shadow-control-body">
+                    {/* Angle dial + distance */}
+                    <div className="shadow-angle-row">
+                        <div className="shadow-angle-dial-wrap">
+                            <div
+                                className="shadow-angle-dial"
+                                onPointerDown={(e) => {
+                                    e.preventDefault();
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const cx = rect.left + rect.width / 2;
+                                    const cy = rect.top + rect.height / 2;
+                                    const calcAngle = (clientX: number, clientY: number) => {
+                                        const deg = Math.round(((Math.atan2(clientY - cy, clientX - cx) * 180) / Math.PI + 360) % 360);
+                                        update({ angle: deg });
+                                    };
+                                    calcAngle(e.clientX, e.clientY);
+                                    const onMove = (ev: PointerEvent) => calcAngle(ev.clientX, ev.clientY);
+                                    const onUp = () => {
+                                        window.removeEventListener("pointermove", onMove);
+                                        window.removeEventListener("pointerup", onUp);
+                                    };
+                                    window.addEventListener("pointermove", onMove);
+                                    window.addEventListener("pointerup", onUp);
+                                }}
+                            >
+                                <div
+                                    className="shadow-angle-indicator"
+                                    style={{ transform: `rotate(${shadow.angle}deg)` }}
+                                >
+                                    <div className="shadow-angle-dot" />
+                                </div>
+                            </div>
+                            <span className="shadow-angle-value">{shadow.angle}°</span>
+                        </div>
+                        <div className="shadow-sliders">
+                            <div className="shadow-slider-row">
+                                <span className="shadow-slider-label">Distance</span>
+                                <input type="range" min={0} max={50} step={1} value={shadow.distance} style={sliderBg(shadow.distance, 0, 50)} onChange={(e) => update({ distance: parseInt(e.target.value) })} className="anim-timing-slider" />
+                                <span className="shadow-slider-value">{shadow.distance}</span>
+                            </div>
+                            <div className="shadow-slider-row">
+                                <span className="shadow-slider-label">Blur</span>
+                                <input type="range" min={0} max={80} step={1} value={shadow.blur} style={sliderBg(shadow.blur, 0, 80)} onChange={(e) => update({ blur: parseInt(e.target.value) })} className="anim-timing-slider" />
+                                <span className="shadow-slider-value">{shadow.blur}</span>
+                            </div>
+                            {!isTextShadow && (
+                                <div className="shadow-slider-row">
+                                    <span className="shadow-slider-label">Spread</span>
+                                    <input type="range" min={-20} max={30} step={1} value={shadow.spread} style={sliderBg(shadow.spread, -20, 30)} onChange={(e) => update({ spread: parseInt(e.target.value) })} className="anim-timing-slider" />
+                                    <span className="shadow-slider-value">{shadow.spread}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    {/* Shadow Color */}
+                    <div className="shadow-color-row">
+                        <span className="shadow-slider-label">Color</span>
+                        <input
+                            type="color"
+                            className="color-swatch"
+                            value={colorParsed.hex}
+                            onChange={(e) => update({ color: toRgba(e.target.value, colorParsed.alpha) })}
+                        />
+                        <input
+                            type="range"
+                            className="anim-timing-slider"
+                            min={0} max={100} step={1}
+                            value={Math.round(colorParsed.alpha * 100)}
+                            style={sliderBg(colorParsed.alpha * 100, 0, 100)}
+                            onChange={(e) => update({ color: toRgba(colorParsed.hex, Number(e.target.value) / 100) })}
+                        />
+                        <span className="shadow-slider-value">{Math.round(colorParsed.alpha * 100)}%</span>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const PropertyInspector: React.FC = () => {
     const {
         selectedElementId, getElement, updateElement, deleteElement, duplicateElement,
@@ -792,22 +958,17 @@ const PropertyInspector: React.FC = () => {
 
                         {/* Shadow */}
                         <Section title="Shadow" defaultOpen={false}>
-                            <Field label="Box shadow">
-                                <input
-                                    type="text"
-                                    value={String(el.styles.boxShadow || "")}
-                                    onChange={(e) => setStyle("boxShadow", e.target.value)}
-                                    placeholder="none"
-                                />
-                            </Field>
-                            <Field label="Text shadow">
-                                <input
-                                    type="text"
-                                    value={String(el.styles.textShadow || "")}
-                                    onChange={(e) => setStyle("textShadow", e.target.value)}
-                                    placeholder="none"
-                                />
-                            </Field>
+                            <ShadowControl
+                                label="Box Shadow"
+                                value={String(el.styles.boxShadow || "")}
+                                onChange={(v) => setStyle("boxShadow", v)}
+                            />
+                            <ShadowControl
+                                label="Text Shadow"
+                                value={String(el.styles.textShadow || "")}
+                                onChange={(v) => setStyle("textShadow", v)}
+                                isTextShadow
+                            />
                         </Section>
 
                         {/* Spacing */}

@@ -6368,6 +6368,13 @@ body {
   background: var(--bg-input);
   outline: none;
   cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.anim-timing-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-input);
 }
 
 .anim-timing-slider::-webkit-slider-thumb {
@@ -6380,10 +6387,23 @@ body {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   cursor: pointer;
   transition: transform 100ms ease;
+  margin-top: -5px;
 }
 
 .anim-timing-slider::-webkit-slider-thumb:hover {
   transform: scale(1.2);
+}
+
+.anim-timing-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-input);
+}
+
+.anim-timing-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
 }
 
 .anim-timing-slider::-moz-range-thumb {
@@ -6663,32 +6683,40 @@ body {
 
 /* ─── Canvas Height Resize Handle ─── */
 .canvas-height-handle {
-  height: 18px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: ns-resize;
   opacity: 0;
   transition: opacity 0.2s ease;
-  margin-top: -1px;
+  margin-top: -2px;
   position: relative;
   z-index: 5;
+  touch-action: none;
+  user-select: none;
 }
+.canvas-page:hover ~ .canvas-height-handle,
 .canvas-height-handle:hover,
 .canvas-height-handle.active {
   opacity: 1;
 }
 .canvas-height-handle-bar {
   width: 48px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--accent, #6366f1);
-  transition: width 0.15s ease, background 0.15s ease;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(99, 102, 241, 0.5);
+  transition: width 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
-.canvas-height-handle:hover .canvas-height-handle-bar,
+.canvas-height-handle:hover .canvas-height-handle-bar {
+  width: 72px;
+  background: var(--accent, #6366f1);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
+}
 .canvas-height-handle.active .canvas-height-handle-bar {
-  width: 64px;
+  width: 96px;
   background: #818cf8;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
 }
 
 /* ─── Canvas Resize Save/Cancel Prompt ─── */
@@ -6800,3 +6828,183 @@ body {
 
 /* Typewriter cursor blink (used by typewriter animation) */
 @keyframes typewriterCursor { 0%, 100% { border-right-color: transparent; } 50% { border-right-color: currentColor; } }
+
+/* ======================== FLOATING TOOLBAR INLINE EDIT ======================== */
+
+.ft-inline-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ft-inline-input {
+  width: 160px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--accent, #6366f1);
+  border-radius: 5px;
+  background: var(--bg-input, #1e1e24);
+  color: var(--text-1, #f4f4f5);
+  font-size: 12px;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.ft-inline-input:focus {
+  border-color: var(--accent, #6366f1);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
+.ft-confirm {
+  color: #34d399 !important;
+}
+
+.ft-confirm:hover {
+  background: rgba(52, 211, 153, 0.15) !important;
+}
+
+.ft-cancel-edit {
+  color: var(--text-3, #71717a) !important;
+}
+
+.ft-cancel-edit:hover {
+  color: var(--red, #ef4444) !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
+/* ======================== SHADOW CONTROL ======================== */
+
+.shadow-control {
+  margin-bottom: 10px;
+}
+
+.shadow-control-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.shadow-control-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2, #a1a1aa);
+  letter-spacing: 0.2px;
+}
+
+.shadow-control-body {
+  padding: 10px;
+  border: 1px solid var(--border, #2e2e38);
+  border-radius: 8px;
+  background: var(--bg-elevated, #1a1a22);
+}
+
+.shadow-angle-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.shadow-angle-dial-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.shadow-angle-dial {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--border, #2e2e38);
+  background: var(--bg-input, #16161c);
+  position: relative;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.shadow-angle-dial:hover {
+  border-color: var(--accent, #6366f1);
+}
+
+.shadow-angle-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  transform-origin: 0% 50%;
+  margin-top: -1px;
+  pointer-events: none;
+}
+
+.shadow-angle-dot {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent, #6366f1);
+  box-shadow: 0 0 4px rgba(99, 102, 241, 0.5);
+}
+
+.shadow-angle-value {
+  font-size: 10px;
+  color: var(--text-3, #71717a);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.shadow-sliders {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shadow-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shadow-slider-label {
+  font-size: 10px;
+  color: var(--text-3, #71717a);
+  font-weight: 500;
+  min-width: 46px;
+  flex-shrink: 0;
+}
+
+.shadow-slider-value {
+  font-size: 10px;
+  color: var(--text-2, #a1a1aa);
+  font-weight: 500;
+  min-width: 24px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.shadow-color-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.shadow-color-row .color-swatch {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+/* Small toggle switch variant */
+.toggle-switch-sm {
+  transform: scale(0.8);
+  transform-origin: right center;
+}

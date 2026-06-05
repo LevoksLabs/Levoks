@@ -44,13 +44,12 @@ export const DEFAULT_STYLES: Record<ElementType, Record<string, string | number>
     section: {
         padding: "40px 20px",
         minHeight: "120px",
-        backgroundColor: "#ffffff",
+        backgroundColor: "rgba(241, 245, 249, 0.6)",
     },
     container: {
         padding: "20px",
         minHeight: "80px",
-        backgroundColor: "transparent",
-        border: "1px dashed #d1d5db",
+        backgroundColor: "rgba(226, 232, 240, 0.35)",
         borderRadius: "8px",
     },
     columns: {
@@ -58,6 +57,7 @@ export const DEFAULT_STYLES: Record<ElementType, Record<string, string | number>
         gap: "16px",
         padding: "20px",
         minHeight: "80px",
+        backgroundColor: "rgba(226, 232, 240, 0.25)",
     },
     stack: {
         display: "flex",
@@ -65,6 +65,7 @@ export const DEFAULT_STYLES: Record<ElementType, Record<string, string | number>
         gap: "12px",
         padding: "16px",
         minHeight: "60px",
+        backgroundColor: "rgba(226, 232, 240, 0.25)",
     },
     title: {
         fontSize: "32px",
