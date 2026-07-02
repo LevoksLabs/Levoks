@@ -80,7 +80,7 @@ function buildGraphFromStores(): FlowGraph {
         connections: routingState.connections,
         pages: editorState.pages,
         activePageId: editorState.activePageId,
-        activeElements: editorState.elements,
+        activeElements: editorState.rootIds.map((id: string) => editorState.elementsById[id]).filter(Boolean),
         services: backendState.services,
     };
 
