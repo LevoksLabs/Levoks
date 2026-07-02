@@ -97,6 +97,7 @@ const DraggableItem: React.FC<{
             className="sidebar-tile"
             {...listeners}
             {...attributes}
+            suppressHydrationWarning
             onDoubleClick={handleClick}
             title={`Drag or double-click to add ${label}`}
         >

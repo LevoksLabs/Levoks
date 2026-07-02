@@ -129,6 +129,12 @@ const parseSolidColor = (value: string, fallback = "#ffffff"): { hex: string; al
     return { hex: fallback, alpha: 1 };
 };
 
+// Shared slider background helper: solid accent-color progress fill for WebKit
+const sliderBg = (val: number, min: number, max: number): React.CSSProperties => {
+    const pct = Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100));
+    return { background: `linear-gradient(to right, var(--accent, #116dff) ${pct}%, var(--bg-input, #2a2a35) ${pct}%)` };
+};
+
 const ColorControl: React.FC<{
     value: string;
     onChange: (value: string) => void;
@@ -183,7 +189,8 @@ const ColorControl: React.FC<{
                     step={1}
                     value={Math.round(solid.alpha * 100)}
                     onChange={(e) => onChange(toRgba(solid.hex, Number(e.target.value) / 100))}
-                    className="color-alpha-slider"
+                    className="editor-slider"
+                    style={sliderBg(Math.round(solid.alpha * 100), 0, 100)}
                 />
                 <span>{Math.round(solid.alpha * 100)}%</span>
                 {allowGradient && (
@@ -380,18 +387,18 @@ const ShadowControl: React.FC<{
                         <div className="shadow-sliders">
                             <div className="shadow-slider-row">
                                 <span className="shadow-slider-label">Distance</span>
-                                <input type="range" min={0} max={50} step={1} value={shadow.distance} style={sliderBg(shadow.distance, 0, 50)} onChange={(e) => update({ distance: parseInt(e.target.value) })} className="anim-timing-slider" />
+                                <input type="range" min={0} max={50} step={1} value={shadow.distance} style={sliderBg(shadow.distance, 0, 50)} onChange={(e) => update({ distance: parseInt(e.target.value) })} className="editor-slider" />
                                 <span className="shadow-slider-value">{shadow.distance}</span>
                             </div>
                             <div className="shadow-slider-row">
                                 <span className="shadow-slider-label">Blur</span>
-                                <input type="range" min={0} max={80} step={1} value={shadow.blur} style={sliderBg(shadow.blur, 0, 80)} onChange={(e) => update({ blur: parseInt(e.target.value) })} className="anim-timing-slider" />
+                                <input type="range" min={0} max={80} step={1} value={shadow.blur} style={sliderBg(shadow.blur, 0, 80)} onChange={(e) => update({ blur: parseInt(e.target.value) })} className="editor-slider" />
                                 <span className="shadow-slider-value">{shadow.blur}</span>
                             </div>
                             {!isTextShadow && (
                                 <div className="shadow-slider-row">
                                     <span className="shadow-slider-label">Spread</span>
-                                    <input type="range" min={-20} max={30} step={1} value={shadow.spread} style={sliderBg(shadow.spread, -20, 30)} onChange={(e) => update({ spread: parseInt(e.target.value) })} className="anim-timing-slider" />
+                                    <input type="range" min={-20} max={30} step={1} value={shadow.spread} style={sliderBg(shadow.spread, -20, 30)} onChange={(e) => update({ spread: parseInt(e.target.value) })} className="editor-slider" />
                                     <span className="shadow-slider-value">{shadow.spread}</span>
                                 </div>
                             )}
@@ -408,7 +415,7 @@ const ShadowControl: React.FC<{
                         />
                         <input
                             type="range"
-                            className="anim-timing-slider"
+                            className="editor-slider"
                             min={0} max={100} step={1}
                             value={Math.round(colorParsed.alpha * 100)}
                             style={sliderBg(colorParsed.alpha * 100, 0, 100)}
@@ -698,7 +705,8 @@ const PropertyInspector: React.FC = () => {
                                             min={0} max={100} step={1}
                                             value={Math.round((el.layout.opacity ?? 1) * 100)}
                                             onChange={(e) => updateElementOpacity(el.id, Number(e.target.value) / 100)}
-                                            className="opacity-slider"
+                                            className="editor-slider"
+                                            style={sliderBg(Math.round((el.layout.opacity ?? 1) * 100), 0, 100)}
                                         />
                                         <span className="opacity-value">{Math.round((el.layout.opacity ?? 1) * 100)}%</span>
                                     </div>
