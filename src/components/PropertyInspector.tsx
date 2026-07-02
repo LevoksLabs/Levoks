@@ -1640,8 +1640,14 @@ const PropertyInspector: React.FC = () => {
                                                                 onChange={(e) => {
                                                                     const nextType = e.target.value as (typeof FORM_FIELD_TYPES)[number];
                                                                     updateFormField(field.id, {
-                                                                        h: nextType === "textarea" ? 96 : 40,
-                                                                        props: { inputType: nextType },
+                                                                        layout: {
+                                                                            ...field.layout,
+                                                                            h: nextType === "textarea" ? 96 : 40
+                                                                        },
+                                                                        props: {
+                                                                            ...field.props,
+                                                                            inputType: nextType
+                                                                        },
                                                                     });
                                                                 }}
                                                             >
