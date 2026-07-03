@@ -7,8 +7,8 @@ import {
     AlignLeft, AlignCenter, AlignRight, AlignJustify, Sun,
 } from "lucide-react";
 import AnimationPanel from "./AnimationPanel";
-import { RgbaColorPicker } from "react-colorful";
 import { useState, useRef, useEffect } from "react";
+import ColorPicker from "react-best-gradient-color-picker";
 
 const FONT_FAMILIES = [
     "Inter", "Roboto", "Playfair Display", "Montserrat", "Open Sans",
@@ -137,30 +137,14 @@ const sliderBg = (val: number, min: number, max: number): React.CSSProperties =>
 };
 
 
-// Helper to convert your rgba string to an object for the picker
-const parseRgbaToObj = (rgbaStr: string) => {
-    const match = rgbaStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
-    if (match) {
-        return {
-            r: parseInt(match[1]),
-            g: parseInt(match[2]),
-            b: parseInt(match[3]),
-            a: match[4] ? parseFloat(match[4]) : 1
-        };
-    }
-    return { r: 255, g: 255, b: 255, a: 1 };
-};
-
-//ColorControl function
+//Color and gradient control function
 const ColorControl: React.FC<{
     value: string;
     onChange: (value: string) => void;
     fallback?: string;
-    allowGradient?: boolean;
-}> = ({ value, onChange, fallback = "#ffffff", allowGradient = false }) => {
+}> = ({ value, onChange, fallback = "#ffffff" }) => {
     const [isOpen, setIsOpen] = useState(false);
     const popoverRef = useRef<HTMLDivElement>(null);
-    const isGradient = allowGradient && isGradientColor(value);
 
     // Close popover when clicking outside
     useEffect(() => {
@@ -173,67 +157,34 @@ const ColorControl: React.FC<{
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [isOpen]);
 
-    if (isGradient) {
-        return (
-            <div className="color-advanced">
-                <textarea
-                    rows={2}
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    className="color-gradient-input"
-                    placeholder="linear-gradient(90deg, #3b82f6 0%, rgba(59,130,246,0) 100%)"
-                />
-                <button
-                    className="color-mode-btn"
-                    onClick={() => onChange(fallback)}
-                    type="button"
-                >
-                    Use Solid
-                </button>
-            </div>
-        );
-    }
-
-    const colorObj = parseRgbaToObj(value);
-
     return (
         <div className="color-advanced" style={{ position: "relative" }}>
-            {/* The Clean Sidebar UI */}
+            {/* The Clean Sidebar Trigger */}
             <div className="color-row">
                 <div
                     className="color-swatch-trigger"
-                    style={{ backgroundColor: value }}
+                    style={{ background: value || fallback }}
                     onClick={() => setIsOpen(!isOpen)}
                 />
                 <input
                     type="text"
-                    value={value}
+                    value={value || ""}
                     onChange={(e) => onChange(e.target.value)}
                     placeholder={fallback}
                 />
             </div>
 
-            {/* The Popover Menu */}
+            {/* The Pro Popover Menu */}
             {isOpen && (
                 <div className="color-popover" ref={popoverRef}>
-                    <RgbaColorPicker
-                        color={colorObj}
-                        onChange={(color) => onChange(`rgba(${color.r}, ${color.g}, ${color.b}, ${color.a})`)}
+                    <ColorPicker
+                        value={value || fallback}
+                        onChange={onChange}
+                        hidePresets={true} // Hides the default ugly color squares
+                        hideEyeDrop={true} // Optional: hide if you don't need native eyedropper yet
+                        width={240}
+                        height={140}
                     />
-
-                    {allowGradient && (
-                        <button
-                            className="color-mode-btn"
-                            style={{ width: "100%", marginTop: "12px" }}
-                            onClick={() => {
-                                setIsOpen(false);
-                                onChange(`linear-gradient(90deg, ${value} 0%, rgba(255, 255, 255, 0) 100%)`);
-                            }}
-                            type="button"
-                        >
-                            Switch to Gradient
-                        </button>
-                    )}
                 </div>
             )}
         </div>

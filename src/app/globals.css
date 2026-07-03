@@ -8019,7 +8019,6 @@ input[type="range"].editor-slider {
 }
 
 /* ======================== PRO COLOR PICKER ======================== */
-
 .color-swatch-trigger {
   width: 28px;
   height: 28px;
@@ -8038,8 +8037,8 @@ input[type="range"].editor-slider {
 .color-popover {
   position: absolute;
   top: 36px;
-  /* Drops it right below the text input */
-  left: 0;
+  right: 0;
+  /* Align to right so it doesn't clip off the sidebar */
   z-index: 100;
   padding: 12px;
   background: var(--bg-panel);
@@ -8047,6 +8046,17 @@ input[type="range"].editor-slider {
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   animation: popIn 0.15s ease-out;
+}
+
+/* Force the picker's text to match your dark mode */
+.color-popover input {
+  color: var(--text-1) !important;
+  background: var(--bg-input) !important;
+  border-color: var(--border) !important;
+}
+
+.color-popover .rbgcp-gradient-degree-input {
+  color: var(--text-1) !important;
 }
 
 @keyframes popIn {
@@ -8059,15 +8069,4 @@ input[type="range"].editor-slider {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
-}
-
-/* Overriding react-colorful defaults to match your dark theme */
-.react-colorful {
-  width: 200px !important;
-  height: 200px !important;
-}
-
-.react-colorful__pointer {
-  width: 16px !important;
-  height: 16px !important;
 }
