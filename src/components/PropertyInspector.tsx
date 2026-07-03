@@ -2,12 +2,13 @@
 
 import { useEditorStore } from "@/store/editorStore";
 import { AnimationData, ActionData, CONTAINER_TYPES, ElementNode } from "@/types";
-import { useState } from "react";
 import {
     Eye, EyeOff, Lock, Unlock, Copy, Trash2, ChevronRight,
     AlignLeft, AlignCenter, AlignRight, AlignJustify, Sun,
 } from "lucide-react";
 import AnimationPanel from "./AnimationPanel";
+import { RgbaColorPicker } from "react-colorful";
+import { useState, useRef, useEffect } from "react";
 
 const FONT_FAMILIES = [
     "Inter", "Roboto", "Playfair Display", "Montserrat", "Open Sans",
@@ -135,14 +136,42 @@ const sliderBg = (val: number, min: number, max: number): React.CSSProperties =>
     return { background: `linear-gradient(to right, var(--accent, #116dff) ${pct}%, var(--bg-input, #2a2a35) ${pct}%)` };
 };
 
+
+// Helper to convert your rgba string to an object for the picker
+const parseRgbaToObj = (rgbaStr: string) => {
+    const match = rgbaStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+    if (match) {
+        return {
+            r: parseInt(match[1]),
+            g: parseInt(match[2]),
+            b: parseInt(match[3]),
+            a: match[4] ? parseFloat(match[4]) : 1
+        };
+    }
+    return { r: 255, g: 255, b: 255, a: 1 };
+};
+
+//ColorControl function
 const ColorControl: React.FC<{
     value: string;
     onChange: (value: string) => void;
     fallback?: string;
     allowGradient?: boolean;
 }> = ({ value, onChange, fallback = "#ffffff", allowGradient = false }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const popoverRef = useRef<HTMLDivElement>(null);
     const isGradient = allowGradient && isGradientColor(value);
-    const solid = parseSolidColor(value, fallback);
+
+    // Close popover when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        if (isOpen) document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [isOpen]);
 
     if (isGradient) {
         return (
@@ -156,7 +185,7 @@ const ColorControl: React.FC<{
                 />
                 <button
                     className="color-mode-btn"
-                    onClick={() => onChange(toRgba(solid.hex, solid.alpha))}
+                    onClick={() => onChange(fallback)}
                     type="button"
                 >
                     Use Solid
@@ -165,14 +194,16 @@ const ColorControl: React.FC<{
         );
     }
 
+    const colorObj = parseRgbaToObj(value);
+
     return (
-        <div className="color-advanced">
+        <div className="color-advanced" style={{ position: "relative" }}>
+            {/* The Clean Sidebar UI */}
             <div className="color-row">
-                <input
-                    type="color"
-                    value={solid.hex}
-                    onChange={(e) => onChange(toRgba(e.target.value, solid.alpha))}
-                    className="color-swatch"
+                <div
+                    className="color-swatch-trigger"
+                    style={{ backgroundColor: value }}
+                    onClick={() => setIsOpen(!isOpen)}
                 />
                 <input
                     type="text"
@@ -181,28 +212,30 @@ const ColorControl: React.FC<{
                     placeholder={fallback}
                 />
             </div>
-            <div className="color-alpha-row">
-                <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={Math.round(solid.alpha * 100)}
-                    onChange={(e) => onChange(toRgba(solid.hex, Number(e.target.value) / 100))}
-                    className="editor-slider"
-                    style={sliderBg(Math.round(solid.alpha * 100), 0, 100)}
-                />
-                <span>{Math.round(solid.alpha * 100)}%</span>
-                {allowGradient && (
-                    <button
-                        className="color-mode-btn"
-                        onClick={() => onChange(`linear-gradient(90deg, ${toRgba(solid.hex, solid.alpha)} 0%, rgba(255, 255, 255, 0) 100%)`)}
-                        type="button"
-                    >
-                        Gradient
-                    </button>
-                )}
-            </div>
+
+            {/* The Popover Menu */}
+            {isOpen && (
+                <div className="color-popover" ref={popoverRef}>
+                    <RgbaColorPicker
+                        color={colorObj}
+                        onChange={(color) => onChange(`rgba(${color.r}, ${color.g}, ${color.b}, ${color.a})`)}
+                    />
+
+                    {allowGradient && (
+                        <button
+                            className="color-mode-btn"
+                            style={{ width: "100%", marginTop: "12px" }}
+                            onClick={() => {
+                                setIsOpen(false);
+                                onChange(`linear-gradient(90deg, ${value} 0%, rgba(255, 255, 255, 0) 100%)`);
+                            }}
+                            type="button"
+                        >
+                            Switch to Gradient
+                        </button>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
