@@ -6814,13 +6814,15 @@ body {
   align-items: center;
   justify-content: center;
   cursor: ns-resize;
-  opacity: 0.62;
+  opacity: 0.50;
   transition: opacity 0.15s ease;
   margin-top: 0;
   position: relative;
   z-index: 5;
   touch-action: none;
   user-select: none;
+  pointer-events: auto;
+  /* <-- This forces the handle to confidently catch the mouse */
 }
 
 .canvas-frame:hover+.canvas-height-handle,
@@ -6853,7 +6855,7 @@ body {
 
 /* ─── Canvas Resize Save/Cancel Prompt ─── */
 .canvas-resize-prompt {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   margin-top: 6px;
@@ -6863,6 +6865,7 @@ body {
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   animation: fadeInUp 0.2s ease-out both;
+  pointer-events: auto;
 }
 
 .canvas-resize-label {

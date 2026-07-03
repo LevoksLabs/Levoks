@@ -141,7 +141,7 @@ const Canvas: React.FC = () => {
         const newPanX = (ws.clientWidth - canvasWidth * s) / 2;
         const newPanY = Math.max(32, (ws.clientHeight - visibleCanvasHeight * s) / 2);
         applyView(newPanX, newPanY, zoom);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Drag state for moving elements
@@ -673,8 +673,7 @@ const Canvas: React.FC = () => {
     const handleCanvasHeightPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         e.preventDefault();
         e.stopPropagation();
-        const target = e.currentTarget;
-        target.setPointerCapture(e.pointerId);
+
         setIsResizingHeight(true);
         resizeStartY.current = e.clientY;
         resizeStartH.current = pendingHeight ?? canvasHeight;
@@ -689,7 +688,6 @@ const Canvas: React.FC = () => {
         };
 
         const onMove = (ev: PointerEvent) => {
-            ev.preventDefault();
             latestY = ev.clientY;
             if (raf === null) raf = requestAnimationFrame(applyHeight);
         };
@@ -700,17 +698,21 @@ const Canvas: React.FC = () => {
             setIsResizingHeight(false);
             document.body.style.cursor = "";
             document.body.style.userSelect = "";
-            if (target.hasPointerCapture(e.pointerId)) target.releasePointerCapture(e.pointerId);
-            target.removeEventListener("pointermove", onMove);
-            target.removeEventListener("pointerup", finish);
-            target.removeEventListener("pointercancel", finish);
+
+            // Clean up global listeners
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", finish);
+            window.removeEventListener("pointercancel", finish);
         };
 
+        // Lock cursor and prevent text selection globally during drag
         document.body.style.cursor = "ns-resize";
         document.body.style.userSelect = "none";
-        target.addEventListener("pointermove", onMove);
-        target.addEventListener("pointerup", finish);
-        target.addEventListener("pointercancel", finish);
+
+        // Bind directly to window
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", finish);
+        window.addEventListener("pointercancel", finish);
     }, [canvasHeight, pendingHeight]);
 
     const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -970,7 +972,13 @@ const Canvas: React.FC = () => {
 
                     {/* Save / Cancel prompt */}
                     {pendingHeight !== null && pendingHeight !== canvasHeight && !isResizingHeight && (
-                        <div className="canvas-resize-prompt">
+                        <div
+                            className="canvas-resize-prompt"
+                            style={{
+                                left: `${canvasWidth / 2}px`,
+                                top: `${pendingHeight + 16}px`,
+                            }}
+                        >
                             <span className="canvas-resize-label">{pendingHeight}px</span>
                             <button className="canvas-resize-save" onClick={() => { updateCanvasSettings({ height: pendingHeight }); setPendingHeight(null); }}>Save</button>
                             <button className="canvas-resize-cancel" onClick={() => setPendingHeight(null)}>Cancel</button>
