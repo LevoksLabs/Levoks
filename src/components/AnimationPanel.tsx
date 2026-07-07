@@ -242,13 +242,13 @@ const AnimationPanel: React.FC<AnimationPanelProps> = ({
 
                     <div className="anim-timing-row">
                         <span className="anim-timing-label">Duration</span>
-                        <input type="range" className="anim-timing-slider" min={0.1} max={5} step={0.1} value={anim.duration} style={sliderBg(anim.duration, 0.1, 5)} onChange={e => patchAnim({ duration: parseFloat(e.target.value) })} />
+                        <input type="range" className="editor-slider" min={0.1} max={5} step={0.1} value={anim.duration} style={sliderBg(anim.duration, 0.1, 5)} onChange={e => patchAnim({ duration: parseFloat(e.target.value) })} />
                         <span className="anim-timing-value">{anim.duration.toFixed(1)}s</span>
                     </div>
 
                     <div className="anim-timing-row">
                         <span className="anim-timing-label">Delay</span>
-                        <input type="range" className="anim-timing-slider" min={0} max={5} step={0.1} value={anim.delay} style={sliderBg(anim.delay, 0, 5)} onChange={e => patchAnim({ delay: parseFloat(e.target.value) })} />
+                        <input type="range" className="editor-slider" min={0} max={5} step={0.1} value={anim.delay} style={sliderBg(anim.delay, 0, 5)} onChange={e => patchAnim({ delay: parseFloat(e.target.value) })} />
                         <span className="anim-timing-value">{anim.delay.toFixed(1)}s</span>
                     </div>
 
@@ -294,7 +294,7 @@ const AnimationPanel: React.FC<AnimationPanelProps> = ({
                             <div className="anim-scroll-opts-title">Scroll Options</div>
                             <div className="anim-timing-row">
                                 <span className="anim-timing-label">Offset</span>
-                                <input type="range" className="anim-timing-slider" min={0} max={100} step={5} value={anim.scrollOffset ?? 20} style={sliderBg(anim.scrollOffset ?? 20, 0, 100)} onChange={e => patchAnim({ scrollOffset: parseInt(e.target.value) })} />
+                                <input type="range" className="editor-slider" min={0} max={100} step={5} value={anim.scrollOffset ?? 20} style={sliderBg(anim.scrollOffset ?? 20, 0, 100)} onChange={e => patchAnim({ scrollOffset: parseInt(e.target.value) })} />
                                 <span className="anim-timing-value">{anim.scrollOffset ?? 20}%</span>
                             </div>
                         </div>
@@ -306,42 +306,42 @@ const AnimationPanel: React.FC<AnimationPanelProps> = ({
                             {isTextAnim && anim.type === "typewriter" && (
                                 <div className="anim-timing-row">
                                     <span className="anim-timing-label">Speed</span>
-                                    <input type="range" className="anim-timing-slider" min={10} max={200} step={5} value={anim.textSpeed ?? 50} style={sliderBg(anim.textSpeed ?? 50, 10, 200)} onChange={e => patchAnim({ textSpeed: parseInt(e.target.value) })} />
+                                    <input type="range" className="editor-slider" min={10} max={200} step={5} value={anim.textSpeed ?? 50} style={sliderBg(anim.textSpeed ?? 50, 10, 200)} onChange={e => patchAnim({ textSpeed: parseInt(e.target.value) })} />
                                     <span className="anim-timing-value">{anim.textSpeed ?? 50}</span>
                                 </div>
                             )}
                             {isTextAnim && anim.type !== "typewriter" && (
                                 <div className="anim-timing-row">
                                     <span className="anim-timing-label">Stagger</span>
-                                    <input type="range" className="anim-timing-slider" min={0} max={200} step={10} value={anim.textStagger ?? 50} style={sliderBg(anim.textStagger ?? 50, 0, 200)} onChange={e => patchAnim({ textStagger: parseInt(e.target.value) })} />
+                                    <input type="range" className="editor-slider" min={0} max={200} step={10} value={anim.textStagger ?? 50} style={sliderBg(anim.textStagger ?? 50, 0, 200)} onChange={e => patchAnim({ textStagger: parseInt(e.target.value) })} />
                                     <span className="anim-timing-value">{anim.textStagger ?? 50}ms</span>
                                 </div>
                             )}
                             {isSlideAnim && (
                                 <div className="anim-timing-row">
                                     <span className="anim-timing-label">Distance</span>
-                                    <input type="range" className="anim-timing-slider" min={10} max={200} step={5} value={anim.translateDistance ?? 30} style={sliderBg(anim.translateDistance ?? 30, 10, 200)} onChange={e => patchAnim({ translateDistance: parseInt(e.target.value) })} />
+                                    <input type="range" className="editor-slider" min={10} max={200} step={5} value={anim.translateDistance ?? 30} style={sliderBg(anim.translateDistance ?? 30, 10, 200)} onChange={e => patchAnim({ translateDistance: parseInt(e.target.value) })} />
                                     <span className="anim-timing-value">{anim.translateDistance ?? 30}px</span>
                                 </div>
                             )}
                             {isShakeAnim && (
                                 <div className="anim-timing-row">
                                     <span className="anim-timing-label">Intensity</span>
-                                    <input type="range" className="anim-timing-slider" min={1} max={10} step={1} value={anim.intensity ?? 5} style={sliderBg(anim.intensity ?? 5, 1, 10)} onChange={e => patchAnim({ intensity: parseInt(e.target.value) })} />
+                                    <input type="range" className="editor-slider" min={1} max={10} step={1} value={anim.intensity ?? 5} style={sliderBg(anim.intensity ?? 5, 1, 10)} onChange={e => patchAnim({ intensity: parseInt(e.target.value) })} />
                                     <span className="anim-timing-value">{anim.intensity ?? 5}</span>
                                 </div>
                             )}
                             {isScaleAnim && (
                                 <div className="anim-timing-row">
                                     <span className="anim-timing-label">From</span>
-                                    <input type="range" className="anim-timing-slider" min={0} max={2} step={0.1} value={anim.scaleFrom ?? 0} style={sliderBg(anim.scaleFrom ?? 0, 0, 2)} onChange={e => patchAnim({ scaleFrom: parseFloat(e.target.value) })} />
+                                    <input type="range" className="editor-slider" min={0} max={2} step={0.1} value={anim.scaleFrom ?? 0} style={sliderBg(anim.scaleFrom ?? 0, 0, 2)} onChange={e => patchAnim({ scaleFrom: parseFloat(e.target.value) })} />
                                     <span className="anim-timing-value">{(anim.scaleFrom ?? 0).toFixed(1)}x</span>
                                 </div>
                             )}
                             {isRotateAnim && (
                                 <div className="anim-timing-row">
                                     <span className="anim-timing-label">Angle</span>
-                                    <input type="range" className="anim-timing-slider" min={0} max={720} step={15} value={anim.rotateAngle ?? 360} style={sliderBg(anim.rotateAngle ?? 360, 0, 720)} onChange={e => patchAnim({ rotateAngle: parseInt(e.target.value) })} />
+                                    <input type="range" className="editor-slider" min={0} max={720} step={15} value={anim.rotateAngle ?? 360} style={sliderBg(anim.rotateAngle ?? 360, 0, 720)} onChange={e => patchAnim({ rotateAngle: parseInt(e.target.value) })} />
                                     <span className="anim-timing-value">{anim.rotateAngle ?? 360}°</span>
                                 </div>
                             )}
