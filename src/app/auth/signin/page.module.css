@@ -1,0 +1,399 @@
+.authPage {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1b1b1f;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ─── Animated background orbs ─── */
+.bgOrb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.35;
+  pointer-events: none;
+  animation: orbFloat 12s ease-in-out infinite;
+}
+
+.orb1 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, #116dff 0%, transparent 70%);
+  top: -120px;
+  left: -80px;
+  animation-delay: 0s;
+  animation-duration: 14s;
+}
+
+.orb2 {
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, #a78bfa 0%, transparent 70%);
+  bottom: -100px;
+  right: -60px;
+  animation-delay: -4s;
+  animation-duration: 16s;
+}
+
+.orb3 {
+  width: 250px;
+  height: 250px;
+  background: radial-gradient(circle, #22c55e 0%, transparent 70%);
+  top: 50%;
+  left: 60%;
+  animation-delay: -8s;
+  animation-duration: 18s;
+}
+
+@keyframes orbFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(30px, -40px) scale(1.08); }
+  50% { transform: translate(-20px, 20px) scale(0.95); }
+  75% { transform: translate(15px, 30px) scale(1.05); }
+}
+
+/* ─── Grid pattern overlay ─── */
+.gridOverlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+}
+
+/* ─── Sign-in card ─── */
+.card {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 420px;
+  padding: 48px 40px;
+  background: rgba(35, 35, 41, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(58, 58, 70, 0.6);
+  border-radius: 20px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.03),
+    0 24px 80px rgba(0, 0, 0, 0.5),
+    0 0 120px rgba(17, 109, 255, 0.06);
+  overflow: hidden;
+}
+
+/* Animated gradient border glow */
+.card::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  border-radius: 21px;
+  background: linear-gradient(135deg, rgba(17,109,255,0.3), transparent 40%, transparent 60%, rgba(167,139,250,0.2));
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.card:hover::before {
+  opacity: 1;
+}
+
+/* ─── Logo area ─── */
+.logoArea {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 36px;
+}
+
+.logoGlow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logoGlow::after {
+  content: "";
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(17,109,255,0.25), transparent 70%);
+  animation: logoPulse 3s ease-in-out infinite;
+}
+
+@keyframes logoPulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.3); opacity: 0.8; }
+}
+
+.logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+}
+
+.brandName {
+  font-size: 24px;
+  font-weight: 700;
+  color: #f0f0f2;
+  letter-spacing: -0.5px;
+}
+
+.tagline {
+  display: flex;
+  gap: 8px;
+  font-size: 14px;
+  color: #72728a;
+  font-weight: 500;
+}
+
+.tagWord {
+  display: inline-block;
+}
+
+/* ─── Subtitle ─── */
+.subtitle {
+  text-align: center;
+  font-size: 14px;
+  color: #b0b0bc;
+  margin-bottom: 32px;
+  line-height: 1.6;
+}
+
+/* ─── Provider buttons ─── */
+.providers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.providerBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: 48px;
+  border-radius: 12px;
+  border: 1px solid rgba(58, 58, 70, 0.8);
+  background: rgba(30, 30, 36, 0.8);
+  color: #f0f0f2;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 200ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.providerBtn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.providerBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.providerBtn:active {
+  transform: translateY(0);
+}
+
+/* GitHub button */
+.githubBtn {
+  background: rgba(36, 41, 47, 0.9);
+  border-color: rgba(110, 118, 129, 0.4);
+}
+
+.githubBtn:hover {
+  background: rgba(55, 62, 71, 0.95);
+  border-color: rgba(110, 118, 129, 0.6);
+}
+
+.githubBtn::before {
+  background: linear-gradient(135deg, rgba(255,255,255,0.04), transparent);
+}
+
+.githubBtn:hover::before {
+  opacity: 1;
+}
+
+/* Google button */
+.googleBtn {
+  background: rgba(30, 30, 36, 0.8);
+  border-color: rgba(58, 58, 70, 0.8);
+}
+
+.googleBtn:hover {
+  background: rgba(42, 42, 50, 0.9);
+  border-color: rgba(80, 80, 95, 0.8);
+}
+
+.googleBtn::before {
+  background: linear-gradient(135deg, rgba(66,133,244,0.04), rgba(234,67,53,0.04));
+}
+
+.googleBtn:hover::before {
+  opacity: 1;
+}
+
+.providerIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.recommended {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #116dff;
+  background: rgba(17, 109, 255, 0.12);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+/* ─── Divider ─── */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 24px 0 20px;
+}
+
+.dividerLine {
+  flex: 1;
+  height: 1px;
+  background: rgba(58, 58, 70, 0.6);
+}
+
+.dividerText {
+  font-size: 11px;
+  color: #72728a;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+/* ─── Footer ─── */
+.footer {
+  margin-top: 32px;
+  text-align: center;
+  font-size: 12px;
+  color: #72728a;
+  line-height: 1.6;
+}
+
+.footer a {
+  color: #116dff;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 150ms ease;
+}
+
+.footer a:hover {
+  color: #3385ff;
+}
+
+/* ─── Scope info ─── */
+.scopeInfo {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: rgba(17, 109, 255, 0.06);
+  border: 1px solid rgba(17, 109, 255, 0.12);
+  border-radius: 10px;
+  font-size: 11px;
+  color: #b0b0bc;
+  line-height: 1.5;
+}
+
+.scopeIcon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #116dff;
+}
+
+/* ─── Error state ─── */
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 20px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 10px;
+  font-size: 12px;
+  color: #fca5a5;
+}
+
+/* ─── Loading spinner ─── */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Particle dots ─── */
+.particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.particle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(17, 109, 255, 0.3);
+  animation: particleFloat 20s linear infinite;
+}
+
+.particle:nth-child(1) { left: 10%; animation-delay: 0s; animation-duration: 18s; }
+.particle:nth-child(2) { left: 25%; animation-delay: -3s; animation-duration: 22s; background: rgba(167,139,250,0.25); }
+.particle:nth-child(3) { left: 45%; animation-delay: -6s; animation-duration: 16s; }
+.particle:nth-child(4) { left: 65%; animation-delay: -9s; animation-duration: 24s; background: rgba(34,197,94,0.2); }
+.particle:nth-child(5) { left: 80%; animation-delay: -12s; animation-duration: 20s; }
+.particle:nth-child(6) { left: 90%; animation-delay: -15s; animation-duration: 17s; background: rgba(167,139,250,0.2); }
+
+@keyframes particleFloat {
+  0% { transform: translateY(100vh) scale(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(-20vh) scale(1.5); opacity: 0; }
+}
