@@ -16,6 +16,8 @@ import BackendHierarchy from "@/components/backend/BackendHierarchy";
 import RoutingCanvas from "@/components/routing/RoutingCanvas";
 import RoutingRightPanel from "@/components/routing/RoutingRightPanel";
 import FrontendCodePreviewPanel from "@/components/FrontendCodePreviewPanel";
+import UserMenu from "@/components/UserMenu";
+import ProfileModal from "@/components/ProfileModal";
 import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
 import { X, FileCode2 } from "lucide-react";
@@ -100,6 +102,7 @@ function CodePreviewPanel() {
 export default function Home() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [autosaveEnabled, setAutosaveEnabled] = useState(true);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const { selectElement, sidebarOpen, frontendCodePreviewOpen } = useEditorStore();
   const { codePreviewOpen } = useBackendStore();
 
@@ -142,6 +145,7 @@ export default function Home() {
             <button className="header-btn primary" disabled title="Coming soon">
               Publish
             </button>
+            <UserMenu onOpenProfile={() => setProfileModalOpen(true)} />
           </div>
         </header>
 
@@ -185,6 +189,7 @@ export default function Home() {
         {isPreviewOpen && <LivePreviewPanel onClose={() => setIsPreviewOpen(false)} />}
         {codePreviewOpen && <CodePreviewPanel />}
         {frontendCodePreviewOpen && <FrontendCodePreviewPanel />}
+        {profileModalOpen && <ProfileModal onClose={() => setProfileModalOpen(false)} />}
       </div>
     </DndProvider>
   );
