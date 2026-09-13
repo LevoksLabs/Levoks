@@ -127,11 +127,11 @@ const LayersPanel: React.FC = () => {
     const listRefs = useRef<{ page: HTMLDivElement | null; global: HTMLDivElement | null }>({ page: null, global: null });
     const setListRef = useCallback((scope: Scope) => (node: HTMLDivElement | null) => { listRefs.current[scope] = node; }, []);
 
-    const buildFlatList = useCallback((ids: string[], parentId: string | null, depth: number, acc: FlatNode[]) => {
+    const buildFlatList = useCallback(function walk(ids: string[], parentId: string | null, depth: number, acc: FlatNode[]) {
         ids.forEach((id, i) => {
             acc.push({ id, parentId, index: i, depth });
             const el = elementsById[id];
-            if (el) buildFlatList(el.children, id, depth + 1, acc);
+            if (el) walk(el.children, id, depth + 1, acc);
         });
         return acc;
     }, [elementsById]);

@@ -187,14 +187,14 @@ export const DEFAULT_RELATION_CONFIG: RelationConfig = {
 
 export const DEFAULT_MIDDLEWARE_CONFIG: MiddlewareConfig = {
     middlewareType: "cors",
-    corsOrigins: "*",
+    corsOrigins: "http://localhost:3000",
     rateLimit: 100,
     rateLimitWindow: 15,
 };
 
 export const DEFAULT_AUTH_CONFIG: AuthConfig = {
     strategy: "jwt",
-    secretKey: "your-secret-key",
+    secretKey: "",
     tokenExpiry: "7d",
     hashRounds: 10,
 };

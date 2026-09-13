@@ -1,4 +1,4 @@
-import { ElementType, SidebarCategory } from "@/types";
+import { ElementType, SidebarCategory, ElementLayout, AnimationData } from "@/types";
 import { DEFAULT_STYLES, DEFAULT_PROPS } from "@/lib/defaults";
 
 // Template type: what addElement/addGlobalElement expect (no id/parentId/children/layout required)
@@ -7,8 +7,8 @@ type ElementTemplate = {
     label?: string;
     props: Record<string, string | number | boolean>;
     styles: Record<string, string | number>;
-    layout?: Partial<{ x: number; y: number; w: number; h: number; position: string; opacity: number; rotation: number; visible: boolean; locked: boolean }>;
-    animation?: { type: "fade" | "slide" | "scale" | "bounce" | "none"; duration: number; delay?: number };
+    layout?: Partial<ElementLayout>;
+    animation?: AnimationData;
     actions?: { type: "submit" | "redirect" | "api_call" | "scroll" | "none"; target?: string };
     children?: ElementTemplate[];
 };
@@ -24,7 +24,7 @@ export const templates: Record<ElementType, ElementTemplate> = {
     button: {
         type: "button", label: "Button",
         props: { ...DEFAULT_PROPS.button }, styles: { ...DEFAULT_STYLES.button },
-        animation: { type: "none", duration: 0.3 }, actions: { type: "none" },
+        actions: { type: "none" },
     },
     image: { type: "image", label: "Image", props: { ...DEFAULT_PROPS.image }, styles: { ...DEFAULT_STYLES.image } },
     video: { type: "video", label: "Video", props: { ...DEFAULT_PROPS.video }, styles: { ...DEFAULT_STYLES.video } },

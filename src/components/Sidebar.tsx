@@ -7,6 +7,7 @@ import { templates, sidebarCategories } from "@/templates";
 import { ElementType, CONTAINER_TYPES } from "@/types";
 import { BACKEND_SIDEBAR_CATEGORIES, BackendBlockType } from "@/types/backend";
 import { generateProject } from "@/lib/codegen";
+import AssetUpload from "./AssetUpload";
 import { generateFrontendProject } from "@/lib/codegen/frontend";
 import { resolveGraph } from "@/lib/graphResolver";
 import { exportAsZip } from "@/lib/codegen/exporter";
@@ -255,6 +256,7 @@ const Sidebar: React.FC = () => {
                         />
                     </div>
 
+                    <AssetUpload />
                     <div className="flyout-groups">
                         {filteredCategories.map((cat) => (
                             <div key={cat.id} className="flyout-group">
@@ -470,60 +472,19 @@ const Sidebar: React.FC = () => {
                                 <Code2 size={24} />
                                 <div>
                                     <p>Frontend Code</p>
-                                    <span>Generate a React project from the current canvas</span>
+                                    <span>Review all pages, services, and export checks</span>
                                 </div>
                             </div>
                             <div className="code-panel-actions">
                                 <button
                                     className="code-panel-btn"
-                                    onClick={() => {
-                                        const activePage = pages.find((p) => p.id === activePageId);
-                                        const routingState = useRoutingStore.getState();
-                                        const beState = useBackendStore.getState();
-                                        const flowGraph = resolveGraph({
-                                            nodes: routingState.nodes,
-                                            connections: routingState.connections,
-                                            pages,
-                                            activePageId,
-                                            activeElements: getRootElements(),
-                                            services: beState.services,
-                                        });
-                                        const elements = getRootElements();
-                                        const globalElements = getGlobalRootElements();
-                                        const { files } = generateFrontendProject(elements, globalElements, canvasSettings, activePage, pages, undefined, flowGraph);
-                                        setFrontendGeneratedCode(files);
-                                        setFrontendCodePreviewOpen(true);
-                                    }}
+                                    onClick={() => window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "source" }))}
                                 >
                                     Preview Code
                                 </button>
                                 <button
                                     className="code-panel-btn secondary"
-                                    onClick={async () => {
-                                        const activePage = pages.find((p) => p.id === activePageId);
-                                        const routingState = useRoutingStore.getState();
-                                        const beState = useBackendStore.getState();
-                                        const flowGraph = resolveGraph({
-                                            nodes: routingState.nodes,
-                                            connections: routingState.connections,
-                                            pages,
-                                            activePageId,
-                                            activeElements: getRootElements(),
-                                            services: beState.services,
-                                        });
-                                        const elements = getRootElements();
-                                        const globalElements = getGlobalRootElements();
-                                        const { files: feFiles } = generateFrontendProject(elements, globalElements, canvasSettings, activePage, pages, undefined, flowGraph);
-                                        const beFiles = beState.services.length > 0 ? generateProject(beState.services, beState.connections, flowGraph) : {};
-                                        const allFiles: Record<string, string> = {};
-                                        for (const [path, content] of Object.entries(feFiles)) {
-                                            allFiles[`frontend/${path}`] = content;
-                                        }
-                                        for (const [path, content] of Object.entries(beFiles)) {
-                                            allFiles[`backend/${path}`] = content;
-                                        }
-                                        await exportAsZip(allFiles, "full-project");
-                                    }}
+                                    onClick={() => window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "ship" }))}
                                 >
                                     Export Full ZIP
                                 </button>
@@ -612,14 +573,11 @@ const BackendFlyout: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         .filter((cat) => cat.items.length > 0);
 
     const handleGenerateCode = () => {
-        const code = generateProject(services, connections);
-        setGeneratedCode(code);
-        setCodePreviewOpen(true);
+        window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "source" }));
     };
 
     const handleExport = async () => {
-        const code = generateProject(services, connections);
-        await exportAsZip(code, "backend-project");
+        window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "ship" }));
     };
 
     return (

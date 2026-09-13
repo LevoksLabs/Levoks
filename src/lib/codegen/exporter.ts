@@ -3,6 +3,7 @@
 // ═══════════════════════════════════════════════════
 
 import JSZip from "jszip";
+import { validateFiles } from "./files";
 
 /**
  * Takes a flat file map and creates a downloadable ZIP.
@@ -16,7 +17,7 @@ export async function exportAsZip(
     const zip = new JSZip();
 
     // Add all files to the ZIP
-    for (const [path, content] of Object.entries(files)) {
+    for (const [path, content] of Object.entries(validateFiles(files))) {
         zip.file(path, content);
     }
 
@@ -31,9 +32,9 @@ export async function exportAsZip(
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${projectName}.zip`;
+    a.download = `${projectName.replace(/[^a-z0-9_-]/gi, "-")}.zip`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

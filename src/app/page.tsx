@@ -18,6 +18,7 @@ import RoutingRightPanel from "@/components/routing/RoutingRightPanel";
 import FrontendCodePreviewPanel from "@/components/FrontendCodePreviewPanel";
 import UserMenu from "@/components/UserMenu";
 import ProfileModal from "@/components/ProfileModal";
+import WorkspaceHub from "@/components/WorkspaceHub";
 import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
 import { X, FileCode2 } from "lucide-react";
@@ -101,7 +102,6 @@ function CodePreviewPanel() {
 
 export default function Home() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [autosaveEnabled, setAutosaveEnabled] = useState(true);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const { selectElement, sidebarOpen, frontendCodePreviewOpen } = useEditorStore();
   const { codePreviewOpen } = useBackendStore();
@@ -132,19 +132,10 @@ export default function Home() {
           </div>
           <div className="header-center">
             <UndoRedoButtons />
-            <button
-              className={`autosave-toggle ${autosaveEnabled ? "on" : "off"}`}
-              onClick={() => setAutosaveEnabled((v) => !v)}
-              title="Toggle autosave"
-            >
-              Autosave {autosaveEnabled ? "On" : "Off"}
-            </button>
+            <WorkspaceHub />
           </div>
           <div className="header-right">
             <button className="header-btn" onClick={openPreview}>Preview</button>
-            <button className="header-btn primary" disabled title="Coming soon">
-              Publish
-            </button>
             <UserMenu onOpenProfile={() => setProfileModalOpen(true)} />
           </div>
         </header>

@@ -2,6 +2,14 @@
 
 import { useEditorStore } from "@/store/editorStore";
 import { useState } from "react";
+import type { Page } from "@/types";
+
+function RouteField({ page }: { page: Page }) {
+    const [route, setRoute] = useState(page.route);
+    const [error, setError] = useState("");
+    const save = () => { try { useEditorStore.getState().updatePageRoute(page.id, route.trim()); setError(""); } catch (error) { setError(error instanceof Error ? error.message : "Invalid route"); } };
+    return <div onClick={event => event.stopPropagation()}><input aria-label={`Route for ${page.title}`} value={route} onChange={e => setRoute(e.target.value)} onBlur={save} onKeyDown={event => { if (event.key === "Enter") save(); }} style={{ width: "100%", background: "transparent", color: "inherit", border: "1px solid #4445", padding: 4, fontSize: 11, borderRadius: 4 }} />{error && <small role="alert" style={{ color: "#f29bab" }}>{error}</small>}</div>;
+}
 
 const PagesPanel: React.FC = () => {
     const { pages, activePageId, rootIds, elementsById, pageElementMap, addPage, deletePage, renamePage, switchPage } = useEditorStore();
@@ -78,7 +86,7 @@ const PagesPanel: React.FC = () => {
                                     {page.title}
                                 </span>
                             )}
-                            <span className="page-route">{page.route}</span>
+                            <RouteField key={`${page.id}:${page.route}`} page={page} />
                         </div>
 
                         {pages.length > 1 && (

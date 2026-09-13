@@ -2,12 +2,14 @@ import { create } from "zustand";
 import { ElementNode, Page, ElementType, CONTAINER_TYPES } from "@/types";
 import { generateElementId, generatePageId, deepCloneSubtree, syncCounters } from "@/lib/idGenerator";
 import { DEFAULT_LAYOUT, DEFAULT_STYLES, DEFAULT_PROPS } from "@/lib/defaults";
+import type { TemplateElement } from "@/types/template";
 import {
     collectDescendantIds, isAncestorOf, getBreadcrumbPath as getBreadcrumbPathHelper,
     findParentAndIndex, reorderSiblings, detachElement, attachElement,
 } from "./editorHelpers";
 
 const MAX_HISTORY = 50;
+type NewElement = Omit<ElementNode, "id" | "parentId" | "children" | "layout"> & { layout?: Partial<ElementNode["layout"]>; children?: NewElement[] };
 
 interface HistorySnapshot {
     elementsById: Record<string, ElementNode>;
@@ -34,7 +36,7 @@ interface EditorStore {
     frontendGeneratedCode: Record<string, string> | null;
     frontendCodePreviewOpen: boolean;
 
-    addElement: (elementData: Omit<ElementNode, "id" | "parentId" | "children" | "layout"> & { layout?: Partial<ElementNode["layout"]>; children?: string[] }, parentId?: string, x?: number, y?: number) => string;
+    addElement: (elementData: NewElement, parentId?: string, x?: number, y?: number) => string;
     updateElement: (id: string, updates: Partial<ElementNode>) => void;
     updateElementPosition: (id: string, x: number, y: number) => void;
     updateElementSize: (id: string, w: number, h: number) => void;
@@ -63,10 +65,11 @@ interface EditorStore {
     addPage: (title?: string) => string;
     deletePage: (id: string) => void;
     renamePage: (id: string, title: string) => void;
+    updatePageRoute: (id: string, route: string) => void;
     switchPage: (id: string) => void;
-    addGlobalElement: (elementData: Omit<ElementNode, "id" | "parentId" | "children" | "layout"> & { layout?: Partial<ElementNode["layout"]>; children?: string[] }) => string;
+    addGlobalElement: (elementData: NewElement) => string;
     deleteGlobalElement: (id: string) => void;
-    loadTemplate: (elements: any[]) => void;
+    loadTemplate: (elements: TemplateElement[]) => void;
     getElement: (id: string) => ElementNode | undefined;
     getSelectedElement: () => ElementNode | undefined;
     getBreadcrumbPath: (id: string) => { id: string; type: string; label?: string }[];
@@ -110,7 +113,7 @@ function updateLayout(el: ElementNode, patch: Partial<ElementNode["layout"]>): E
 
 // Build nested elements from template data (old format with nested children objects)
 function buildTemplateElements(
-    items: Array<Omit<ElementNode, "id" | "parentId" | "children" | "layout"> & { layout?: Partial<ElementNode["layout"]>; children?: any[]; x?: number; y?: number; w?: number; h?: number; opacity?: number; rotation?: number; visible?: boolean; locked?: boolean }>,
+    items: TemplateElement[],
     parentId: string | null
 ): { byId: Record<string, ElementNode>; rootIds: string[] } {
     const byId: Record<string, ElementNode> = {};
@@ -171,6 +174,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     addElement: (elementData, parentId, dropX, dropY) => {
         const id = generateElementId(elementData.type);
+        const nested = buildTemplateElements(elementData.children || [], id);
         const isInContainer = parentId ? CONTAINER_TYPES.includes(get().elementsById[parentId]?.type) : false;
         const existingCount = Object.keys(get().elementsById).length;
         const posX = dropX ?? (parentId ? 0 : 100 + (existingCount % 5) * 30);
@@ -191,12 +195,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             id,
             parentId: parentId || null,
             layout: makeLayout(elementData.type, layoutOverrides),
-            children: [],
+            children: nested.rootIds,
         };
         set(state => {
             const validParent = parentId && state.elementsById[parentId] ? parentId : undefined;
             const hist = pushHistory(state);
-            const next = { ...state.elementsById, [id]: { ...element, parentId: validParent || null } };
+            const next = { ...state.elementsById, ...nested.byId, [id]: { ...element, parentId: validParent || null } };
             let newRoots = state.rootIds;
             if (validParent && next[validParent]) {
                 next[validParent] = { ...next[validParent], children: [...next[validParent].children, id] };
@@ -517,15 +521,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         const state = get();
         if (state.pages.length <= 1) return;
         const remaining = state.pages.filter(p => p.id !== id);
+        if (!remaining.some(p => p.route === "/")) remaining[0] = { ...remaining[0], route: "/" };
         const switchTo = id === state.activePageId ? remaining[0] : remaining.find(p => p.id === state.activePageId) || remaining[0];
-        const pageRoots = state.pageElementMap[id] || [];
+        const pageRoots = id === state.activePageId ? state.rootIds : state.pageElementMap[id] || [];
         const toDelete = new Set<string>();
         for (const rid of pageRoots) {
             for (const did of collectDescendantIds(state.elementsById, rid)) toDelete.add(did);
         }
         const next = { ...state.elementsById };
         for (const did of toDelete) delete next[did];
-        const newMap = { ...state.pageElementMap };
+        const newMap = { ...state.pageElementMap, [state.activePageId]: state.rootIds };
         delete newMap[id];
         set({
             pages: remaining,
@@ -540,6 +545,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     renamePage: (id, title) => {
         set(state => ({ pages: state.pages.map(p => p.id === id ? { ...p, title } : p) }));
+    },
+    updatePageRoute: (id, route) => {
+        const state = get();
+        if (!/^\/(?:[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*)?$/.test(route)) throw new Error("Use a path such as /about or /products/new.");
+        if (state.pages.some(p => p.id !== id && p.route === route)) throw new Error("Another page already uses this route.");
+        if (state.pages.find(p => p.id === id)?.route === "/" && route !== "/") throw new Error("The home page must keep the / route.");
+        set({ pages: state.pages.map(p => p.id === id ? { ...p, route } : p) });
     },
 
     switchPage: (id) => {
@@ -557,6 +569,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     addGlobalElement: (elementData) => {
         const id = generateElementId(elementData.type);
+        const nested = buildTemplateElements(elementData.children || [], id);
         const element: ElementNode = {
             type: elementData.type, label: elementData.label,
             props: elementData.props || { ...(DEFAULT_PROPS[elementData.type] || {}) },
@@ -564,10 +577,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             animation: elementData.animation, actions: elementData.actions,
             id, parentId: null,
             layout: makeLayout(elementData.type, elementData.layout),
-            children: [],
+            children: nested.rootIds,
         };
         set(s => ({
-            elementsById: { ...s.elementsById, [id]: element },
+            ...pushHistory(s),
+            elementsById: { ...s.elementsById, ...nested.byId, [id]: element },
             globalRootIds: [...s.globalRootIds, id],
             selectedElementId: id,
         }));
@@ -581,6 +595,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             const next = { ...state.elementsById };
             for (const did of toDelete) delete next[did];
             return {
+                ...pushHistory(state),
                 elementsById: next,
                 globalRootIds: state.globalRootIds.filter(r => !toDelete.has(r)),
                 selectedElementId: toDelete.has(state.selectedElementId || "") ? null : state.selectedElementId,
@@ -593,7 +608,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         set(state => {
             const hist = pushHistory(state);
             const { byId, rootIds } = buildTemplateElements(templateElements, null);
-            return { elementsById: { ...state.elementsById, ...byId }, rootIds, selectedElementId: null, ...hist };
+            const retained = { ...state.elementsById };
+            for (const root of state.rootIds) for (const id of collectDescendantIds(state.elementsById, root)) delete retained[id];
+            return { elementsById: { ...retained, ...byId }, rootIds, selectedElementId: null, selectedElementIds: [], ...hist };
         });
     },
 

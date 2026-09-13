@@ -24,7 +24,7 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
   if (!session?.user) return null;
 
   const user = session.user;
-  const hasGithub = !!session.githubAccessToken;
+  const hasGithub = session.provider === "github";
   const initials = user.name
     ? user.name
         .split(" ")
@@ -117,15 +117,15 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
                     </div>
                   )}
                 </div>
-                <div className="profile-account-card connected">
+                <div className={`profile-account-card ${session.provider === "google" ? "connected" : ""}`}>
                   <Globe size={20} />
                   <div className="profile-account-info">
                     <span className="profile-account-name">Google</span>
                     <span className="profile-account-status">
-                      {user.email ? "Connected" : "Not linked"}
+                      {session.provider === "google" ? "Signed in" : "Not linked"}
                     </span>
                   </div>
-                  {user.email && (
+                  {session.provider === "google" && (
                     <div className="profile-account-check">
                       <Shield size={14} />
                     </div>
@@ -142,10 +142,11 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
               </div>
               <div className="profile-projects-empty">
                 <FolderOpen size={24} strokeWidth={1.5} />
-                <p>No projects yet</p>
-                <span>Projects you build with Levoks will appear here.</span>
+                <p>Your visual workspace and cloud projects</p>
+                <button className="header-btn" onClick={() => { onClose(); window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "projects" })); }}>Open projects</button>
               </div>
             </div>
+            <div className="profile-section"><div className="profile-section-header"><Sparkles size={14} /><span>Personal plan · Bring your own key</span></div><p style={{ fontSize: 12, lineHeight: 1.6 }}>Local editing and code export are available without an AI subscription. AI inference is billed directly by your selected provider. Levoks does not provision a paid inference plan.</p></div>
           </div>
         </motion.div>
       </motion.div>

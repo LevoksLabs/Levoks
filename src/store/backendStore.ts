@@ -74,6 +74,15 @@ interface BackendStore {
 
 // ─── Store Implementation ───
 
+function serviceIdentity(services: ServiceContainer[], base: string) {
+    const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    let name = base;
+    for (let suffix = 2; services.some(s => slug(s.name) === slug(name)); suffix++) name = `${base} ${suffix}`;
+    let port = 3001;
+    while (services.some(s => s.port === port)) port++;
+    return { name, port };
+}
+
 export const useBackendStore = create<BackendStore>((set, get) => ({
     services: [],
     connections: [],
@@ -90,9 +99,8 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
         const colorIndex = state.services.length % SERVICE_COLORS.length;
         const service: ServiceContainer = {
             id: uuidv4(),
-            name: name || `Service ${state.services.length + 1}`,
+            ...serviceIdentity(state.services, name || `Service ${state.services.length + 1}`),
             description: "",
-            port: 3000 + state.services.length,
             color: SERVICE_COLORS[colorIndex],
             blocks: [],
             collapsed: false,
@@ -150,7 +158,7 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
         set({
             services: get().services.map((s) =>
                 s.id === serviceId
-                    ? { ...s, blocks: s.blocks.filter((b) => b.id !== blockId) }
+                    ? { ...s, blocks: s.blocks.filter((b) => b.id !== blockId).map(b => ({ ...b, connections: b.connections.filter(id => id !== blockId) })) }
                     : s
             ),
             selectedBlockId: get().selectedBlockId === blockId ? null : get().selectedBlockId,
@@ -295,9 +303,8 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
         const serviceId = uuidv4();
         const service: ServiceContainer = {
             id: serviceId,
-            name: "Auth Service",
+            ...serviceIdentity(get().services, "Auth Service"),
             description: "JWT-based authentication with user registration and login",
-            port: 3001,
             color: SERVICE_COLORS[0],
             blocks: [
                 {
@@ -400,9 +407,8 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
         const serviceId = uuidv4();
         const service: ServiceContainer = {
             id: serviceId,
-            name: "CRUD API",
+            ...serviceIdentity(get().services, "CRUD API"),
             description: "RESTful CRUD API with database model",
-            port: 3002,
             color: SERVICE_COLORS[1],
             blocks: [
                 {
@@ -510,9 +516,8 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
         const serviceId = uuidv4();
         const service: ServiceContainer = {
             id: serviceId,
-            name: "Chat Service",
+            ...serviceIdentity(get().services, "Chat Service"),
             description: "Real-time chat with message history and rooms",
-            port: 3003,
             color: SERVICE_COLORS[2],
             blocks: [
                 {

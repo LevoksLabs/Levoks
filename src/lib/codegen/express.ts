@@ -21,6 +21,8 @@ import {
     ENV_TEMPLATE,
     DOCKERFILE_TEMPLATE,
 } from "./templates";
+import { serviceSlug } from "@/lib/project/schema";
+import { authController } from "./auth";
 
 // ─── Field type → Mongoose type ───
 function mongooseType(type: SchemaField["type"]): string {
@@ -37,13 +39,15 @@ function mongooseType(type: SchemaField["type"]): string {
 }
 
 // ─── Generate model file ───
-function generateModel(block: BackendBlock): string {
+function generateModel(block: BackendBlock, identityModel = false): string {
     const config = block.config as DbModelConfig;
     const fields = config.fields.map((f) => {
-        let fieldDef = `    ${f.name}: {\n      type: ${mongooseType(f.type)}`;
+        let fieldDef = `    ${JSON.stringify(f.name)}: {\n      type: ${mongooseType(f.type)}`;
         if (f.required) fieldDef += `,\n      required: true`;
-        if (f.defaultValue) fieldDef += `,\n      default: '${f.defaultValue}'`;
-        if (f.ref) fieldDef += `,\n      ref: '${f.ref}'`;
+        if (/password|token|secret/i.test(f.name)) fieldDef += `,\n      select: false`;
+        if (identityModel && f.name === "email") fieldDef += `,\n      unique: true, lowercase: true, trim: true`;
+        if (f.defaultValue) fieldDef += `,\n      default: ${JSON.stringify(f.defaultValue)}`;
+        if (f.ref) fieldDef += `,\n      ref: ${JSON.stringify(f.ref)}`;
         fieldDef += `\n    }`;
         return fieldDef;
     }).join(",\n");
@@ -51,14 +55,20 @@ function generateModel(block: BackendBlock): string {
     const opts: string[] = [];
     if (config.timestamps) opts.push("  timestamps: true");
 
-    return MODEL_TEMPLATE(config.tableName, fields);
+    return MODEL_TEMPLATE(config.tableName, fields).replace("timestamps: true", `timestamps: ${config.timestamps}`);
 }
 
 // ─── Generate route handler for an endpoint ───
-function generateEndpointHandler(block: BackendBlock, models: string[]): string {
+function generateEndpointHandler(block: BackendBlock, models: string[], fields: SchemaField[], identityModel: boolean): string {
     const config = block.config as EndpointConfig;
     const method = config.method.toLowerCase();
     const modelName = models.length > 0 ? models[0] : null;
+    if (identityModel) {
+        const action = config.route.split("/").pop();
+        if (action === "register" || action === "login") return `router.post(${JSON.stringify(config.route)}, identity.limit, validateBody(${JSON.stringify(config.requestBody)}), validateRules, identity.${action});`;
+        if (action === "profile") return `router.get(${JSON.stringify(config.route)}, auth, identity.profile);`;
+        if (action === "logout") return `router.post(${JSON.stringify(config.route)}, auth, identity.logout);`;
+    }
 
     // Build handler body based on method
     let handlerBody: string;
@@ -75,7 +85,9 @@ function generateEndpointHandler(block: BackendBlock, models: string[]): string 
   }`;
                 } else {
                     handlerBody = `  try {
-    const items = await ${modelName}.find(req.query);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const items = await ${modelName}.find({}).limit(limit).skip((page - 1) * limit);
     res.json(items);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -93,7 +105,7 @@ function generateEndpointHandler(block: BackendBlock, models: string[]): string 
                 break;
             case "PUT":
                 handlerBody = `  try {
-    const item = await ${modelName}.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const item = await ${modelName}.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
     if (!item) return res.status(404).json({ error: '${modelName} not found' });
     res.json(item);
   } catch (error) {
@@ -111,7 +123,7 @@ function generateEndpointHandler(block: BackendBlock, models: string[]): string 
                 break;
             default:
                 handlerBody = `  try {
-    const item = await ${modelName}.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const item = await ${modelName}.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
     if (!item) return res.status(404).json({ error: '${modelName} not found' });
     res.json(item);
   } catch (error) {
@@ -120,14 +132,15 @@ function generateEndpointHandler(block: BackendBlock, models: string[]): string 
         }
     } else {
         handlerBody = `  try {
-    res.json({ message: '${config.description || block.label}' });
+    res.json({ message: ${JSON.stringify(config.description || block.label)} });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }`;
     }
 
     const authMiddleware = config.authRequired ? "auth, " : "";
-    return `router.${method}('${config.route}', ${authMiddleware}async (req, res) => {\n${handlerBody}\n});`;
+    const inputFields = config.requestBody.length ? config.requestBody : fields.filter(f => !/password|token|secret|role/i.test(f.name));
+    return `router.${method}(${JSON.stringify(config.route)}, ${authMiddleware}validateBody(${JSON.stringify(inputFields)}), validateRules, async (req, res) => {\n${handlerBody.replaceAll('res.status(500).json({ error: error.message })', 'res.status(500).json({ error: "Request failed" })')}\n});`;
 }
 
 // ─── Generate middleware setup ───
@@ -135,9 +148,9 @@ function generateMiddlewareSetup(block: BackendBlock): string {
     const config = block.config as MiddlewareConfig;
     switch (config.middlewareType) {
         case "cors":
-            return `app.use(cors({ origin: '${config.corsOrigins || "*"}' }));`;
+            return `// CORS is configured centrally using CORS_ORIGINS.`;
         case "rateLimit":
-            return `const rateLimit = require('express-rate-limit');\napp.use(rateLimit({ windowMs: ${(config.rateLimitWindow || 15) * 60 * 1000}, max: ${config.rateLimit || 100} }));`;
+            return `app.use(require('express-rate-limit')({ windowMs: ${(config.rateLimitWindow || 15) * 60 * 1000}, max: ${config.rateLimit || 100} }));`;
         case "helmet":
             return `app.use(helmet());`;
         case "logger":
@@ -154,7 +167,7 @@ function generateMiddlewareSetup(block: BackendBlock): string {
 // ─── Main generator for a single service ───
 export function generateServiceCode(service: ServiceContainer): Record<string, string> {
     const files: Record<string, string> = {};
-    const servicePath = service.name.toLowerCase().replace(/\s+/g, "-");
+    const servicePath = serviceSlug(service.name);
 
     // Separate blocks by type
     const endpoints = service.blocks.filter((b) => b.type === "rest_endpoint");
@@ -164,11 +177,12 @@ export function generateServiceCode(service: ServiceContainer): Record<string, s
     const envVars = service.blocks.filter((b) => b.type === "env_var");
 
     const modelNames = models.map((m) => (m.config as DbModelConfig).tableName);
+    const identityModel = authBlocks.some(b => (b.config as AuthConfig).strategy === "jwt") && models.some(m => (m.config as DbModelConfig).fields.some(f => f.name === "password"));
 
     // 1. Generate models
     models.forEach((model) => {
         const config = model.config as DbModelConfig;
-        files[`${servicePath}/models/${config.tableName}.js`] = generateModel(model);
+        files[`${servicePath}/models/${config.tableName}.js`] = generateModel(model, identityModel);
     });
 
     // 2. Generate auth middleware if needed
@@ -184,10 +198,11 @@ export function generateServiceCode(service: ServiceContainer): Record<string, s
             .join("\n");
         const authImport = hasAuth ? "const auth = require('../middleware/auth');\n" : "";
         const endpointCode = endpoints
-            .map((e) => generateEndpointHandler(e, modelNames))
+            .map((e) => generateEndpointHandler(e, modelNames, (models[0]?.config as DbModelConfig | undefined)?.fields || [], identityModel))
             .join("\n\n");
 
-        files[`${servicePath}/routes/index.js`] = `const express = require('express');\nconst router = express.Router();\n${authImport}${modelImports}\n\n${endpointCode}\n\nmodule.exports = router;`;
+        files[`${servicePath}/routes/index.js`] = `const express = require('express');\nconst router = express.Router();\nconst { validateBody, validateRules } = require('../middleware/validate');\n${identityModel ? "const identity = require('../controllers/identity');\n" : ""}${authImport}${modelImports}\n\n${endpointCode}\n\nmodule.exports = router;`;
+        if (identityModel) { const config = authBlocks[0].config as AuthConfig; files[`${servicePath}/controllers/identity.js`] = authController(modelNames[0], Math.min(14, Math.max(10, config.hashRounds || 12)), config.tokenExpiry || "1h"); }
     }
 
     // 4. Generate server.js
@@ -199,7 +214,8 @@ export function generateServiceCode(service: ServiceContainer): Record<string, s
         service.port,
         routeImport,
         middlewareSetup,
-        routeSetup
+        routeSetup,
+        (middlewares.find(m => (m.config as MiddlewareConfig).middlewareType === "cors")?.config as MiddlewareConfig | undefined)?.corsOrigins
     );
 
     // 5. package.json
@@ -210,17 +226,51 @@ export function generateServiceCode(service: ServiceContainer): Record<string, s
         PORT: String(service.port),
         MONGO_URI: `mongodb://localhost:27017/${servicePath.replace(/-/g, "_")}_db`,
         NODE_ENV: "development",
+        CORS_ORIGINS: (middlewares.find(m => (m.config as MiddlewareConfig).middlewareType === "cors")?.config as MiddlewareConfig | undefined)?.corsOrigins || "http://localhost:3000",
     };
     if (hasAuth) {
         const authConfig = authBlocks[0]?.config as AuthConfig | undefined;
-        envMap.JWT_SECRET = authConfig?.secretKey || "your-secret-key";
+        envMap.JWT_SECRET = "";
         envMap.JWT_EXPIRY = authConfig?.tokenExpiry || "7d";
     }
     envVars.forEach((e) => {
-        const cfg = e.config as { key: string; value: string };
-        envMap[cfg.key] = cfg.value;
+        const cfg = e.config as { key: string; value: string; isSecret: boolean };
+        envMap[cfg.key] = cfg.isSecret ? "" : cfg.value.replace(/[\r\n]/g, "");
     });
-    files[`${servicePath}/.env`] = ENV_TEMPLATE(envMap);
+    files[`${servicePath}/.env.example`] = ENV_TEMPLATE(envMap);
+    files[`${servicePath}/.dockerignore`] = `node_modules\n.env*\n.git\n`;
+    files[`${servicePath}/middleware/validate.js`] = `exports.validateBody = (fields) => (req, res, next) => {
+  if (req.params.id && !/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: 'Invalid resource ID' });
+  if (['GET', 'DELETE'].includes(req.method)) return next();
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return res.status(400).json({ error: 'Expected an object' });
+  const unsafe = value => value && typeof value === 'object' && Object.entries(value).some(([key, child]) => key.startsWith('$') || key.includes('.') || ['__proto__', 'constructor', 'prototype'].includes(key) || unsafe(child));
+  if (unsafe(body)) return res.status(400).json({ error: 'Unsafe field name' });
+  const clean = {};
+  for (const field of fields) {
+    const value = body[field.name];
+    if (field.required && req.method !== 'PATCH' && (value === undefined || value === '')) return res.status(400).json({ error: field.name + ' is required' });
+    if (value === undefined) continue;
+    const valid = field.type === 'array' ? Array.isArray(value) : field.type === 'objectId' ? typeof value === 'string' && /^[a-f0-9]{24}$/i.test(value) : field.type === 'date' ? typeof value === 'string' && !Number.isNaN(Date.parse(value)) : typeof value === field.type;
+    if (!valid || value === null) return res.status(400).json({ error: 'Invalid ' + field.name });
+    clean[field.name] = value;
+  }
+  req.body = clean;
+  next();
+};
+const validations = ${JSON.stringify(service.blocks.filter(b => b.type === "validation").map(b => b.config))};
+exports.validateRules = (req, res, next) => {
+  if (['GET', 'DELETE'].includes(req.method)) return next();
+  for (const validation of validations) {
+    const value = req.body[validation.fieldName];
+    for (const rule of validation.rules) {
+      if (req.method === 'PATCH' && value === undefined) continue;
+      const valid = rule.type === 'required' ? value !== undefined && value !== '' : value === undefined ? true : rule.type === 'email' ? typeof value === 'string' && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value) : rule.type === 'minLength' ? String(value).length >= Number(rule.value) : rule.type === 'maxLength' ? String(value).length <= Number(rule.value) : rule.type === 'min' ? Number(value) >= Number(rule.value) : rule.type === 'max' ? Number(value) <= Number(rule.value) : false;
+      if (!valid) return res.status(400).json({ error: rule.message || 'Validation failed' });
+    }
+  }
+  next();
+};`;
 
     // 7. .gitignore
     files[`${servicePath}/.gitignore`] = `node_modules/\n.env\n.DS_Store`;

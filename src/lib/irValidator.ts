@@ -24,7 +24,8 @@ export function validateIR(graph: FlowGraph): IRDiagnostic[] {
 
     for (const flow of graph.flows) {
         // 1. Duplicate trigger detection
-        const existing = seenTriggers.get(flow.trigger.elementId);
+        const triggerKey = `${flow.trigger.pageId}:${flow.trigger.elementId}:${flow.trigger.event}`;
+        const existing = seenTriggers.get(triggerKey);
         if (existing) {
             diagnostics.push({
                 severity: "warning",
@@ -33,7 +34,7 @@ export function validateIR(graph: FlowGraph): IRDiagnostic[] {
                 message: `Element "${flow.trigger.elementId}" has multiple flows (also in ${existing}). Only the last will take effect.`,
             });
         }
-        seenTriggers.set(flow.trigger.elementId, flow.id);
+        seenTriggers.set(triggerKey, flow.id);
 
         // 2. Empty steps
         if (flow.steps.length === 0) {

@@ -142,6 +142,7 @@ const ColorControl: React.FC<{
     value: string;
     onChange: (value: string) => void;
     fallback?: string;
+    allowGradient?: boolean;
 }> = ({ value, onChange, fallback = "#ffffff" }) => {
     const [isOpen, setIsOpen] = useState(false);
     const popoverRef = useRef<HTMLDivElement>(null);

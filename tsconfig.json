@@ -37,6 +37,7 @@
     "**/*.mts"
   ],
   "exclude": [
+    ".verification",
     "node_modules",
     "templates"
   ]

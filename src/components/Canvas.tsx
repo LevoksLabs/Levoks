@@ -863,8 +863,8 @@ const Canvas: React.FC = () => {
                 <div className="canvas-url-bar">
                     <span className="url-icon"><Lock size={12} /></span>
                     <span className="url-text">https://yoursite.com{activePageRoute}</span>
-                    <button className="url-action-btn" disabled title="Coming soon">
-                        Connect Domain
+                    <button className="url-action-btn" onClick={() => window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "ship" }))} title="Export or deploy your website">
+                        Deployment
                     </button>
                 </div>
                 <div className="canvas-topbar-right">

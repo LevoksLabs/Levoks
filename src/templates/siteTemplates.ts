@@ -1,4 +1,5 @@
 import { ElementNode } from "@/types";
+import type { TemplateElement } from "@/types/template";
 
 export interface SiteTemplate {
     id: string;
@@ -7,13 +8,13 @@ export interface SiteTemplate {
     category: string;
     thumbnail: string;
     previewUrl: string;
-    elements: any[];
+    elements: TemplateElement[];
 }
 
 // ═══════════════════════════════════════════════════════════
 // Template 1 — Open: SaaS Landing Page
 // ═══════════════════════════════════════════════════════════
-const template1Elements: any[] = [
+const template1Elements: TemplateElement[] = [
     // ─── Hero Section ───
     {
         type: "section",
@@ -388,7 +389,7 @@ const template1Elements: any[] = [
 // ═══════════════════════════════════════════════════════════
 // Template 2 — TailAdmin: Dashboard
 // ═══════════════════════════════════════════════════════════
-const template2Elements: any[] = [
+const template2Elements: TemplateElement[] = [
     // ─── Top Header Bar ───
     {
         type: "section",
@@ -676,7 +677,7 @@ const template2Elements: any[] = [
 // ═══════════════════════════════════════════════════════════
 // Template 3 — Eldora UI: Portfolio
 // ═══════════════════════════════════════════════════════════
-const template3Elements: any[] = [
+const template3Elements: TemplateElement[] = [
     // ─── Hero / Intro Section ───
     {
         type: "section",

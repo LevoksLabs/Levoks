@@ -18,7 +18,8 @@ const FloatingToolbar: React.FC = () => {
     const toolbarRef = useRef<HTMLDivElement>(null);
 
     // Inline text editing state
-    const [isEditing, setIsEditing] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const isEditing = editingId !== null && editingId === selectedElementId;
     const [editValue, setEditValue] = useState("");
     const editInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,10 +77,6 @@ const FloatingToolbar: React.FC = () => {
         };
     }, [updatePosition]);
 
-    // Close editing when selection changes
-    useEffect(() => {
-        setIsEditing(false);
-    }, [selectedElementId]);
 
     // Focus the input when editing starts
     useEffect(() => {
@@ -104,18 +101,18 @@ const FloatingToolbar: React.FC = () => {
 
     const startEditing = () => {
         setEditValue(currentText);
-        setIsEditing(true);
+        setEditingId(selectedElementId);
     };
 
     const commitEdit = () => {
         if (editValue !== currentText) {
             updateElement(el.id, { props: { ...el.props, [textKey]: editValue } });
         }
-        setIsEditing(false);
+        setEditingId(null);
     };
 
     const cancelEdit = () => {
-        setIsEditing(false);
+        setEditingId(null);
     };
 
     return (

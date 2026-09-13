@@ -3,11 +3,11 @@
 import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { Shield } from "lucide-react";
 import styles from "./page.module.css";
 
-const fadeUp = {
+const fadeUp: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
     opacity: 1,
@@ -16,7 +16,7 @@ const fadeUp = {
   }),
 };
 
-const cardVariant = {
+const cardVariant: Variants = {
   hidden: { opacity: 0, y: 30, scale: 0.97 },
   visible: {
     opacity: 1,

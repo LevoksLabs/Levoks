@@ -173,6 +173,9 @@ export const useRoutingStore = create<RoutingStore>((set, get) => ({
             (c) => c.fromPortId === fromPortId && c.toPortId === toPortId
         );
         if (exists) return;
+        const from = get().getPortsForNode(fromNodeId).find(p => p.id === fromPortId);
+        const to = get().getPortsForNode(toNodeId).find(p => p.id === toPortId);
+        if (!from || !to || from.portType !== "output" || to.portType !== "input" || fromNodeId === toNodeId) return;
 
         const conn: RoutingConnection = {
             id: uuidv4(),
@@ -182,7 +185,7 @@ export const useRoutingStore = create<RoutingStore>((set, get) => ({
             toNodeId,
             animated: true,
         };
-        set({ connections: [...state.connections, conn] });
+        set({ connections: [...state.connections.filter(c => c.fromPortId !== fromPortId), conn] });
     },
 
     removeConnection: (id) => {
@@ -285,7 +288,7 @@ export const useRoutingStore = create<RoutingStore>((set, get) => ({
             
             // Collect all elements (including children) for this page
             const allElements: ElementNode[] = [];
-            const stack = [...pageRootIds];
+            const stack = [...pageRootIds, ...editorState.globalRootIds];
             while (stack.length > 0) {
                 const id = stack.pop()!;
                 const el = editorState.elementsById[id];

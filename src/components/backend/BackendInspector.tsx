@@ -54,7 +54,9 @@ const SchemaFieldsEditor: React.FC<{
     label?: string;
 }> = ({ fields, onChange, label = "Fields" }) => {
     const addField = () => {
-        onChange([...fields, { name: "", type: "string", required: false }]);
+        let name = `field_${fields.length + 1}`;
+        while (fields.some(field => field.name === name)) name += "_new";
+        onChange([...fields, { name, type: "string", required: false }]);
     };
 
     const updateField = (index: number, updates: Partial<SchemaField>) => {

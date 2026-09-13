@@ -193,10 +193,10 @@ const FrontendCodePreviewPanel: React.FC = () => {
 
     // Keep store in sync for export — use a ref to avoid triggering re-renders
     const allFilesRef = useRef(allFiles);
-    allFilesRef.current = allFiles;
     useEffect(() => {
-        setFrontendGeneratedCode(allFilesRef.current);
-    }, [frontendFiles, backendFiles, setFrontendGeneratedCode]);
+        allFilesRef.current = allFiles;
+        setFrontendGeneratedCode(allFiles);
+    }, [allFiles, setFrontendGeneratedCode]);
 
     // Copy file content
     const copyFile = useCallback(async (filePath: string) => {

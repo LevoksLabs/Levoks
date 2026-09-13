@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Levoks - Database-Ready Website Builder",
-  description: "A Next.js 14 visual website editor with fully serializable JSON state for PostgreSQL storage",
+  description: "Design, generate, and ship full-stack websites with visual canvases, AI assistance, and portable source code.",
 };
 
 export default function RootLayout({

@@ -64,7 +64,7 @@ export default function UserMenu({ onOpenProfile }: UserMenuProps) {
   }
 
   const user = session.user;
-  const hasGithub = !!session.githubAccessToken;
+  const hasGithub = session.provider === "github";
   const initials = user?.name
     ? user.name
         .split(" ")
@@ -149,11 +149,11 @@ export default function UserMenu({ onOpenProfile }: UserMenuProps) {
             <Settings size={14} />
             Profile Settings
           </button>
-          <button className="user-menu-item" onClick={() => setOpen(false)}>
+          <button className="user-menu-item" onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "projects" })); }}>
             <FolderOpen size={14} />
             My Projects
           </button>
-          <button className="user-menu-item" onClick={() => setOpen(false)}>
+          <button className="user-menu-item" onClick={() => { setOpen(false); onOpenProfile(); }}>
             <Link2 size={14} />
             Linked Accounts
           </button>

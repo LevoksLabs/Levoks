@@ -16,7 +16,7 @@ const KeyboardShortcuts: React.FC = () => {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             const tag = (e.target as HTMLElement).tagName;
-            if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+            if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target as HTMLElement).isContentEditable || (e.target as HTMLElement).closest("dialog")) return;
 
             const isCtrl = e.ctrlKey || e.metaKey;
 

@@ -1,5 +1,7 @@
 # Levoks 🚀
 
+**Implementation status:** The editor now includes local autosave and recovery, project checkpoints, reviewed AI proposals, complete multi-page source export, GitHub commits, and Vercel frontend deployment. The larger product vision in `Documentation/levoks.md` is still in development. See [production readiness and setup](Documentation/production-readiness.md) for supported behavior, verification, and release blockers.
+
 **The Database-Ready Visual Website Builder**
 
 Levoks is a sophisticated, multi-layered visual development platform built with Next.js 16. It enables developers and designers to build full-stack applications with a live frontend canvas, a service-oriented backend builder, and a visual routing engine that wires everything together.
@@ -45,10 +47,10 @@ The Backend Builder allows for visual microservice orchestration.
 - **Control Flow**: Logic blocks for **If/Else** conditions, **Loops**, and **Try-Catch** error handling.
 
 ### Prebuilt Templates
-Jumpstart development with production-ready templates:
-- **Auth System**: Complete JWT-based registration and login flow.
+Jumpstart development with templates that still require application-specific review:
+- **Auth System**: JWT registration, login, profile, and logout generation with password hashing and HttpOnly cookies.
 - **CRUD API**: Standard Create-Read-Update-Delete patterns for any resource.
-- **Chat System**: Real-time messaging architecture.
+- **Chat System**: Visual architecture starter; real-time execution and multiple-model binding are not implemented, so export reports errors.
 
 ---
 
@@ -91,7 +93,7 @@ Projects are bundled into a **Full-Stack ZIP** via `JSZip`, containing:
 ## 🚀 Getting Started & Development
 
 ### Prerequisites
-- **Node.js**: v18.0.0 or higher
+- **Node.js**: v22 or higher
 - **Package Manager**: npm, pnpm, or yarn
 
 ### Installation

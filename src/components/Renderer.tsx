@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useCallback } from "react";
-import { ElementType, CONTAINER_TYPES } from "@/types";
+import { ElementType, ElementNode, CONTAINER_TYPES } from "@/types";
 import { useEditorStore } from "@/store/editorStore";
 import { useDroppable } from "@dnd-kit/core";
 
@@ -70,8 +70,7 @@ interface ElementRendererProps {
     readOnly?: boolean;
 }
 
-const ElementRenderer: React.FC<ElementRendererProps> = ({ elementId, isRoot, readOnly = false }) => {
-    const element = useEditorStore(s => s.elementsById[elementId]);
+const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> = ({ element, elementId, isRoot, readOnly = false }) => {
     const selectedElementId = useEditorStore(s => s.selectedElementId);
     const selectedElementIds = useEditorStore(s => s.selectedElementIds);
     const selectElement = useEditorStore(s => s.selectElement);
@@ -84,7 +83,6 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ elementId, isRoot, re
         disabled: !isContainer || readOnly,
     });
 
-    if (!element || !element.layout.visible) return null;
 
     const isSelected = !readOnly && (selectedElementId === elementId || selectedElementIds.includes(elementId));
     const layout = element.layout;
@@ -267,7 +265,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ elementId, isRoot, re
     // ─── Hover, Scroll & Click animation triggers ───
     const elRef = useRef<HTMLDivElement>(null);
     const animStrRef = useRef(buildAnimStr);
-    animStrRef.current = buildAnimStr;
+    useEffect(() => { animStrRef.current = buildAnimStr; }, [buildAnimStr]);
 
     useEffect(() => {
         const node = elRef.current;
@@ -285,7 +283,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ elementId, isRoot, re
             const delay = (anim.delay ?? 0) * 1000;
 
             let timerId: ReturnType<typeof setTimeout> | null = null;
-            let rafId: number | null = null;
+            const rafId: number | null = null;
             let cancelled = false;
 
             const runTypewriter = () => {
@@ -441,6 +439,11 @@ const ElementRenderer: React.FC<ElementRendererProps> = ({ elementId, isRoot, re
             )}
         </div>
     );
+};
+
+const ElementRenderer: React.FC<ElementRendererProps> = (props) => {
+    const element = useEditorStore(s => s.elementsById[props.elementId]);
+    return element?.layout.visible ? <VisibleElement {...props} element={element} /> : null;
 };
 
 const Renderer: React.FC<RendererProps> = ({ elementIds, isRoot = false, readOnly = false }) => (
