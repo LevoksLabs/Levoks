@@ -18,6 +18,10 @@ import {
     DEFAULT_AUTH_CONFIG,
     DEFAULT_VALIDATION_CONFIG,
     DEFAULT_ENV_VAR_CONFIG,
+    DEFAULT_REALTIME_WEBSOCKET_CONFIG,
+    DEFAULT_REALTIME_PUBLISH_CONFIG,
+    RealtimeWebSocketConfig,
+    RealtimePublishConfig,
 } from "@/types/backend";
 
 // ─── Store Interface ───
@@ -589,6 +593,30 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
                         description: "Create a new chat room",
                         authRequired: true,
                     } as EndpointConfig,
+                    position: { x: 0, y: 0 },
+                    connections: [],
+                },
+                {
+                    id: uuidv4(),
+                    type: "realtime_websocket",
+                    label: "Chat WebSocket",
+                    config: {
+                        ...DEFAULT_REALTIME_WEBSOCKET_CONFIG,
+                        path: "/ws/chat",
+                        authRequired: true,
+                        description: "Real-time chat connection",
+                    } as RealtimeWebSocketConfig,
+                    position: { x: 0, y: 0 },
+                    connections: [],
+                },
+                {
+                    id: uuidv4(),
+                    type: "realtime_publish",
+                    label: "Publish Message",
+                    config: {
+                        ...DEFAULT_REALTIME_PUBLISH_CONFIG,
+                        channel: "chat.room",
+                    } as RealtimePublishConfig,
                     position: { x: 0, y: 0 },
                     connections: [],
                 },
