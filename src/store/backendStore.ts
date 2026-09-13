@@ -326,7 +326,7 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
         const service: ServiceContainer = {
             id: serviceId,
             ...serviceIdentity(get().services, "Auth Service"),
-            description: "JWT-based authentication with user registration and login",
+            description: "Authentication with revocable sessions, rotating refresh tokens and account session controls",
             color: SERVICE_COLORS[0],
             blocks: [
                 {
@@ -422,6 +422,24 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
             ],
             collapsed: false,
         };
+        for (const [action, method, description] of [
+            ["refresh", "POST", "Rotate the refresh token and renew access"],
+            ["introspect", "POST", "Validate a session for connected backend services"],
+            ["forgot-password", "POST", "Request a password reset email"],
+            ["reset-password", "POST", "Consume a reset link and invalidate sessions"],
+            ["request-verification", "POST", "Request an email verification link"],
+            ["verify-email", "POST", "Confirm a verified email address"],
+            ["logout", "POST", "Revoke the current session"],
+            ["logout-all", "POST", "Revoke all account sessions"],
+            ["sessions", "GET", "List active account sessions"],
+            ["revoke-session", "POST", "Revoke a selected account session"],
+            ["change-password", "POST", "Change password and invalidate every session"],
+        ] as const) {
+            service.blocks.push({id: uuidv4(), type: "rest_endpoint", label: action,
+                config: {...DEFAULT_ENDPOINT_CONFIG, method, route: `/api/auth/${action}`, description, authRequired: !["refresh", "forgot-password", "reset-password", "request-verification", "verify-email"].includes(action),
+                    requestBody: action === "revoke-session" ? [{name: "sessionId", type: "string", required: true}] : action === "change-password" ? [{name: "currentPassword", type: "string", required: true}, {name: "newPassword", type: "string", required: true}] : action === "forgot-password" || action === "request-verification" ? [{name: "email", type: "string", required: true}] : action === "reset-password" ? [{name: "token", type: "string", required: true}, {name: "newPassword", type: "string", required: true}] : action === "verify-email" ? [{name: "token", type: "string", required: true}] : []},
+                position: {x: 0, y: 0}, connections: []});
+        }
         set({ services: [...get().services, service] });
     },
 

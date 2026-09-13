@@ -73,6 +73,10 @@ export interface MiddlewareConfig {
 }
 
 export interface AuthConfig {
+  requireVerifiedEmail?: boolean;
+  identityServiceId?: string;
+  refreshDays?: number;
+  idleMinutes?: number;
   strategy: "jwt" | "oauth" | "session" | "apiKey";
   secretKey: string;
   tokenExpiry: string; // e.g. "7d", "24h"
@@ -219,7 +223,9 @@ export const DEFAULT_MIDDLEWARE_CONFIG: MiddlewareConfig = {
 export const DEFAULT_AUTH_CONFIG: AuthConfig = {
   strategy: "jwt",
   secretKey: "",
-  tokenExpiry: "7d",
+  tokenExpiry: "15m",
+  refreshDays: 7,
+  idleMinutes: 60,
   hashRounds: 10,
 };
 

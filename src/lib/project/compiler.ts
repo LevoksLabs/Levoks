@@ -81,6 +81,13 @@ export function compileProject(value: ProjectDocument) {
         `${service.name}: port 3000 is reserved for the frontend.`,
       );
     for (const block of service.blocks) {
+      if (jwt && identityModel && block.type === "rest_endpoint" && block.connections.length) problem(block.id, "Identity endpoints use the validated identity lifecycle controller; workflow steps cannot bypass password hashing or session checks.");
+      if (jwt && identityModel?.type === "db_model" && ["email", "name", "password"].some(name => identityModel.config.fields.find(f => f.name === name)?.type !== "string")) problem(identityModel.id, "Identity email, name and password must be string fields.");
+      if (block.type === "auth_block" && block.config.identityServiceId) {
+        const target = backend.services.find(s => s.id === block.config.identityServiceId);
+        if (!target || target.id === service.id || !target.blocks.some(b => b.type === "db_model" && b.config.fields.some(f => f.name === "password")) || !target.blocks.some(b => b.type === "auth_block" && b.config.strategy === "jwt") || !target.blocks.some(b => b.type === "rest_endpoint" && b.config.route.endsWith("/introspect") && b.config.method === "POST")) problem(block.id, "Select an identity service with a JWT User model and POST introspect endpoint.");
+        if (identityModel) problem(block.id, "Identity services validate their own sessions. Remote identity binding is for resource services.");
+      }
       if (
         ["logic_if", "logic_loop", "logic_trycatch", "relation"].includes(
           block.type,
@@ -116,11 +123,11 @@ export function compileProject(value: ProjectDocument) {
         jwt &&
         identityModel &&
         block.type === "rest_endpoint" &&
-        !/\/(register|login|profile|logout)$/.test(block.config.route)
+        !/\/(register|login|profile|logout|refresh|sessions|revoke-session|logout-all|change-password|introspect|forgot-password|reset-password|request-verification|verify-email)$/.test(block.config.route)
       )
         problem(
           block.id,
-          `${block.label}: identity services only expose register, login, profile and logout. Put other resources in a separate service.`,
+          `${block.label}: identity services expose register, login, profile, logout, refresh, sessions, revoke-session, logout-all and change-password. Put other resources in a separate service.`,
         );
       if (
         jwt &&
@@ -160,11 +167,11 @@ export function compileProject(value: ProjectDocument) {
         identityModel &&
         block.type === "rest_endpoint" &&
         block.config.method !==
-          (block.config.route.endsWith("/profile") ? "GET" : "POST")
+          (/\/(profile|sessions)$/.test(block.config.route) ? "GET" : "POST")
       )
         problem(
           block.id,
-          `${block.label}: identity endpoints use POST, except profile which uses GET.`,
+          `${block.label}: identity endpoints use POST, except profile and sessions which use GET.`,
         );
       if (
         block.type === "middleware" &&

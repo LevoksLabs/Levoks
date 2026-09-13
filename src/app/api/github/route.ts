@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiError, readJSON } from "@/lib/server/http";
 import { commitProject, githubHead } from "@/lib/server/github";
+import { requireOwner } from "@/lib/server/identity";
 const target = z.object({
   token: z.string().min(10).max(1000),
   owner: z.string().regex(/^[\w-]+$/),
@@ -17,6 +18,7 @@ const target = z.object({
 });
 export async function POST(request: Request) {
   try {
+    await requireOwner();
     const raw = await readJSON(request, 12_000_000);
     const body = target
       .extend({

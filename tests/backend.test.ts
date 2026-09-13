@@ -61,8 +61,19 @@ test("identity controller hashes passwords, rejects privilege input, and sets Ht
     },
     jsonwebtoken: { sign: () => "signed-token" },
     "express-rate-limit": () => () => {},
+    "../identity/sessions": {
+      issue: async (
+        _user: unknown,
+        _request: unknown,
+        response: ResponseStub,
+      ) =>
+        response.cookie("levoks_session", "fixture-session", {
+          httpOnly: true,
+          secure: true,
+        }),
+    },
   };
-  runInNewContext(authController("User", 12, "1h"), {
+  runInNewContext(authController("User", 12), {
     exports: exported,
     require: (id: string) => dependencies[id],
     process: { env: { JWT_SECRET: "x".repeat(32), NODE_ENV: "production" } },

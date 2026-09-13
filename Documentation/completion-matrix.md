@@ -11,7 +11,7 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | ID | Specification requirement | Status | Evidence and remaining acceptance criteria |
 |---|---|---|---|
 | UX01 | Header logo/home navigation, Files menu | PARTIAL | `app/page.tsx`, W; workspace actions exist, specified expandable Files hierarchy not reproduced. Browser navigation/recovery evidence absent. |
-| UX02 | Header Connections workflow | PARTIAL | W Ship token forms; dedicated connection inventory/provider lifecycle missing. |
+| UX02 | Header Connections workflow | PARTIAL | Dedicated GitHub Connections with durable credentials, discovery, review and queue; header layout parity and other provider lifecycles remain. |
 | UX03 | Small floating AI chat window | PARTIAL | W modal prompt/proposal; conversational floating window and transcript missing. |
 | UX04 | Fullscreen play preview | PARTIAL | `LivePreviewPanel`; design simulation, no isolated fullstack execution. |
 | UX05 | Expandable Deploy / ZIP / Commit actions | PARTIAL | W separate Ship/source tabs; requested header interaction and full deployment missing. |
@@ -45,23 +45,23 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | BE04 | Models: identity, types, required, uniqueness, defaults, indexes | PARTIAL | B models and basic fields; unique/index controls and emitted constraints incomplete. |
 | BE05 | Model timestamps and soft-delete behavior | PARTIAL | Timestamps emitted; soft delete blocked by C. |
 | BE06 | Relations, foreign keys, cardinality, update/delete behavior | PARTIAL | Relation type/state exists but no inspector/execution; C blocks export. |
-| BE07 | Query: model binding, CRUD, count, filter, sort, aggregation, outputs | MISSING | B method inference is not a configurable Query block. |
-| BE08 | Atomic transaction groups and rollback | MISSING | No transaction schema, session propagation, inspector, runtime or tests. |
-| BE09 | JWT auth: secure refs, identity/model, expiry, endpoint attachment | PARTIAL | Auth generator works in controlled tests; lifecycle and real execution incomplete. |
+| BE07 | Query: model binding, CRUD, count, filter, sort, aggregation, outputs | PARTIAL | ProgramInspector, validated program IR and emitted runtime execute model-bound scoped CRUD/count/filter/sort; real Mongo tests pass. Aggregation remains missing. |
+| BE08 | Atomic transaction groups and rollback | PARTIAL | Ordered transaction steps emit session-aware runtime; real replica-set duplicate-write rollback passed. Broader browser/error acceptance remains. |
+| BE09 | JWT auth: secure refs, identity/model, expiry, endpoint attachment | PARTIAL | Real generated HTTP verifies login, hashed refresh rotation/replay, logout, password invalidation and cross-service introspection. Email lifecycle, account UI, full strategy coverage and deployment acceptance remain. |
 | BE10 | OAuth auth: providers, callbacks, identity mapping | PARTIAL | Strategy selector exists, generation blocked. Editor OAuth is separate. |
-| BE11 | Session authentication | PARTIAL | Strategy selector exists, generation blocked. |
+| BE11 | Session authentication | PARTIAL | JWT identity templates now persist sessions and enforce revocation/expiry with inspector controls; separate session strategy selection and full account lifecycle remain incomplete. |
 | BE12 | API-key authentication | PARTIAL | Strategy selector exists, generation blocked. |
-| BE13 | Roles and granted capabilities | MISSING | Auth registration fixes initial role; no role-definition or enforcement block. |
-| BE14 | Resource/action permissions | MISSING | No permission schema, inspector or enforcement. |
-| BE15 | Access policies: roles, actions, ownership, conditional rules | MISSING | No row-level authorization or policy compiler. |
-| BE16 | Tenant isolation on reads, writes, aggregates and relationships | MISSING | Generic CRUD is not tenant-scoped. |
+| BE13 | Roles and granted capabilities | PARTIAL | Role inspector, schema and runtime grants are implemented; identity lifecycle and administrative role management remain. |
+| BE14 | Resource/action permissions | PARTIAL | Permission definitions and policy enforcement execute in generated programs; all application access paths remain to be covered. |
+| BE15 | Access policies: roles, actions, ownership, conditional rules | PARTIAL | Policy inspector, IR and generated query scopes; real owner/tenant enforcement passed. Arbitrary policy conditions remain. |
+| BE16 | Tenant isolation on reads, writes, aggregates and relationships | PARTIAL | Explicit workflow reads/creates/updates enforce tenant and owner; real Mongo and HTTP tests passed. Aggregates, relations and legacy CRUD remain incomplete. |
 | BE17 | Password reset, verification, refresh rotation, revocation | MISSING | Identity generator lacks these lifecycle operations. |
 | BE18 | If/Else conditions and executable branches | PARTIAL | String config/inspector exists; C blocks export. |
 | BE19 | Collection/conditional loops and execution bounds | PARTIAL | String config/inspector exists; C blocks export. |
 | BE20 | Try/Catch/Finally, retry and error branches | PARTIAL | String config/inspector exists; C blocks export. |
 | BE21 | Validation: types, required, range, format, pattern, custom conditions | PARTIAL | Subset emitted globally to mutations; rule scope, editable bounds and custom conditions incomplete. |
-| BE22 | Transform: data mapping, output filtering, sensitive-field removal | MISSING | No Transform block/runtime. |
-| BE23 | Functions: inputs, workflow, outputs, reusable service/app scope | MISSING | No function block/call model. |
+| BE22 | Transform: data mapping, output filtering, sensitive-field removal | PARTIAL | Inspector mappings emit bounded interpreted transforms with sensitive output stripping; broader mapping semantics remain. |
+| BE23 | Functions: inputs, workflow, outputs, reusable service/app scope | PARTIAL | Service functions accept inputs and execute ordered steps/outputs; cross-service/app scope remains. |
 | BE24 | Events: names, payloads, producers, consumers | MISSING | No event execution model. |
 | BE25 | Durable queues, retries and failure handling | MISSING | No queue blocks or durable dispatcher. |
 | BE26 | Jobs: payloads, bounds, retry/backoff, failures | MISSING | No job runtime. |
@@ -129,12 +129,12 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | PS03 | Durable assets with lifecycle/access/quotas | MISSING | Inline images only. |
 | PS04 | Background/offline synchronization and conflict resolution | MISSING | Debounced foreground save is not durable background sync. |
 | PS05 | Teams, collaboration, permissions, conflict reconciliation | MISSING | Account-owned single-user snapshots only. |
-| GH01 | Repository authorization / Connections / token expiry | PARTIAL | PAT field and request errors; persisted connection and reauth absent. |
-| GH02 | Repository/branch discovery and selection | MISSING | Manual text inputs only. |
-| GH03 | Initial repository and branch setup | MISSING | Existing initialized branch required. |
-| GH04 | Changed-file review and commit history/status | PARTIAL | Tree comparison/commit result; file diff/history UI absent. |
-| GH05 | Conflict detection/non-force safe updates | PARTIAL | `server/github.ts`, T mocked race; live GitHub verification pending. |
-| GH06 | Durable periodic commits with closed browser | MISSING | Five-minute tab timer only. |
+| GH01 | Repository authorization / Connections / token expiry | PARTIAL | Encrypted PAT connection records, authenticated APIs, expiry/error states and replacement; GitHub App/OAuth and automatic token refresh missing; live authorization unverified. |
+| GH02 | Repository/branch discovery and selection | PARTIAL | Paginated writable-repository/branch discovery and selection UI/API; live GitHub acceptance awaits test authorization. |
+| GH03 | Initial repository and branch setup | PARTIAL | Explicit private-repository creation, branch creation and empty-repo initialization; live provider verification pending. |
+| GH04 | Changed-file review and commit history/status | PARTIAL | Git blob hash comparison lists added/modified/deleted managed files; remote history and durable worker results. Hunk-level review and live acceptance remain. |
+| GH05 | Conflict detection/non-force safe updates | PARTIAL | Head checks, non-force ref update, operation recovery and lease fencing tested; arbitrary remote-to-IR merge and live GitHub race verification remain. |
+| GH06 | Durable periodic commits with closed browser | PARTIAL | Standalone Mongo worker scans saved cloud revisions, schedules commits, retries outages and pauses conflicts; real Mongo restart/concurrency tests passed. Live closed-tab commit and worker container verification pending. |
 | DP01 | Full application deployment model: frontend/backend/database | PARTIAL | Vercel frontend only; backend Compose export is not orchestration. |
 | DP02 | Hosting selection/region/resources/scaling/container settings | MISSING | No deployment plan/provider capability model. |
 | DP03 | Per-environment configuration and secret references | PARTIAL | API origins and examples; managed environments absent. |
@@ -146,10 +146,10 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | DP09 | Monitoring, metrics, alerts | MISSING | No operational integration. |
 | DP10 | Database backups/restore and storage durability | MISSING | Local Compose volume only. |
 | SB01 | Isolated generated-app build/runtime preview | MISSING | No sandbox worker; browser design preview is simulated. |
-| QA01 | Browser E2E and accessibility workflows | MISSING | No browser suite in baseline; prior available UI tool had no browser. |
-| QA02 | Real database/provider/runtime integration tests | MISSING | Existing tests use fakes and VM stubs. |
+| QA01 | Browser E2E and accessibility workflows | PARTIAL | Real Chromium suite verifies persistence, ZIP, inspector-to-source and unauthenticated Connections behavior; broad visual/accessibility coverage remains. |
+| QA02 | Real database/provider/runtime integration tests | PARTIAL | Actual Mongo replica set, generated Express HTTP, vault and durable queue tests. Live external provider tests remain gated. |
 | QA03 | Types/lint/unit/editor/frontend export build/audit | PARTIAL | Previously passed; 71 lint warnings; coverage incomplete. |
-| QA04 | Backend build/generated-project tests/Docker runtime/load | MISSING | Syntax checks only; actual backend/deployment evidence absent. |
+| QA04 | Backend build/generated-project tests/Docker runtime/load | PARTIAL | Generated modules execute with actual Express and MongoDB; container runtime, load and broad generated feature acceptance remain. |
 
 ## External verification gates (do not change internal feature status)
 
@@ -168,11 +168,17 @@ Implemented `src/lib/backend/program-schema.ts`, `program.ts`, `src/lib/codegen/
 
 Evidence: `tests/backend-program.test.ts` has four passing tests covering emitted program preservation, invalid references/cycles/reserved outputs, branching/function/transform execution, and loop bounds. `tests/integration/backend-runtime.test.ts` passed against an actual temporary MongoDB replica set using the emitted runtime and model files. It verifies forced ownership/tenant fields on create, scoped reads, denied cross-tenant updates, missing tenant/identity failures, and rollback after a duplicate-key failure. Existing 22 tests still pass.
 
-Updated statuses: BE07, BE08, BE13, BE14, BE15, BE16, BE22 and BE23 are now **PARTIAL**, with the above concrete execution evidence. BE18–BE20 and IR01–IR02 remain PARTIAL with new compiled execution. No COMPLETE claim: aggregate queries, all loop variants, rich function scoping, graphical edge editing, authorization lifecycle, browser acceptance, and more adversarial execution coverage remain. The initial audit table above is retained as the baseline; this stage ledger records changes against it.
+Updated statuses: BE07, BE08, BE13, BE14, BE15, BE16, BE22 and BE23 are now **PARTIAL**, with the above concrete execution evidence. BE18–BE20 and IR01–IR02 remain PARTIAL with new compiled execution. No COMPLETE claim: aggregate queries, all loop variants, rich function scoping, graphical edge editing, authorization lifecycle, browser acceptance, and more adversarial execution coverage remain. The table above reflects the current status; this stage ledger preserves the implementation evidence.
 
 The MongoDB test-binary gate is resolved locally through `mongodb-memory-server`, with its binary cached under `.verification`. Atlas remains unverified. This harness runs real MongoDB, not an in-memory database mock. It follows the [replica-set harness documentation](https://github.com/typegoose/mongodb-memory-server) and [Mongoose session/transaction API](https://mongoosejs.com/docs/7.x/docs/api/connection.html).
 
 ## Execution order and evidence updates
+
+Stage 2: `src/lib/server/vault.ts`, `/api/secrets`, and `SecretsPanel.tsx` provide encrypted durable storage, metadata-only reads, authenticated owner/project scoping, versioned writes/deletes, and re-encryption under an active key. `tests/integration/vault.test.ts` passes against real MongoDB, including ciphertext inspection, tenant separation, stale updates, tamper detection and rotation. BE51 remains PARTIAL: GCP Secret Manager, host injection and authenticated browser/provider verification are not yet complete. Internal backend inspector plaintext secret inputs were replaced by references to the Secrets workflow.
+
+QA01 and QA02 are now PARTIAL. `tests/e2e/workspace.spec.ts` has two passing real Chromium workflows. `backend-runtime.test.ts` now also starts the actual generated Express server and checks real HTTP requests, JWT enforcement, validation and origin rejection. Browser/MongoDB harness setup is implemented without requiring user credentials; Docker remains unavailable.
+
+Generated backend dependency auditing found two moderate `qs` advisories despite the editor audit being clean. The template now requires patched `qs >=6.16.0` through an override, following [the upstream advisory](https://github.com/advisories/GHSA-4mjr-xmp4-gh2g); verification runs audit the generated package separately.
 
 1. Explicit backend program IR, endpoint/model/query bindings, bounded control flow, transformations, transactions, policies and execution tests.
 2. Identity lifecycle, durable secret/asset boundaries, persistent worker/job infrastructure.
@@ -182,3 +188,15 @@ The MongoDB test-binary gate is resolved locally through `mongodb-memory-server`
 6. Browser E2E, live provider gates, complete generated-app and operational verification.
 
 This order does not waive any row. Update row evidence and readiness after each stage. No internal requirement is blocked simply because credentials for a different feature are missing.
+
+## Stage 3: durable GitHub Connections (2026-09-14)
+
+`GitHubPanel.tsx`, `/api/connections/github`, `server/github-connections.ts` and `scripts/github-worker.ts` replace the foreground-only workflow. Scope and operating instructions are in [github-operations.md](github-operations.md). GH01–GH06 remain PARTIAL for the specific internal and live-verification boundaries recorded above. Real MongoDB tests exercise store restart, worker exclusivity, lease fencing, concurrent queue edits, credential replacement/deletion, owner isolation and scheduled cloud revisions. Contract tests cover file hashes and a lost provider acknowledgement. No GitHub credentials were used and no remote repository was mutated during this stage.
+
+## Stage 4 identity lifecycle checkpoint (2026-09-14)
+
+`auth-session.ts` emits MongoDB-backed sessions, hashed rotating refresh tokens, single-use CAS rotation, proven replay-family revocation, bounded session lifetime/idle expiry and metadata-only session listings. The auth controller revokes sessions on logout/password change, and checks account disablement. Authentication inspector identity-service references produce live introspection in resource services; its target and endpoint are compiler-validated. Identity workflow overrides that would bypass password hashing are now export errors.
+
+`tests/integration/identity-runtime.test.ts` starts two actual generated Express servers with separate MongoDB databases. Passing requests cover registration, hidden credentials, CSRF rejection, successful rotation, random-token rejection without revoking a valid family, concurrent refresh replay, logout, password change, disabled accounts and propagation of revocation into a separate resource service. Session work follows [OWASP session invalidation guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html) and [refresh replay guidance in RFC 9700](https://www.rfc-editor.org/info/rfc9700/). These sources inform the implementation; the project does not claim OAuth conformance from this JWT/session subset.
+
+Stage 3 verification: TypeScript and all 28 unit tests passed; lint had 0 errors and 71 existing warnings. Three real-Mongo integration tests, three real Chromium E2E tests, editor production build and exported two-page frontend build passed. Editor and generated backend audits each returned zero vulnerabilities. Windows Playwright cleanup required running the test command with permission to terminate its own server processes; the rerun exited normally with 3 passed in 15.9 seconds. Stage 4 adds another real integration test and requires another full verification pass after the remaining changes. Docker is still unavailable.

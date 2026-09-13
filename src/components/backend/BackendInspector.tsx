@@ -185,11 +185,9 @@ const BackendInspector: React.FC = () => {
                 className="bi-input"
                 value={block.label}
                 onChange={(e) => {
-                  useBackendStore
-                    .getState()
-                    .updateBlock(serviceId, block.id, {
-                      label: e.target.value,
-                    });
+                  useBackendStore.getState().updateBlock(serviceId, block.id, {
+                    label: e.target.value,
+                  });
                 }}
               />
             </FieldRow>
@@ -552,50 +550,115 @@ const MiddlewareEditor: React.FC<{
 const AuthEditor: React.FC<{
   config: AuthConfig;
   onChange: (u: Partial<AuthConfig>) => void;
-}> = ({ config, onChange }) => (
-  <Section title="Authentication" icon={<Shield size={12} />}>
-    <FieldRow label="Strategy">
-      <select
-        className="bi-select"
-        value={config.strategy}
-        onChange={(e) =>
-          onChange({ strategy: e.target.value as AuthConfig["strategy"] })
-        }
-      >
-        <option value="jwt">JWT</option>
-        <option value="oauth">OAuth</option>
-        <option value="session">Session</option>
-        <option value="apiKey">API Key</option>
-      </select>
-    </FieldRow>
-    <FieldRow label="Secret Key">
-      <input
-        className="bi-input"
-        value={config.secretKey}
-        onChange={(e) => onChange({ secretKey: e.target.value })}
-        type="password"
-      />
+}> = ({ config, onChange }) => {
+  const services = useBackendStore((s) => s.services);
+  return (
+    <Section title="Authentication" icon={<Shield size={12} />}>
+      <FieldRow label="Identity service">
+        <select
+          className="bi-select"
+          value={config.identityServiceId || ""}
+          onChange={(e) =>
+            onChange({ identityServiceId: e.target.value || undefined })
+          }
+        >
+          <option value="">Local identity / standalone JWT validation</option>
+          {services
+            .filter((s) =>
+              s.blocks.some(
+                (b) =>
+                  b.type === "db_model" &&
+                  (b.config as DbModelConfig).fields.some(
+                    (f) => f.name === "password",
+                  ),
+              ),
+            )
+            .map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+        </select>
+        <small>
+          Resource services use this connection to enforce logout and account
+          changes immediately.
+        </small>
+      </FieldRow>
+      <FieldRow label="Strategy">
+        <select
+          className="bi-select"
+          value={config.strategy}
+          onChange={(e) =>
+            onChange({ strategy: e.target.value as AuthConfig["strategy"] })
+          }
+        >
+          <option value="jwt">JWT</option>
+          <option value="oauth">OAuth</option>
+          <option value="session">Session</option>
+          <option value="apiKey">API Key</option>
+        </select>
+      </FieldRow>
+      <FieldRow label="Secret reference">
+        <span>JWT_SECRET</span>
+        <button
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent("levoks:panel", { detail: "secrets" }),
+            )
+          }
+        >
+          Manage encrypted secrets
+        </button>
+      </FieldRow>
+    <FieldRow label="Email verification">
+      <label><input type="checkbox" checked={config.requireVerifiedEmail ?? false} onChange={e => onChange({requireVerifiedEmail: e.target.checked})}/> Require verified email before login</label>
+      <small>Requires the generated email worker, sender and recovery-page configuration.</small>
     </FieldRow>
     <FieldRow label="Token Expiry">
-      <input
-        className="bi-input"
-        value={config.tokenExpiry}
-        onChange={(e) => onChange({ tokenExpiry: e.target.value })}
-        placeholder="7d"
-      />
-    </FieldRow>
-    {config.strategy === "jwt" && (
-      <FieldRow label="Hash Rounds">
         <input
           className="bi-input"
-          type="number"
-          value={config.hashRounds || 10}
-          onChange={(e) => onChange({ hashRounds: parseInt(e.target.value) })}
+          value={config.tokenExpiry}
+          onChange={(e) => onChange({ tokenExpiry: e.target.value })}
+          placeholder="7d"
         />
       </FieldRow>
-    )}
-  </Section>
-);
+      {config.strategy === "jwt" && (
+        <FieldRow label="Session lifetime (days)">
+          <input
+            className="bi-input"
+            type="number"
+            min={1}
+            max={30}
+            value={config.refreshDays ?? 7}
+            onChange={(e) => onChange({ refreshDays: Number(e.target.value) })}
+          />
+        </FieldRow>
+      )}
+      {config.strategy === "jwt" && (
+        <FieldRow label="Idle timeout (minutes)">
+          <input
+            className="bi-input"
+            type="number"
+            min={5}
+            max={1440}
+            value={config.idleMinutes ?? 60}
+            onChange={(e) => onChange({ idleMinutes: Number(e.target.value) })}
+          />
+        </FieldRow>
+      )}
+      {config.strategy === "jwt" && (
+        <FieldRow label="Hash Rounds">
+          <input
+            className="bi-input"
+            type="number"
+            value={config.hashRounds || 10}
+            onChange={(e) => onChange({ hashRounds: parseInt(e.target.value) })}
+          />
+        </FieldRow>
+      )}
+    </Section>
+  );
+};
 
 const ValidationEditor: React.FC<{
   config: ValidationConfig;
@@ -682,10 +745,23 @@ const EnvVarEditor: React.FC<{
     <FieldRow label="Value">
       <input
         className="bi-input"
-        value={config.value}
+        value={config.isSecret ? "" : config.value}
         onChange={(e) => onChange({ value: e.target.value })}
         type={config.isSecret ? "password" : "text"}
+        disabled={config.isSecret}
+        placeholder={config.isSecret ? "Managed in Project secrets" : "Value"}
       />
+      {config.isSecret && (
+        <button
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent("levoks:panel", { detail: "secrets" }),
+            )
+          }
+        >
+          Manage encrypted secrets
+        </button>
+      )}
     </FieldRow>
     <FieldRow label="Secret">
       <label className="bi-toggle">

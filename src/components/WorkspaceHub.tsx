@@ -50,8 +50,9 @@ import { exportAsZip } from "@/lib/codegen/exporter";
 import { validateFiles } from "@/lib/codegen/files";
 import "./workspace.css";
 import SecretsPanel from "./SecretsPanel";
+import GitHubPanel from "./GitHubPanel";
 
-type Panel = "projects" | "ai" | "source" | "ship" | "secrets";
+type Panel = "projects" | "ai" | "source" | "ship" | "secrets" | "connections";
 type Proposal = {
   summary: string;
   project?: ProjectDocument;
@@ -103,13 +104,6 @@ export default function WorkspaceHub() {
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [selectedFile, setSelectedFile] = useState("");
   const [query, setQuery] = useState("");
-  const [githubToken, setGithubToken] = useState("");
-  const [owner, setOwner] = useState("");
-  const [repo, setRepo] = useState("");
-  const [branch, setBranch] = useState("main");
-  const [head, setHead] = useState("");
-  const [commitMessage, setCommitMessage] = useState("Save Levoks progress");
-  const [autoCommit, setAutoCommit] = useState(false);
   const [vercelToken, setVercelToken] = useState("");
   const [origins, setOrigins] = useState<Record<string, string>>({});
   const [deployment, setDeployment] = useState<{
@@ -117,12 +111,10 @@ export default function WorkspaceHub() {
     url: string;
     state: string;
   } | null>(null);
-  const [lastCommit, setLastCommit] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const abort = useRef<AbortController | null>(null);
   const operation = useRef(false);
-  const autoCommitAction = useRef<() => void>(() => {});
 
   const compilation = useMemo(() => {
     if (!panel || !workspace.ready) return null;
@@ -185,30 +177,15 @@ export default function WorkspaceHub() {
     if (panel) dialog.current?.showModal();
     else dialog.current?.close();
   }, [panel]);
-  useEffect(() => {
-    autoCommitAction.current = () => {
-      if (!operation.current && projectSignature() !== lastCommit)
-        void run(async () => {
-          await commit();
-        });
-    };
-  });
   useEffect(
     () =>
       useWorkspaceStore.subscribe((next, previous) => {
         if (next.id !== previous.id) {
-          setAutoCommit(false);
           setProposal(null);
-          setLastCommit("");
         }
       }),
     [],
   );
-  useEffect(() => {
-    if (!autoCommit) return;
-    const interval = setInterval(() => autoCommitAction.current(), 300_000);
-    return () => clearInterval(interval);
-  }, [autoCommit]);
   useEffect(() => {
     if (
       !deployment ||
@@ -277,39 +254,6 @@ export default function WorkspaceHub() {
     );
     setProposal({ ...result, basedOn });
     setMessage("Proposal ready. Review it before applying.");
-  }
-  async function commit() {
-    if (!head) throw new Error("Connect the repository and branch first.");
-    const signature = projectSignature();
-    try {
-      const result = await api("/api/github", {
-        action: "commit",
-        token: githubToken,
-        owner,
-        repo,
-        branch,
-        expectedHead: head,
-        projectId: workspace.id,
-        files: buildFiles(),
-        message: commitMessage,
-      });
-      setHead(result.sha);
-      setLastCommit(signature);
-      setMessage(
-        result.unchanged
-          ? "No source changes to commit."
-          : `Committed ${result.sha.slice(0, 7)} to ${owner}/${repo}.`,
-      );
-      await flushWorkspace("GitHub commit");
-    } catch (error) {
-      setAutoCommit(false);
-      throw error;
-    }
-  }
-  function changeTarget(setter: (value: string) => void, value: string) {
-    setter(value);
-    setHead("");
-    setAutoCommit(false);
   }
   const openPanel = (next: Panel) => {
     setPanel(next);
@@ -418,6 +362,7 @@ export default function WorkspaceHub() {
                 ["ai", Sparkles, "AI assistant"],
                 ["source", Code2, "Source & checks"],
                 ["secrets", Save, "Secrets"],
+                ["connections", GitBranch, "Connections"],
                 ["ship", Rocket, "Export & deploy"],
               ] as const
             ).map(([id, Icon, label]) => (
@@ -442,7 +387,12 @@ export default function WorkspaceHub() {
             {message && <p className="workspace-success">{message}</p>}
           </div>
           <div className="workspace-content">
-            {panel === "secrets" && <SecretsPanel key={workspace.id} projectId={workspace.id} />}
+            {panel === "connections" && (
+              <GitHubPanel key={workspace.id} projectId={workspace.id} />
+            )}
+            {panel === "secrets" && (
+              <SecretsPanel key={workspace.id} projectId={workspace.id} />
+            )}
             {panel === "projects" && (
               <div className="workspace-grid">
                 <section>
@@ -948,101 +898,9 @@ export default function WorkspaceHub() {
                       details.
                     </p>
                   )}
-                  <h2>
-                    <GitBranch size={20} /> Save progress to GitHub
-                  </h2>
-                  <p>
-                    Use an existing repository with at least one commit and a
-                    fine-grained token with Contents read/write access.
-                    Generated files are managed in{" "}
-                    <code>levoks/{workspace.id}/</code>.
-                  </p>
-                  <label>
-                    GitHub token
-                    <input
-                      type="password"
-                      autoComplete="off"
-                      value={githubToken}
-                      onChange={(e) =>
-                        changeTarget(setGithubToken, e.target.value)
-                      }
-                    />
-                  </label>
-                  <div className="workspace-field-row">
-                    <label>
-                      Owner
-                      <input
-                        value={owner}
-                        onChange={(e) => changeTarget(setOwner, e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Repository
-                      <input
-                        value={repo}
-                        onChange={(e) => changeTarget(setRepo, e.target.value)}
-                      />
-                    </label>
-                  </div>
-                  <label>
-                    Branch
-                    <input
-                      value={branch}
-                      onChange={(e) => changeTarget(setBranch, e.target.value)}
-                    />
-                  </label>
-                  <button
-                    disabled={busy || !githubToken || !owner || !repo}
-                    onClick={() =>
-                      void run(async () => {
-                        const result = await api("/api/github", {
-                          action: "connect",
-                          token: githubToken,
-                          owner,
-                          repo,
-                          branch,
-                          projectId: workspace.id,
-                        });
-                        setHead(result.sha);
-                        setMessage(
-                          `Connected at commit ${result.sha.slice(0, 7)}.`,
-                        );
-                      })
-                    }
-                  >
-                    Connect / refresh branch
+                  <button onClick={() => openPanel("connections")}>
+                    <GitBranch size={16} /> Open GitHub Connections
                   </button>
-                  {head && (
-                    <>
-                      <label>
-                        Commit message
-                        <input
-                          value={commitMessage}
-                          maxLength={200}
-                          onChange={(e) => setCommitMessage(e.target.value)}
-                        />
-                      </label>
-                      <button
-                        disabled={busy || blocked || !commitMessage.trim()}
-                        onClick={() => void run(commit)}
-                      >
-                        Commit reviewed source
-                      </button>
-                      <label className="workspace-check">
-                        <input
-                          type="checkbox"
-                          checked={autoCommit}
-                          onChange={(e) => setAutoCommit(e.target.checked)}
-                        />{" "}
-                        Commit changed source every 5 minutes while this tab is
-                        open
-                      </label>
-                      <p>
-                        Automatic commits stop on errors or conflicts.
-                        Credentials are cleared when this tab reloads.
-                      </p>
-                    </>
-                  )}
                 </section>
                 <section>
                   <h2>

@@ -7,6 +7,8 @@
 
 import { ServiceContainer, ConnectionEdge } from "@/types/backend";
 import { FlowGraph } from "@/types/ir";
+import { serviceSlug } from "@/lib/project/schema";
+import type { AuthConfig } from "@/types/backend";
 import { generateServiceCode } from "./express";
 import { DOCKER_COMPOSE_TEMPLATE, README_TEMPLATE } from "./templates";
 
@@ -27,17 +29,21 @@ export function generateProject(
 
     // Generate code for each service
     for (const service of services) {
-        const serviceFiles = generateServiceCode(service);
+        const serviceFiles = generateServiceCode(service, services);
         Object.assign(allFiles, serviceFiles);
     }
 
     // Docker Compose (if multiple services)
     if (services.length > 0) {
         allFiles["docker-compose.yml"] = DOCKER_COMPOSE_TEMPLATE(
-            services.map((s) => ({
+            services.map((s) => {
+                const identityId = (s.blocks.find(b => b.type === "auth_block" && (b.config as AuthConfig).identityServiceId)?.config as AuthConfig | undefined)?.identityServiceId;
+                const target = services.find(service => service.id === identityId);
+                return {
                 name: s.name,
                 port: s.port,
-            }))
+                identityOrigin: target ? `http://${serviceSlug(target.name)}:${target.port}` : undefined,
+            }; })
         );
     }
 

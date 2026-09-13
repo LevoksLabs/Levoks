@@ -23,6 +23,8 @@ import {
 } from "./templates";
 import { serviceSlug } from "@/lib/project/schema";
 import { authController } from "./auth";
+import { authSessionRuntime } from "./auth-session";
+import { authRecoveryRuntime, IDENTITY_EMAIL_WORKER } from "./auth-recovery";
 import { programFiles } from "@/lib/backend/program";
 
 // ─── Field type → Mongoose type ───
@@ -58,7 +60,8 @@ function generateModel(block: BackendBlock, identityModel = false): string {
     const opts: string[] = [];
     if (config.timestamps) opts.push("  timestamps: true");
 
-    return MODEL_TEMPLATE(config.tableName, fields + (config.softDelete ? ",\n    deletedAt: { type: Date, default: null, index: true }" : "")).replace("timestamps: true", `timestamps: ${config.timestamps}`);
+    const identityFields = identityModel && config.fields.some(f => f.name === "password") ? ",\n    authVersion: {type: Number, default: 0, select: false},\n    disabledAt: {type: Date, default: null, select: false},\n    emailVerifiedAt: {type: Date, default: null},\n" + ['authReset', 'authVerify'].map(prefix => `    ${prefix}Hash: {type: String, select: false},\n    ${prefix}ExpiresAt: {type: Date, select: false},\n    ${prefix}RequestedAt: {type: Date, select: false},\n    ${prefix}Mail: {type: mongoose.Schema.Types.Mixed, select: false}`).join(',\n') : "";
+    return MODEL_TEMPLATE(config.tableName, fields + identityFields + (config.softDelete ? ",\n    deletedAt: { type: Date, default: null, index: true }" : "")).replace("timestamps: true", `timestamps: ${config.timestamps}`);
 }
 
 // ─── Generate route handler for an endpoint ───
@@ -72,6 +75,17 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
         if (action === "register" || action === "login") return `router.post(${JSON.stringify(config.route)}, identity.limit, validateBody(${JSON.stringify(config.requestBody)}), validateRules, identity.${action});`;
         if (action === "profile") return `router.get(${JSON.stringify(config.route)}, auth, identity.profile);`;
         if (action === "logout") return `router.post(${JSON.stringify(config.route)}, auth, identity.logout);`;
+        if (action === "refresh") return `router.post(${JSON.stringify(config.route)}, identity.limit, identity.refresh);`;
+        if (action === "sessions") return `router.get(${JSON.stringify(config.route)}, auth, identity.sessions);`;
+        if (action === "introspect") return `router.post(${JSON.stringify(config.route)}, auth, (req, res) => {res.set('Cache-Control', 'no-store'); res.json(req.user);});`;
+        if (["forgot-password", "request-verification", "reset-password", "verify-email"].includes(action || "")) {
+            const fields = action === "forgot-password" || action === "request-verification" ? [{name: "email", type: "string", required: true}] : [{name: "token", type: "string", required: true}, ...(action === "reset-password" ? [{name: "newPassword", type: "string", required: true}] : [])];
+            return `router.post(${JSON.stringify(config.route)}, identity.limit, validateBody(${JSON.stringify(fields)}), identity[${JSON.stringify(action)}]);`;
+        }
+        if (["logout-all", "revoke-session", "change-password"].includes(action || "")) {
+            const input = action === "revoke-session" ? [{name: "sessionId", type: "string", required: true}] : action === "change-password" ? [{name: "currentPassword", type: "string", required: true}, {name: "newPassword", type: "string", required: true}] : [];
+            return `router.post(${JSON.stringify(config.route)}, auth, identity.limit, validateBody(${JSON.stringify(input)}), identity[${JSON.stringify(action)}]);`;
+        }
     }
 
     // Build handler body based on method
@@ -169,7 +183,7 @@ function generateMiddlewareSetup(block: BackendBlock): string {
 }
 
 // ─── Main generator for a single service ───
-export function generateServiceCode(service: ServiceContainer): Record<string, string> {
+export function generateServiceCode(service: ServiceContainer, allServices: ServiceContainer[] = []): Record<string, string> {
     const files: Record<string, string> = {};
     const servicePath = serviceSlug(service.name);
 
@@ -179,6 +193,9 @@ export function generateServiceCode(service: ServiceContainer): Record<string, s
     const middlewares = service.blocks.filter((b) => b.type === "middleware");
     const authBlocks = service.blocks.filter((b) => b.type === "auth_block");
     const envVars = service.blocks.filter((b) => b.type === "env_var");
+    const identityId = (authBlocks.find(b => (b.config as AuthConfig).identityServiceId)?.config as AuthConfig | undefined)?.identityServiceId;
+    const remoteIdentity = allServices.find(s => s.id === identityId);
+    const introspectionPath = (remoteIdentity?.blocks.find(b => b.type === "rest_endpoint" && (b.config as EndpointConfig).route.endsWith('/introspect'))?.config as EndpointConfig | undefined)?.route;
 
     const modelNames = models.map((m) => (m.config as DbModelConfig).tableName);
     const identityModel = authBlocks.some(b => (b.config as AuthConfig).strategy === "jwt") && models.some(m => (m.config as DbModelConfig).fields.some(f => f.name === "password"));
@@ -194,7 +211,7 @@ export function generateServiceCode(service: ServiceContainer): Record<string, s
     const hasAuth = programAuth || authBlocks.length > 0 || endpoints.some((e) => (e.config as EndpointConfig).authRequired || (e.config as EndpointConfig).policyIds?.length);
     if (endpoints.some(e => e.connections.length)) for (const [path, source] of Object.entries(programFiles(service))) files[`${servicePath}/${path}`] = source;
     if (hasAuth) {
-        files[`${servicePath}/middleware/auth.js`] = AUTH_MIDDLEWARE_TEMPLATE();
+        files[`${servicePath}/middleware/auth.js`] = AUTH_MIDDLEWARE_TEMPLATE(identityModel, remoteIdentity ? `http://localhost:${remoteIdentity.port}` : undefined, introspectionPath);
     }
 
     // 3. Generate routes
@@ -213,7 +230,14 @@ export function generateServiceCode(service: ServiceContainer): Record<string, s
             .join("\n\n");
 
         files[`${servicePath}/routes/index.js`] = `const express = require('express');\nconst router = express.Router();\n${endpoints.some(e => e.connections.length) ? "const workflow = require('../workflow');\n" : ""}const { validateBody, validateRules } = require('../middleware/validate');\n${identityModel ? "const identity = require('../controllers/identity');\n" : ""}${authImport}${modelImports}\n\n${endpointCode}\n\nmodule.exports = router;`;
-        if (identityModel) { const config = authBlocks[0].config as AuthConfig; files[`${servicePath}/controllers/identity.js`] = authController(modelNames[0], Math.min(14, Math.max(10, config.hashRounds || 12)), config.tokenExpiry || "1h"); }
+        if (identityModel) {
+            const config = authBlocks.find(b => (b.config as AuthConfig).strategy === "jwt")!.config as AuthConfig;
+            const identityName = (models.find(m => (m.config as DbModelConfig).fields.some(f => f.name === "password"))!.config as DbModelConfig).tableName;
+            files[`${servicePath}/controllers/identity.js`] = authController(identityName, Math.min(14, Math.max(10, config.hashRounds || 12)), config.requireVerifiedEmail);
+            files[`${servicePath}/identity/sessions.js`] = authSessionRuntime(identityName, config.tokenExpiry || "15m", config.refreshDays ?? 7, config.idleMinutes ?? 60);
+            files[`${servicePath}/identity/recovery.js`] = authRecoveryRuntime(identityName, Math.min(14, Math.max(10, config.hashRounds || 12)));
+            files[`${servicePath}/workers/identity-email.js`] = IDENTITY_EMAIL_WORKER;
+        }
     }
 
     // 4. Generate server.js
@@ -231,6 +255,11 @@ export function generateServiceCode(service: ServiceContainer): Record<string, s
 
     // 5. package.json
     files[`${servicePath}/package.json`] = PACKAGE_JSON_TEMPLATE(service.name, service.port);
+    if (identityModel) {
+        const manifest = JSON.parse(files[`${servicePath}/package.json`]);
+        manifest.scripts['worker:email'] = 'node workers/identity-email.js';
+        files[`${servicePath}/package.json`] = JSON.stringify(manifest, null, 2);
+    }
 
     // 6. .env
     const envMap: Record<string, string> = {
@@ -240,6 +269,7 @@ export function generateServiceCode(service: ServiceContainer): Record<string, s
         CORS_ORIGINS: (middlewares.find(m => (m.config as MiddlewareConfig).middlewareType === "cors")?.config as MiddlewareConfig | undefined)?.corsOrigins || "http://localhost:3000",
     };
     if (hasAuth) {
+        if (remoteIdentity) envMap.AUTH_IDENTITY_ORIGIN = `http://localhost:${remoteIdentity.port}`;
         const authConfig = authBlocks[0]?.config as AuthConfig | undefined;
         envMap.JWT_SECRET = "";
         envMap.JWT_EXPIRY = authConfig?.tokenExpiry || "7d";
@@ -249,6 +279,7 @@ export function generateServiceCode(service: ServiceContainer): Record<string, s
         envMap[cfg.key] = cfg.isSecret ? "" : cfg.value.replace(/[\r\n]/g, "");
     });
     files[`${servicePath}/.env.example`] = ENV_TEMPLATE(envMap);
+    if (identityModel) files[`${servicePath}/.env.example`] += '\nIDENTITY_PUBLIC_URL=\nIDENTITY_EMAIL_FROM=\nIDENTITY_EMAIL_KEYS=\nIDENTITY_EMAIL_ACTIVE_KEY=\nRESEND_API_KEY=\n';
     files[`${servicePath}/.dockerignore`] = `node_modules\n.env*\n.git\n`;
     files[`${servicePath}/middleware/validate.js`] = `exports.validateBody = (fields) => (req, res, next) => {
   if (req.params.id && !/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: 'Invalid resource ID' });

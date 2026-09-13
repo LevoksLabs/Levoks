@@ -100,10 +100,11 @@ export async function providerJSON(
   });
   if (!response.ok)
     throw new HttpError(
-      response.status === 401 || response.status === 403
-        ? 401
-        : response.status === 429
-          ? 429
+      response.status === 403 &&
+        response.headers.get("x-ratelimit-remaining") === "0"
+        ? 429
+        : [401, 403, 404, 409, 422, 429].includes(response.status)
+          ? response.status
           : 502,
       `Provider request failed (${response.status}). Check your credentials, permissions, and quota.`,
     );

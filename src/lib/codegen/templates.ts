@@ -27,7 +27,9 @@ export const PACKAGE_JSON_TEMPLATE = (name: string, port: number) => `{
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
-  }
+  },
+  "overrides": { "qs": "^6.16.0" },
+  "engines": { "node": ">=22" }
 }`;
 
 export const SERVER_TEMPLATE = (port: number, imports: string, middlewareSetup: string, routeSetup: string, corsOrigins = "http://localhost:3000") => `
@@ -117,10 +119,11 @@ ${endpoints}
 module.exports = router;
 `.trim();
 
-export const AUTH_MIDDLEWARE_TEMPLATE = () => `
+export const AUTH_MIDDLEWARE_TEMPLATE = (identitySession = false, identityOrigin?: string, introspectionPath = "/api/auth/introspect") => `
 const jwt = require('jsonwebtoken');
+${identitySession ? "const sessions = require('../identity/sessions');" : ""}
 
-const auth = (req, res, next) => {
+const auth = async (req, res, next) => {
   try {
     const bearer = req.header('Authorization')?.replace('Bearer ', '');
     const cookie = req.headers.cookie?.split(';').map(value => value.trim()).find(value => value.startsWith('levoks_session='))?.slice('levoks_session='.length);
@@ -132,7 +135,13 @@ const auth = (req, res, next) => {
 
     if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) return res.status(503).json({ error: 'Authentication is not configured' });
     const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
-    req.user = decoded;
+    ${identityOrigin ? `let response;
+    try { response = await fetch((process.env.AUTH_IDENTITY_ORIGIN || ${JSON.stringify(identityOrigin)}).replace(/\\/$/, '') + ${JSON.stringify(introspectionPath)}, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000), headers: {Authorization: 'Bearer ' + token}}); }
+    catch { return res.status(503).json({error: 'Identity service unavailable'}); }
+    if (!response.ok) return res.status([401, 403].includes(response.status) ? 401 : 503).json({error: 'Identity session unavailable or revoked'});
+    const data = await response.json();
+    if (typeof data.sub !== 'string' || data.sub !== decoded.sub || typeof data.sid !== 'string' || data.sid !== decoded.sid || typeof data.role !== 'string' || (data.tenantId !== undefined && typeof data.tenantId !== 'string')) return res.status(401).json({error: 'Invalid identity response'});
+    req.user = {sub: data.sub, sid: data.sid, role: data.role, ...(data.tenantId ? {tenantId: data.tenantId} : {})};` : `req.user = ${identitySession ? "await sessions.verify(decoded)" : "decoded"};`}
     next();
   } catch (error) {
     res.status(401).json({ error: 'Invalid token.' });
@@ -171,7 +180,7 @@ EXPOSE ${port}
 CMD ["node", "server.js"]
 `.trim();
 
-export const DOCKER_COMPOSE_TEMPLATE = (services: { name: string; port: number }[]) => `
+export const DOCKER_COMPOSE_TEMPLATE = (services: { name: string; port: number; identityOrigin?: string }[]) => `
 version: '3.8'
 
 services:
@@ -189,7 +198,7 @@ ${services.map(s => `  ${serviceSlug(s.name)}:
     environment:
       - PORT=${s.port}
       - JWT_SECRET=\${JWT_SECRET:-}
-      - CORS_ORIGINS=\${CORS_ORIGINS:-http://localhost:3000}
+${s.identityOrigin ? `      - AUTH_IDENTITY_ORIGIN=${s.identityOrigin}\n` : ""}      - CORS_ORIGINS=\${CORS_ORIGINS:-http://localhost:3000}
       - MONGO_URI=mongodb://mongodb:27017/${serviceSlug(s.name).replace(/-/g, '_')}_db
     depends_on:
       - mongodb

@@ -64,6 +64,10 @@ const configs = {
     customCode: text.optional(),
   }),
   auth_block: z.object({
+    requireVerifiedEmail: z.boolean().optional(),
+    identityServiceId: id.optional(),
+    refreshDays: z.number().int().min(1).max(30).optional(),
+    idleMinutes: z.number().int().min(5).max(1440).optional(),
     strategy: z.enum(["jwt", "oauth", "session", "apiKey"]),
     secretKey: text,
     tokenExpiry: text,

@@ -4,50 +4,145 @@ import JSZip from "jszip";
 import { emptyProject } from "../../src/lib/project/workspace";
 import { programFixture } from "../helpers/program-fixture";
 
-test("project autosave survives reload and ZIP contains all imported backend operations", async ({page}) => {
-  const errors:string[]=[];
-  page.on("pageerror",error=>errors.push(error.message));
+test("Connections shows authentication errors without falsely reporting a connected provider", async ({
+  page,
+}) => {
   await page.goto("/");
-  await page.getByRole("button",{name:"Untitled project",exact:true}).click();
-  const dialog=page.getByRole("dialog",{name:"Levoks project workspace"});
-  await dialog.getByLabel("Project name",{exact:true}).fill("Persistent browser project");
-  await dialog.getByRole("button",{name:"Save checkpoint",exact:true}).click();
+  await page
+    .getByRole("button", { name: "Untitled project", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Levoks project workspace" });
+  await dialog
+    .getByRole("button", { name: "Connections", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toContainText("Sign in");
+  await expect(dialog.getByRole("status")).toHaveText(
+    "No repository connected",
+  );
+  await expect(
+    dialog.getByRole("button", { name: "Find repositories", exact: true }),
+  ).toBeDisabled();
+  const unauthorized = await page.request.get(
+    "/api/connections/github?projectId=other-project",
+  );
+  expect(unauthorized.status()).toBe(401);
+});
+
+test("project autosave survives reload and ZIP contains all imported backend operations", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Untitled project", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Levoks project workspace" });
+  await dialog
+    .getByLabel("Project name", { exact: true })
+    .fill("Persistent browser project");
+  await dialog
+    .getByRole("button", { name: "Save checkpoint", exact: true })
+    .click();
   await expect(dialog.getByText("Checkpoint saved.")).toBeVisible();
   await page.reload();
-  await page.getByRole("button",{name:"Persistent browser project",exact:true}).click();
-  await expect(dialog.getByLabel("Project name",{exact:true})).toHaveValue("Persistent browser project");
-  const source=emptyProject("Executable browser project");
-  const upload={...source,backend:{...source.backend,services:[programFixture()]}};
-  await dialog.locator('input[type="file"]').setInputFiles({name:"project.json",mimeType:"application/json",buffer:Buffer.from(JSON.stringify(upload))});
-  await expect(dialog.getByLabel("Project name",{exact:true})).toHaveValue("Executable browser project (import)");
-  await dialog.getByRole("button",{name:"Source & checks",exact:true}).click();
+  await page
+    .getByRole("button", { name: "Persistent browser project", exact: true })
+    .click();
+  await expect(dialog.getByLabel("Project name", { exact: true })).toHaveValue(
+    "Persistent browser project",
+  );
+  const source = emptyProject("Executable browser project");
+  const upload = {
+    ...source,
+    backend: { ...source.backend, services: [programFixture()] },
+  };
+  await dialog.locator('input[type="file"]').setInputFiles({
+    name: "project.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(upload)),
+  });
+  await expect(dialog.getByLabel("Project name", { exact: true })).toHaveValue(
+    "Executable browser project (import)",
+  );
+  await dialog
+    .getByRole("button", { name: "Source & checks", exact: true })
+    .click();
   await expect(dialog.getByRole("alert")).toHaveCount(0);
-  const downloadEvent=page.waitForEvent("download");
-  await dialog.getByRole("button",{name:"ZIP",exact:true}).click();
-  const download=await downloadEvent;
-  const zip=await JSZip.loadAsync(await readFile((await download.path())!));
-  const program=JSON.parse(await zip.file("backend/workflow-service/workflow/program.json")!.async("string"));
-  expect(program.blocks.some((block:{type:string})=>block.type==="query")).toBe(true);
-  expect(program.blocks.some((block:{type:string})=>block.type==="access_policy")).toBe(true);
+  const downloadEvent = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "ZIP", exact: true }).click();
+  const download = await downloadEvent;
+  const zip = await JSZip.loadAsync(await readFile((await download.path())!));
+  const program = JSON.parse(
+    await zip
+      .file("backend/workflow-service/workflow/program.json")!
+      .async("string"),
+  );
+  expect(
+    program.blocks.some((block: { type: string }) => block.type === "query"),
+  ).toBe(true);
+  expect(
+    program.blocks.some(
+      (block: { type: string }) => block.type === "access_policy",
+    ),
+  ).toBe(true);
   expect(zip.file("frontend/app/page.jsx")).not.toBeNull();
   expect(errors).toEqual([]);
 });
 
-test("backend query inspector changes persisted IR and emitted source",async({page})=>{
+test("backend query inspector changes persisted IR and emitted source", async ({
+  page,
+}) => {
   await page.goto("/");
-  await page.getByRole("button",{name:"Untitled project",exact:true}).click();
-  const dialog=page.getByRole("dialog");
-  const source=emptyProject("Inspector workflow");
-  await dialog.locator('input[type="file"]').setInputFiles({name:"workflow.json",mimeType:"application/json",buffer:Buffer.from(JSON.stringify({...source,backend:{...source.backend,services:[programFixture()]}}))});
-  await expect(dialog.getByLabel("Project name",{exact:true})).toHaveValue("Inspector workflow (import)");
-  await dialog.getByRole("button",{name:"Close workspace"}).click();
-  await page.getByTitle("Backend Builder",{exact:true}).click();
-  await page.locator(".backend-block").filter({has:page.locator(".backend-block-label",{hasText:/^list$/})}).click();
-  await page.getByLabel("Maximum results",{exact:true}).fill("7");
-  await page.getByRole("button",{name:"Save project",exact:true}).click();
-  await page.getByRole("banner").getByRole("button",{name:"Code",exact:true}).click();
-  await dialog.getByLabel("Filter source files",{exact:true}).fill("workflow/program.json");
-  await dialog.getByRole("button",{name:"backend/workflow-service/workflow/program.json",exact:true}).click();
-  const text=await dialog.getByRole("textbox",{name:"Source code for backend/workflow-service/workflow/program.json",exact:true}).inputValue();
-  expect(JSON.parse(text).blocks.find((block:{id:string})=>block.id==="list").config.limit).toBe(7);
+  await page
+    .getByRole("button", { name: "Untitled project", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  const source = emptyProject("Inspector workflow");
+  await dialog.locator('input[type="file"]').setInputFiles({
+    name: "workflow.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify({
+        ...source,
+        backend: { ...source.backend, services: [programFixture()] },
+      }),
+    ),
+  });
+  await expect(dialog.getByLabel("Project name", { exact: true })).toHaveValue(
+    "Inspector workflow (import)",
+  );
+  await dialog.getByRole("button", { name: "Close workspace" }).click();
+  await page.getByTitle("Backend Builder", { exact: true }).click();
+  await page
+    .locator(".backend-block")
+    .filter({
+      has: page.locator(".backend-block-label", { hasText: /^list$/ }),
+    })
+    .click();
+  await page.getByLabel("Maximum results", { exact: true }).fill("7");
+  await page.getByRole("button", { name: "Save project", exact: true }).click();
+  await page
+    .getByRole("banner")
+    .getByRole("button", { name: "Code", exact: true })
+    .click();
+  await dialog
+    .getByLabel("Filter source files", { exact: true })
+    .fill("workflow/program.json");
+  await dialog
+    .getByRole("button", {
+      name: "backend/workflow-service/workflow/program.json",
+      exact: true,
+    })
+    .click();
+  const text = await dialog
+    .getByRole("textbox", {
+      name: "Source code for backend/workflow-service/workflow/program.json",
+      exact: true,
+    })
+    .inputValue();
+  expect(
+    JSON.parse(text).blocks.find((block: { id: string }) => block.id === "list")
+      .config.limit,
+  ).toBe(7);
 });
