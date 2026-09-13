@@ -1,5 +1,9 @@
 # Levoks implementation and release readiness
 
+The active requirement ledger is [completion-matrix.md](completion-matrix.md). The user confirmed `levoks.md` is the original PDF converted to Markdown. Prior passing checks establish only their tested subsets; every documented feature is tracked separately with execution and error-handling acceptance criteria. Implementation continues through the internal gaps; credentials block only the corresponding live integration.
+
+Stage 1 adds explicit generated backend workflows and the Property Inspector controls for queries, transactions, policies, roles/permissions, conditions, bounded collection loops, error branches, transforms, functions and responses. `npm run test:integration` now runs generated workflow/model code against a real temporary MongoDB replica set; tenant/owner isolation and transaction rollback passed. This supersedes the earlier statements below that no backend workflow runtime or real database tests exist. Full feature status remains PARTIAL pending the remaining semantics and UI/execution coverage recorded in the matrix.
+
 This document describes the implementation in this working tree. `levoks.md` remains the product vision. Levoks now has a connected editing, persistence, generation, and delivery workflow, but the complete vision is **not production complete**. In particular, live integrations, browser acceptance testing, application authorization, and backend execution beyond the supported subset remain release gates.
 
 ## Implemented workflows

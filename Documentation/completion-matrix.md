@@ -1,0 +1,184 @@
+# Levoks completion matrix
+
+Sources: `levoks.md` (the user-confirmed conversion of the original PDF), `production-readiness.md`, and the current code. This is an implementation ledger, not a launch declaration. Baseline audit: 2026-09-13.
+
+COMPLETE means UI → persisted state → validated IR → emitted implementation → execution → error handling has evidence where applicable. PARTIAL means some of that chain exists. MISSING means required behavior has no implementation. EXTERNAL DEPENDENCY is reserved for an otherwise implemented, independently verifiable integration awaiting external access; missing internal code never becomes an external blocker. No full product feature is marked COMPLETE at this audit baseline. Existing 22 tests include substantial mocks and cannot establish full execution coverage.
+
+Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`, `Renderer.tsx`, `PropertyInspector.tsx`; B = `src/types/backend.ts`, `src/components/backend`, `src/lib/codegen/express.ts`; R = `src/store/routingStore.ts`, `src/components/routing`, `src/lib/graphResolver.ts`; W = `src/components/WorkspaceHub.tsx`, `src/store/workspaceStore.ts`; C = `src/lib/project/schema.ts`, `compiler.ts`; T = `tests/`. All paths are relative to the repository.
+
+## Editor structure and interaction requirements
+
+| ID | Specification requirement | Status | Evidence and remaining acceptance criteria |
+|---|---|---|---|
+| UX01 | Header logo/home navigation, Files menu | PARTIAL | `app/page.tsx`, W; workspace actions exist, specified expandable Files hierarchy not reproduced. Browser navigation/recovery evidence absent. |
+| UX02 | Header Connections workflow | PARTIAL | W Ship token forms; dedicated connection inventory/provider lifecycle missing. |
+| UX03 | Small floating AI chat window | PARTIAL | W modal prompt/proposal; conversational floating window and transcript missing. |
+| UX04 | Fullscreen play preview | PARTIAL | `LivePreviewPanel`; design simulation, no isolated fullstack execution. |
+| UX05 | Expandable Deploy / ZIP / Commit actions | PARTIAL | W separate Ship/source tabs; requested header interaction and full deployment missing. |
+| UX06 | Account/profile/settings | PARTIAL | `UserMenu`, `ProfileModal`, NextAuth; real profile management, account lifecycle and preference persistence incomplete. |
+| UX07 | HDE off-screen visibility toggle | MISSING | Element visibility exists; screen-boundary toggle does not. |
+| UX08 | Tray with Elements, Assets, Pages, Backend, Routing, Code, Secrets, Settings | PARTIAL | `Sidebar`; several tools route to generic panels or lack specified behavior. |
+| UX09 | Contextual searchable Sub-Tray; drag/drop and double-click insertion | PARTIAL | Sidebar and backend service drop handlers; browser tests and parity of drag/double-click configurations needed. |
+| UX10 | Pages, per-page layers, globals | PARTIAL | E, `PagesPanel`, `LayersPanel`; unit coverage, browser/export parity and history across pages incomplete. |
+| UX11 | Granular property inspector: style/layout/type/borders/fonts | PARTIAL | E; controls exist, property-to-export coverage and accessible editing not fully verified. |
+| UX12 | Floating Dock: screen device picker, default 1920×1080 | PARTIAL | Canvas resolution bar differs from documented Dock; device/model selection missing. |
+| UX13 | Pointer/hand/marquee tool cycling | PARTIAL | Canvas pan/marquee handlers; explicit tool cycle absent. |
+| UX14 | Zoom-to-cursor, pan, fit, snap | PARTIAL | Canvas matrices and guides; browser interaction evidence absent. |
+| UX15 | Dock lock freezes zoom and movement | MISSING | Per-element lock exists; viewport lock absent. |
+| UX16 | Pen, editable vector curves, closed reusable shapes | MISSING | Primitive shape rendering exists, no path authoring/curve handles/library. |
+| UX17 | Motion workspace with multiple-object timeline | MISSING | `AnimationPanel` configures individual animations only. |
+| UX18 | Per-element animations and triggers | PARTIAL | `animationCodegen.ts`, `AnimationPanel`; full trigger, reduced-motion and exported runtime parity unverified. |
+| UX19 | Responsive overrides and breakpoint-specific editing | PARTIAL | Canvas width presets/basic export CSS; independent breakpoint state absent. |
+| UX20 | Design tokens and reusable component instances | MISSING | Static templates/globals are not linked token/component instances. |
+| UX21 | Advanced widgets: tabs, repeater, gallery | PARTIAL | E and frontend generator; warnings acknowledge incomplete executable behavior. |
+| UX22 | Asset library: images, icons, fonts | PARTIAL | `AssetUpload` supports small inline raster uploads; durable library, fonts, icons and asset lifecycle missing. |
+| UX23 | Full IDE: files, editing, diagnostics, export | PARTIAL | W textarea/file browser; IDE tooling, sandbox execution and reconciliation missing. |
+| UX24 | Undo/redo, keyboard, selection and errors | PARTIAL | Editor history and shortcuts; cross-canvas transactions/accessibility/browser coverage incomplete. |
+
+## Backend configuration and execution
+
+| ID | Requirement | Status | Evidence and remaining acceptance criteria |
+|---|---|---|---|
+| BE01 | Logical services, editable containers and ordinary blocks | PARTIAL | B groups blocks but always emits separate services; within-service execution edges missing. |
+| BE02 | Endpoints: five methods and routes | PARTIAL | B generates routes; behavior inferred from method/first model rather than explicit workflows. |
+| BE03 | Endpoint path/query/header/body/response contracts, statuses, errors | PARTIAL | Request/body schema fields exist; query/header/response/status execution incomplete. |
+| BE04 | Models: identity, types, required, uniqueness, defaults, indexes | PARTIAL | B models and basic fields; unique/index controls and emitted constraints incomplete. |
+| BE05 | Model timestamps and soft-delete behavior | PARTIAL | Timestamps emitted; soft delete blocked by C. |
+| BE06 | Relations, foreign keys, cardinality, update/delete behavior | PARTIAL | Relation type/state exists but no inspector/execution; C blocks export. |
+| BE07 | Query: model binding, CRUD, count, filter, sort, aggregation, outputs | MISSING | B method inference is not a configurable Query block. |
+| BE08 | Atomic transaction groups and rollback | MISSING | No transaction schema, session propagation, inspector, runtime or tests. |
+| BE09 | JWT auth: secure refs, identity/model, expiry, endpoint attachment | PARTIAL | Auth generator works in controlled tests; lifecycle and real execution incomplete. |
+| BE10 | OAuth auth: providers, callbacks, identity mapping | PARTIAL | Strategy selector exists, generation blocked. Editor OAuth is separate. |
+| BE11 | Session authentication | PARTIAL | Strategy selector exists, generation blocked. |
+| BE12 | API-key authentication | PARTIAL | Strategy selector exists, generation blocked. |
+| BE13 | Roles and granted capabilities | MISSING | Auth registration fixes initial role; no role-definition or enforcement block. |
+| BE14 | Resource/action permissions | MISSING | No permission schema, inspector or enforcement. |
+| BE15 | Access policies: roles, actions, ownership, conditional rules | MISSING | No row-level authorization or policy compiler. |
+| BE16 | Tenant isolation on reads, writes, aggregates and relationships | MISSING | Generic CRUD is not tenant-scoped. |
+| BE17 | Password reset, verification, refresh rotation, revocation | MISSING | Identity generator lacks these lifecycle operations. |
+| BE18 | If/Else conditions and executable branches | PARTIAL | String config/inspector exists; C blocks export. |
+| BE19 | Collection/conditional loops and execution bounds | PARTIAL | String config/inspector exists; C blocks export. |
+| BE20 | Try/Catch/Finally, retry and error branches | PARTIAL | String config/inspector exists; C blocks export. |
+| BE21 | Validation: types, required, range, format, pattern, custom conditions | PARTIAL | Subset emitted globally to mutations; rule scope, editable bounds and custom conditions incomplete. |
+| BE22 | Transform: data mapping, output filtering, sensitive-field removal | MISSING | No Transform block/runtime. |
+| BE23 | Functions: inputs, workflow, outputs, reusable service/app scope | MISSING | No function block/call model. |
+| BE24 | Events: names, payloads, producers, consumers | MISSING | No event execution model. |
+| BE25 | Durable queues, retries and failure handling | MISSING | No queue blocks or durable dispatcher. |
+| BE26 | Jobs: payloads, bounds, retry/backoff, failures | MISSING | No job runtime. |
+| BE27 | Workers: queue binding, concurrency, leases and failures | MISSING | No worker process/lease implementation. |
+| BE28 | Schedulers: interval/cron, timezone, jobs | MISSING | No scheduler runtime. |
+| BE29 | WebSockets: auth, schemas, endpoints, events | MISSING | Chat template contains models/HTTP endpoints only. |
+| BE30 | SSE with disconnect/backpressure and authorization | MISSING | No generated SSE runtime. |
+| BE31 | Subscribe/channel membership | MISSING | No subscriptions. |
+| BE32 | Publish and event routing | MISSING | No publishers. |
+| BE33 | Broadcast by channel/user/role | MISSING | No scoped broadcast runtime. |
+| BE34 | HTTP requests: contracts, auth, timeout, retry, response mapping | MISSING | Editor provider proxy is not a generated HTTP Request block. |
+| BE35 | Webhooks: receiving route, raw signature verification, replay safety | MISSING | No generated webhook runtime. |
+| BE36 | Email: provider, sender, recipients, templates, attachments, delivery | MISSING | Provider adapter and generated behavior absent; live credentials are a later gate. |
+| BE37 | SMS: recipient, message, provider, delivery | MISSING | Internal adapter absent; credentials not sole blocker. |
+| BE38 | Payments: customer, amount/currency, flows, metadata, webhooks | MISSING | No implementation; provider test account needed after implementation. |
+| BE39 | Upload: types, size, authentication, names, destinations | MISSING | Editor image upload is not a generated application upload endpoint. |
+| BE40 | Download: policies, expiring access, disposition | MISSING | No storage download block. |
+| BE41 | Storage: provider/location/access/secret refs | MISSING | No durable generated storage adapter. |
+| BE42 | Storage deletion and access checks | MISSING | No delete block. |
+| BE43 | Cache: provider, scoped key, TTL, strategy | MISSING | No cache block/runtime. |
+| BE44 | Invalidation: exact/pattern keys, event triggers | MISSING | No invalidation block/runtime. |
+| BE45 | Middleware: global/service/endpoint scopes | PARTIAL | B applies service middleware; endpoint middlewareIds not respected. |
+| BE46 | CORS origins/methods/headers/credentials | PARTIAL | Origin/credentials subset emitted; complete controls and runtime coverage absent. |
+| BE47 | Rate limits: key strategy/window/limit/error | PARTIAL | Express process-local limit; distributed limit/scope configuration missing. |
+| BE48 | Request/error/metadata logging with redaction | PARTIAL | Morgan/default errors; configurable redaction and retention absent. |
+| BE49 | Custom middleware extension | PARTIAL | Raw string setting, export blocked; trusted extension contract absent. |
+| BE50 | Environment development/production configuration | PARTIAL | Env blocks/examples; per-environment model and management missing. |
+| BE51 | Secrets by reference, Google Cloud Secret Manager | PARTIAL | Declared values redacted on persistence; secure vault, rotation and GCP integration absent. |
+| BE52 | Error Handler: classification/logging/status/exposure | PARTIAL | Fixed generic handler; no configurable block. |
+| BE53 | Health Check: database/storage/dependency readiness | PARTIAL | Fixed liveness `/health`; no dependency/configurable checks. |
+| BE54 | Audit Log: actor/event/context/persistence/retention | MISSING | No durable audit records. |
+| BE55 | Editable Auth template | PARTIAL | Ordinary blocks; lifecycle/authorization/live tests incomplete. |
+| BE56 | Editable CRUD template | PARTIAL | Ordinary blocks; explicit query binding/access policies missing. |
+| BE57 | Functional editable Chat template | PARTIAL | Static architecture; no real-time runtime, multimodel export blocked. |
+| BE58 | Future e-commerce/blog/SaaS/booking/file/social templates | MISSING | Marked future in source; requested full coverage still tracked. |
+
+## IR, synchronization and AI
+
+| ID | Requirement | Status | Evidence and remaining acceptance criteria |
+|---|---|---|---|
+| IR01 | Complete UI/backend/routing validated IR | PARTIAL | C structural schema, R frontend flows; backend execution/data flow absent. |
+| IR02 | Every configuration changes generated behavior | PARTIAL | Unsupported configurations blocked, several controls ignored; compile coverage required. |
+| IR03 | Live generation at reasonable latency | PARTIAL | W compiles when panel is open; no incremental dependency-aware compiler/background scheduling. |
+| IR04 | Source edits/canvas changes follow regeneration model | PARTIAL | Fingerprint blocks stale exports; granular reconciliation absent. |
+| IR05 | All-page Next.js generation, navigation and globals | PARTIAL | C and T build fixture; browser behavior/parity unverified. |
+| IR06 | Full Express/container ZIP and project restore | PARTIAL | C and T; generated backend execution/Docker unverified. |
+| RT01 | Page/service trays, draggable freely placed nodes | PARTIAL | R canvas exists; browser interaction verification pending. |
+| RT02 | Page→page, page→service, service→service flow | PARTIAL | R resolves navigation/API calls; typed data/output bindings missing. |
+| RT03 | Wire selection and context-specific inspector/disabled options | PARTIAL | R basic wire state; complete context-sensitive mapping absent. |
+| AI01 | BYOK model selection/Hugging Face inference | PARTIAL | `/api/ai`; live responses/model capability discovery unverified. |
+| AI02 | Specialized/fine-tuned IR agents | MISSING | Generic completion prompting is not trained specialized agents. Model selection/training artifacts required; internal orchestration missing. |
+| AI03 | Robust complete IR-to-code generation | PARTIAL | Validated JSON/proposals; backend IR and source semantic analysis incomplete. |
+| AI04 | Incremental proposals, streaming, cancellation | PARTIAL | Whole-document proposal/cancellation; incremental edits and streaming absent. |
+| AI05 | Generated source syntax/security/dependency analysis | PARTIAL | File-path/size validation only; arbitrary proposals not built/analyzed. |
+| AI06 | Review, diff, checkpoint, stale-proposal protection | PARTIAL | W review/checkpoints; meaningful change diff and browser coverage absent. |
+| AI07 | Usage/cost budgets and inference controls | PARTIAL | Token cap/process-local rate limit; spend/usage ledger absent. |
+| AI08 | Paid plans/profile billing/metering | MISSING | Informational profile only; provider credential needed after internal implementation. |
+
+## Persistence, connections and deployment
+
+| ID | Requirement | Status | Evidence and remaining acceptance criteria |
+|---|---|---|---|
+| PS01 | Local autosave/history/recovery/conflict handling | PARTIAL | W, IndexedDB, T; browser tests and eviction/recovery acceptance missing. |
+| PS02 | Authenticated cloud storage and ownership | PARTIAL | Mongo API uses owner/revision; actual database and concurrency execution unverified. |
+| PS03 | Durable assets with lifecycle/access/quotas | MISSING | Inline images only. |
+| PS04 | Background/offline synchronization and conflict resolution | MISSING | Debounced foreground save is not durable background sync. |
+| PS05 | Teams, collaboration, permissions, conflict reconciliation | MISSING | Account-owned single-user snapshots only. |
+| GH01 | Repository authorization / Connections / token expiry | PARTIAL | PAT field and request errors; persisted connection and reauth absent. |
+| GH02 | Repository/branch discovery and selection | MISSING | Manual text inputs only. |
+| GH03 | Initial repository and branch setup | MISSING | Existing initialized branch required. |
+| GH04 | Changed-file review and commit history/status | PARTIAL | Tree comparison/commit result; file diff/history UI absent. |
+| GH05 | Conflict detection/non-force safe updates | PARTIAL | `server/github.ts`, T mocked race; live GitHub verification pending. |
+| GH06 | Durable periodic commits with closed browser | MISSING | Five-minute tab timer only. |
+| DP01 | Full application deployment model: frontend/backend/database | PARTIAL | Vercel frontend only; backend Compose export is not orchestration. |
+| DP02 | Hosting selection/region/resources/scaling/container settings | MISSING | No deployment plan/provider capability model. |
+| DP03 | Per-environment configuration and secret references | PARTIAL | API origins and examples; managed environments absent. |
+| DP04 | Domains and TLS | MISSING | Button opens Ship; no domain verification/certificate workflow. |
+| DP05 | Deployment status/progress/failures | PARTIAL | Vercel polling only; fullstack durable status missing. |
+| DP06 | Build/runtime logs and redaction | MISSING | External dashboard instruction only. |
+| DP07 | Health checks/readiness/rollout gates | MISSING | No deployed-application health gates. |
+| DP08 | Versioned releases and rollback | MISSING | No deployment release/history/rollback implementation. |
+| DP09 | Monitoring, metrics, alerts | MISSING | No operational integration. |
+| DP10 | Database backups/restore and storage durability | MISSING | Local Compose volume only. |
+| SB01 | Isolated generated-app build/runtime preview | MISSING | No sandbox worker; browser design preview is simulated. |
+| QA01 | Browser E2E and accessibility workflows | MISSING | No browser suite in baseline; prior available UI tool had no browser. |
+| QA02 | Real database/provider/runtime integration tests | MISSING | Existing tests use fakes and VM stubs. |
+| QA03 | Types/lint/unit/editor/frontend export build/audit | PARTIAL | Previously passed; 71 lint warnings; coverage incomplete. |
+| QA04 | Backend build/generated-project tests/Docker runtime/load | MISSING | Syntax checks only; actual backend/deployment evidence absent. |
+
+## External verification gates (do not change internal feature status)
+
+| Gate | Current evidence | Required external action | Verification after access |
+|---|---|---|---|
+| Docker runtime | `Get-Command docker` returned no executable | Install/start Docker Desktop or provide a reachable isolated Docker host; OS installation requires user authorization | Build exported/frontend/backend images, start dependency stack, readiness/rollback/isolation tests |
+| MongoDB | `Get-Command mongod` returned no executable | Local test binary may be provisioned within workspace; Atlas verification needs a test URI via local environment, never chat | Real CRUD, isolation, transactions/rollback, concurrency, backups |
+| GitHub | No live repository access exercised | Connect a disposable test repo with scoped credentials through Connections after implementation | Repository discovery/setup, actual diffs/history, race/conflict, closed-tab worker, token expiry |
+| Hosting | Vercel adapter mocked only | Provide provider test project/credentials in environment or connection UI after adapters exist | Fullstack rollout, logs, health, domains/TLS and supported rollback |
+| AI | No live inference verified | Enter BYOK through AI UI; chosen model must support requested output/capacity | Stream/patch generation, budgets, malformed output, source checks |
+| Cloud secrets/OAuth/email/SMS/payment/storage | Adapters incomplete | Configure test providers/secret references after internal implementations exist | Provider-specific sandbox tests without production recipients or charges |
+
+## Stage 1 evidence: explicit backend programs
+
+Implemented `src/lib/backend/program-schema.ts`, `program.ts`, `src/lib/codegen/program-runtime.ts` and `ProgramInspector.tsx`. The inspector now edits ordered execution steps, explicit model bindings, query filters/values/sort/limits, transaction groups, branching, bounded collection loops, try/catch/finally, transforms, reusable service functions, responses, roles, permissions, and ownership/tenant policies. These configurations persist in the validated project and emit `workflow/program.json` plus a standalone interpreter used by generated Express routes. Model uniqueness/index settings now affect generated schemas. Conditions and bindings are interpreted as data; no canvas JavaScript is evaluated.
+
+Evidence: `tests/backend-program.test.ts` has four passing tests covering emitted program preservation, invalid references/cycles/reserved outputs, branching/function/transform execution, and loop bounds. `tests/integration/backend-runtime.test.ts` passed against an actual temporary MongoDB replica set using the emitted runtime and model files. It verifies forced ownership/tenant fields on create, scoped reads, denied cross-tenant updates, missing tenant/identity failures, and rollback after a duplicate-key failure. Existing 22 tests still pass.
+
+Updated statuses: BE07, BE08, BE13, BE14, BE15, BE16, BE22 and BE23 are now **PARTIAL**, with the above concrete execution evidence. BE18–BE20 and IR01–IR02 remain PARTIAL with new compiled execution. No COMPLETE claim: aggregate queries, all loop variants, rich function scoping, graphical edge editing, authorization lifecycle, browser acceptance, and more adversarial execution coverage remain. The initial audit table above is retained as the baseline; this stage ledger records changes against it.
+
+The MongoDB test-binary gate is resolved locally through `mongodb-memory-server`, with its binary cached under `.verification`. Atlas remains unverified. This harness runs real MongoDB, not an in-memory database mock. It follows the [replica-set harness documentation](https://github.com/typegoose/mongodb-memory-server) and [Mongoose session/transaction API](https://mongoosejs.com/docs/7.x/docs/api/connection.html).
+
+## Execution order and evidence updates
+
+1. Explicit backend program IR, endpoint/model/query bindings, bounded control flow, transformations, transactions, policies and execution tests.
+2. Identity lifecycle, durable secret/asset boundaries, persistent worker/job infrastructure.
+3. Complete block families on that runtime, generated tests and real service integration.
+4. GitHub Connections and durable sync; fullstack deployment adapters and isolation.
+5. Editor structural parity, responsive/components/vector/motion and incremental AI/IDE.
+6. Browser E2E, live provider gates, complete generated-app and operational verification.
+
+This order does not waive any row. Update row evidence and readiness after each stage. No internal requirement is blocked simply because credentials for a different feature are missing.

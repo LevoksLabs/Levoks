@@ -4083,6 +4083,20 @@ body {
 }
 
 /* Section */
+.bi-program { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.bi-program p { color: var(--text-secondary); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.bi-program h4 { font-size: 12px; margin: 0; }
+.bi-program label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; min-width: 0; }
+.bi-program .bi-field { align-items: stretch; }
+.bi-program fieldset { border: 1px solid var(--border-color, #3b3d49); border-radius: 7px; padding: 10px; min-inline-size: 0; display: flex; flex-direction: column; gap: 8px; }
+.bi-program legend { color: var(--text-secondary); font-size: 11px; padding: 0 4px; }
+.bi-program button { border: 1px solid #404455; border-radius: 5px; background: #292c39; color: #d8dae5; padding: 5px 8px; font-size: 11px; cursor: pointer; }
+.bi-program button:disabled { opacity: .4; cursor: default; }
+.bi-program ol { padding-left: 20px; margin: 0; }
+.bi-program li { margin: 5px 0; font-size: 11px; }
+.bi-program li button { margin-left: 5px; }
+.bi-program input[type="checkbox"] { align-self: flex-start; }
+.bi-program :focus-visible { outline: 2px solid #7f8dff; outline-offset: 2px; }
 .bi-section {
   border-bottom: 1px solid var(--border);
 }

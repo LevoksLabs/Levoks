@@ -537,9 +537,9 @@ const BackendDraggableItem: React.FC<{
     };
 
     const handleClick = () => {
-        const { services, addBlock } = useBackendStore.getState();
+        const { services, addBlock, selectedServiceId } = useBackendStore.getState();
         if (services.length > 0) {
-            addBlock(services[0].id, blockType, label);
+            addBlock(selectedServiceId || services[0].id, blockType, label);
         }
     };
 

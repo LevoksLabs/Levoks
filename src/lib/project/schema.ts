@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { validateFiles } from "@/lib/codegen/files";
+import { programConfigs, controlSchema } from "@/lib/backend/program-schema";
 
 const id = z
   .string()
@@ -24,6 +25,8 @@ const fields = z
       required: z.boolean(),
       defaultValue: text.optional(),
       ref: id.optional(),
+      unique: z.boolean().optional(),
+      indexed: z.boolean().optional(),
     }),
   )
   .max(200);
@@ -35,6 +38,8 @@ const endpoint = z.object({
   responseBody: fields,
   middlewareIds: z.array(id),
   authRequired: z.boolean(),
+  modelId: id.optional(),
+  policyIds: z.array(id).optional(),
 });
 const configs = {
   rest_endpoint: endpoint,
@@ -65,14 +70,21 @@ const configs = {
     providers: z.array(text).optional(),
     hashRounds: finite.optional(),
   }),
-  logic_if: z.object({ condition: text, trueBranch: text, falseBranch: text }),
+  logic_if: z.object({
+    condition: text,
+    trueBranch: text,
+    falseBranch: text,
+    program: controlSchema.optional(),
+  }),
   logic_loop: z.object({
+    program: controlSchema.optional(),
     loopType: z.enum(["for", "forEach", "while"]),
     iteratorName: text,
     collection: text,
     body: text,
   }),
   logic_trycatch: z.object({
+    program: controlSchema.optional(),
     tryBody: text,
     catchBody: text,
     finallyBody: text.optional(),
@@ -118,6 +130,32 @@ const blockBase = z.object({
   connections: z.array(id).max(1000),
 });
 const block = z.discriminatedUnion("type", [
+  blockBase.extend({ type: z.literal("query"), config: programConfigs.query }),
+  blockBase.extend({
+    type: z.literal("transaction"),
+    config: programConfigs.transaction,
+  }),
+  blockBase.extend({
+    type: z.literal("transform"),
+    config: programConfigs.transform,
+  }),
+  blockBase.extend({
+    type: z.literal("function"),
+    config: programConfigs.function,
+  }),
+  blockBase.extend({
+    type: z.literal("response"),
+    config: programConfigs.response,
+  }),
+  blockBase.extend({ type: z.literal("role"), config: programConfigs.role }),
+  blockBase.extend({
+    type: z.literal("permission"),
+    config: programConfigs.permission,
+  }),
+  blockBase.extend({
+    type: z.literal("access_policy"),
+    config: programConfigs.access_policy,
+  }),
   blockBase.extend({
     type: z.literal("rest_endpoint"),
     config: configs.rest_endpoint,

@@ -131,7 +131,27 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
     // ─── Block CRUD ───
 
     addBlock: (serviceId, blockType, label, configOverrides) => {
-        const defaultConfig = { ...DEFAULT_BLOCK_CONFIGS[blockType] };
+        const defaultConfig = structuredClone(DEFAULT_BLOCK_CONFIGS[blockType]);
+        const service = get().services.find(s => s.id === serviceId);
+        if (!service) return;
+        if (blockType === "rest_endpoint") {
+            const endpoint = defaultConfig as EndpointConfig;
+            if (label && ["GET", "POST", "PUT", "PATCH", "DELETE"].includes(label)) endpoint.method = label as EndpointConfig["method"];
+            const base = endpoint.route;
+            for (let suffix = 2; service.blocks.some(b => b.type === "rest_endpoint" && (b.config as EndpointConfig).method === endpoint.method && (b.config as EndpointConfig).route === endpoint.route); suffix++) endpoint.route = base + suffix;
+        }
+        if (blockType === "db_model") {
+            const model = defaultConfig as DbModelConfig;
+            for (let suffix = 2; service.blocks.some(b => b.type === "db_model" && (b.config as DbModelConfig).tableName === model.tableName); suffix++) model.tableName = "Model" + suffix;
+        }
+        if (blockType === "auth_block" && label) {
+            const strategies: Record<string, AuthConfig["strategy"]> = {"JWT Auth":"jwt",OAuth:"oauth",Session:"session","API Key":"apiKey"};
+            (defaultConfig as AuthConfig).strategy = strategies[label] || "jwt";
+        }
+        if (blockType === "middleware" && label) {
+            const kinds: Record<string, MiddlewareConfig["middlewareType"]> = {CORS:"cors","Rate Limit":"rateLimit",Logger:"logger",Custom:"custom"};
+            (defaultConfig as MiddlewareConfig).middlewareType = kinds[label] || "cors";
+        }
         const config = configOverrides
             ? { ...defaultConfig, ...configOverrides }
             : defaultConfig;
@@ -140,12 +160,14 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
             id: uuidv4(),
             type: blockType,
             label: label || blockType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-            config,
+            config: config as BlockConfig,
             position: { x: 0, y: 0 },
             connections: [],
         };
 
         set({
+            selectedServiceId: serviceId,
+            selectedBlockId: block.id,
             services: get().services.map((s) =>
                 s.id === serviceId
                     ? { ...s, blocks: [...s.blocks, block] }
@@ -188,7 +210,7 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
                         ...s,
                         blocks: s.blocks.map((b) =>
                             b.id === blockId
-                                ? { ...b, config: { ...b.config, ...configUpdates } }
+                                ? { ...b, config: { ...b.config, ...configUpdates } as BlockConfig }
                                 : b
                         ),
                     }

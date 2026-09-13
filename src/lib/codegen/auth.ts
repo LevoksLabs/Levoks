@@ -30,7 +30,7 @@ exports.login = async (req, res) => {
     const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+password');
     const valid = await bcrypt.compare(password, user?.password || dummyHash);
     if (!user || !valid) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ sub: String(user._id) }, process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: ${JSON.stringify(expiry)} });
+    const token = jwt.sign({ sub: String(user._id), role: user.role || 'user', ...(user.tenantId ? { tenantId: String(user.tenantId) } : {}) }, process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: ${JSON.stringify(expiry)} });
     res.cookie('levoks_session', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', path: '/' });
     return res.json(identity(user));
   } catch { return res.status(500).json({ error: 'Login failed' }); }

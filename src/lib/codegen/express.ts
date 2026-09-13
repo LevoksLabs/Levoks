@@ -23,6 +23,7 @@ import {
 } from "./templates";
 import { serviceSlug } from "@/lib/project/schema";
 import { authController } from "./auth";
+import { programFiles } from "@/lib/backend/program";
 
 // ─── Field type → Mongoose type ───
 function mongooseType(type: SchemaField["type"]): string {
@@ -44,6 +45,8 @@ function generateModel(block: BackendBlock, identityModel = false): string {
     const fields = config.fields.map((f) => {
         let fieldDef = `    ${JSON.stringify(f.name)}: {\n      type: ${mongooseType(f.type)}`;
         if (f.required) fieldDef += `,\n      required: true`;
+        if (f.unique) fieldDef += `,\n      unique: true`;
+        if (f.indexed) fieldDef += `,\n      index: true`;
         if (/password|token|secret/i.test(f.name)) fieldDef += `,\n      select: false`;
         if (identityModel && f.name === "email") fieldDef += `,\n      unique: true, lowercase: true, trim: true`;
         if (f.defaultValue) fieldDef += `,\n      default: ${JSON.stringify(f.defaultValue)}`;
@@ -55,13 +58,14 @@ function generateModel(block: BackendBlock, identityModel = false): string {
     const opts: string[] = [];
     if (config.timestamps) opts.push("  timestamps: true");
 
-    return MODEL_TEMPLATE(config.tableName, fields).replace("timestamps: true", `timestamps: ${config.timestamps}`);
+    return MODEL_TEMPLATE(config.tableName, fields + (config.softDelete ? ",\n    deletedAt: { type: Date, default: null, index: true }" : "")).replace("timestamps: true", `timestamps: ${config.timestamps}`);
 }
 
 // ─── Generate route handler for an endpoint ───
 function generateEndpointHandler(block: BackendBlock, models: string[], fields: SchemaField[], identityModel: boolean): string {
     const config = block.config as EndpointConfig;
     const method = config.method.toLowerCase();
+    if (block.connections.length) return `router.${method}(${JSON.stringify(config.route)}, ${config.authRequired || config.policyIds?.length ? "auth, " : ""}validateBody(${JSON.stringify(config.requestBody)}), async (req, res, next) => { try { const output = await workflow(${JSON.stringify(block.id)}, req); if (output.status === 204) return res.status(204).end(); res.status(output.status).json(output.body ?? null); } catch (error) { next(error); } });`;
     const modelName = models.length > 0 ? models[0] : null;
     if (identityModel) {
         const action = config.route.split("/").pop();
@@ -186,7 +190,9 @@ export function generateServiceCode(service: ServiceContainer): Record<string, s
     });
 
     // 2. Generate auth middleware if needed
-    const hasAuth = authBlocks.length > 0 || endpoints.some((e) => (e.config as EndpointConfig).authRequired);
+    const programAuth = service.blocks.some(b => b.type === "access_policy");
+    const hasAuth = programAuth || authBlocks.length > 0 || endpoints.some((e) => (e.config as EndpointConfig).authRequired || (e.config as EndpointConfig).policyIds?.length);
+    if (endpoints.some(e => e.connections.length)) for (const [path, source] of Object.entries(programFiles(service))) files[`${servicePath}/${path}`] = source;
     if (hasAuth) {
         files[`${servicePath}/middleware/auth.js`] = AUTH_MIDDLEWARE_TEMPLATE();
     }
@@ -198,10 +204,15 @@ export function generateServiceCode(service: ServiceContainer): Record<string, s
             .join("\n");
         const authImport = hasAuth ? "const auth = require('../middleware/auth');\n" : "";
         const endpointCode = endpoints
-            .map((e) => generateEndpointHandler(e, modelNames, (models[0]?.config as DbModelConfig | undefined)?.fields || [], identityModel))
+            .map((e) => {
+                const bound = models.find(m => m.id === (e.config as EndpointConfig).modelId) || models[0];
+                const boundConfig = bound?.config as DbModelConfig | undefined;
+                const effective = e.connections.length && programAuth ? {...e, config: {...e.config, authRequired: true}} : e;
+                return generateEndpointHandler(effective, boundConfig ? [boundConfig.tableName] : modelNames, boundConfig?.fields || [], identityModel);
+            })
             .join("\n\n");
 
-        files[`${servicePath}/routes/index.js`] = `const express = require('express');\nconst router = express.Router();\nconst { validateBody, validateRules } = require('../middleware/validate');\n${identityModel ? "const identity = require('../controllers/identity');\n" : ""}${authImport}${modelImports}\n\n${endpointCode}\n\nmodule.exports = router;`;
+        files[`${servicePath}/routes/index.js`] = `const express = require('express');\nconst router = express.Router();\n${endpoints.some(e => e.connections.length) ? "const workflow = require('../workflow');\n" : ""}const { validateBody, validateRules } = require('../middleware/validate');\n${identityModel ? "const identity = require('../controllers/identity');\n" : ""}${authImport}${modelImports}\n\n${endpointCode}\n\nmodule.exports = router;`;
         if (identityModel) { const config = authBlocks[0].config as AuthConfig; files[`${servicePath}/controllers/identity.js`] = authController(modelNames[0], Math.min(14, Math.max(10, config.hashRounds || 12)), config.tokenExpiry || "1h"); }
     }
 

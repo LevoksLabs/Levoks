@@ -49,8 +49,9 @@ import { compileProject } from "@/lib/project/compiler";
 import { exportAsZip } from "@/lib/codegen/exporter";
 import { validateFiles } from "@/lib/codegen/files";
 import "./workspace.css";
+import SecretsPanel from "./SecretsPanel";
 
-type Panel = "projects" | "ai" | "source" | "ship";
+type Panel = "projects" | "ai" | "source" | "ship" | "secrets";
 type Proposal = {
   summary: string;
   project?: ProjectDocument;
@@ -416,6 +417,7 @@ export default function WorkspaceHub() {
                 ["projects", FolderOpen, "Projects"],
                 ["ai", Sparkles, "AI assistant"],
                 ["source", Code2, "Source & checks"],
+                ["secrets", Save, "Secrets"],
                 ["ship", Rocket, "Export & deploy"],
               ] as const
             ).map(([id, Icon, label]) => (
@@ -440,6 +442,7 @@ export default function WorkspaceHub() {
             {message && <p className="workspace-success">{message}</p>}
           </div>
           <div className="workspace-content">
+            {panel === "secrets" && <SecretsPanel key={workspace.id} projectId={workspace.id} />}
             {panel === "projects" && (
               <div className="workspace-grid">
                 <section>

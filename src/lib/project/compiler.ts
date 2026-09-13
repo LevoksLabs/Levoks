@@ -1,5 +1,6 @@
 import type { ElementNode } from "@/types";
 import type { IRDiagnostic } from "@/types/ir";
+import { programDiagnostics } from "@/lib/backend/program";
 import { resolveGraph } from "@/lib/graphResolver";
 import { validateIR } from "@/lib/irValidator";
 import { generateFrontendProject } from "@/lib/codegen/frontend";
@@ -65,6 +66,7 @@ export function compileProject(value: ProjectDocument) {
       });
   }
   for (const service of backend.services) {
+    diagnostics.push(...programDiagnostics(service));
     const identityModel = service.blocks.find(
       (b) =>
         b.type === "db_model" &&
@@ -82,7 +84,8 @@ export function compileProject(value: ProjectDocument) {
       if (
         ["logic_if", "logic_loop", "logic_trycatch", "relation"].includes(
           block.type,
-        )
+        ) &&
+        !("program" in block.config && block.config.program)
       )
         problem(
           block.id,
@@ -101,7 +104,13 @@ export function compileProject(value: ProjectDocument) {
           block.id,
           `${block.label}: token expiry must use a duration such as 1h or 7d.`,
         );
-      if (block.type === "db_model" && block.config.softDelete)
+      if (
+        block.type === "db_model" &&
+        block.config.softDelete &&
+        service.blocks.some(
+          (b) => b.type === "rest_endpoint" && !b.connections.length,
+        )
+      )
         problem(block.id, `${block.label}: soft deletion is not yet compiled.`);
       if (
         jwt &&
@@ -127,6 +136,8 @@ export function compileProject(value: ProjectDocument) {
         );
       if (
         block.type === "rest_endpoint" &&
+        !block.connections.length &&
+        !block.config.modelId &&
         service.blocks.filter((b) => b.type === "db_model").length > 1
       )
         problem(
