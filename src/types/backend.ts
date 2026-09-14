@@ -11,6 +11,8 @@ import {
   type ProgramConfig,
   type ControlConfig,
 } from "@/lib/backend/program-schema";
+import { healthSchema, type HealthConfig } from "@/lib/backend/health-schema";
+export type { HealthConfig } from "@/lib/backend/health-schema";
 export type BackendBlockType =
   | ProgramBlockType
   | "rest_endpoint"
@@ -22,6 +24,7 @@ export type BackendBlockType =
   | "logic_trycatch"
   | "validation"
   | "relation"
+  | "health_check"
   | "env_var";
 
 // ─── Block Configs ───
@@ -134,6 +137,7 @@ export interface EnvVarConfig {
 
 // Union config type
 export type BlockConfig =
+  | HealthConfig
   | ProgramConfig
   | EndpointConfig
   | DbModelConfig
@@ -267,6 +271,7 @@ export const DEFAULT_ENV_VAR_CONFIG: EnvVarConfig = {
 
 // Map block type → default config
 export const DEFAULT_BLOCK_CONFIGS: Record<BackendBlockType, BlockConfig> = {
+  health_check: healthSchema.parse({}),
   ...PROGRAM_DEFAULTS,
   rest_endpoint: DEFAULT_ENDPOINT_CONFIG,
   db_model: DEFAULT_DB_MODEL_CONFIG,
@@ -289,6 +294,7 @@ export interface BackendSidebarCategory {
 }
 
 export const BACKEND_SIDEBAR_CATEGORIES: BackendSidebarCategory[] = [
+  {id: 'observability', label: 'Observability', items: [{type: 'health_check', label: 'Health Check', icon: 'validation'}]},
   {
     id: "endpoints",
     label: "Endpoints",

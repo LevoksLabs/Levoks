@@ -58,6 +58,10 @@ exports.processOne = async () => {
   exports.ready();
   for (const prefix of ['authReset', 'authVerify']) {
     const field = prefix + 'Mail', lease = crypto.randomUUID(), now = new Date();
+    // Mixed outbox documents cannot use a TTL index without deleting the user.
+    // Expire only the challenge and encrypted delivery material, never the account.
+    await User.updateMany({[prefix + 'ExpiresAt']: {$lte: now}}, {$unset: {[prefix + 'Hash']: '', [prefix + 'ExpiresAt']: '', [field]: ''}});
+    await User.updateMany({disabledAt: {$ne: null}, [field]: {$exists: true}}, {$unset: {[prefix + 'Hash']: '', [prefix + 'ExpiresAt']: '', [field]: ''}});
     const user = await User.findOneAndUpdate({disabledAt: null, [field + '.status']: 'queued', [field + '.dueAt']: {$lte: now}, [field + '.expiresAt']: {$gt: now}, $or: [{[field + '.leaseUntil']: null}, {[field + '.leaseUntil']: {$lt: now}}]}, {$set: {[field + '.lease']: lease, [field + '.leaseUntil']: new Date(Date.now() + 60000)}}, {new: true}).select('+' + field);
     if (!user) continue;
     const mail = user[field], filter = {_id: user._id, [field + '.id']: mail.id, [field + '.lease']: lease};

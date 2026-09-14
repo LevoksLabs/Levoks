@@ -24,6 +24,7 @@ const configuration = new Set([
   "auth_block",
   "relation",
   "env_var",
+  "health_check",
 ]);
 
 function Binding({

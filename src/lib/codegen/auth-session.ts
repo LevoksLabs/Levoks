@@ -4,6 +4,7 @@ export function authSessionRuntime(
   expiry: string,
   refreshDays = 7,
   idleMinutes = 60,
+  cookieSuffix = "",
 ) {
   return `
 const mongoose = require('mongoose');
@@ -21,6 +22,7 @@ const schema = new mongoose.Schema({
 const Session = mongoose.models.LevoksIdentitySession || mongoose.model('LevoksIdentitySession', schema);
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const cookieOptions = {httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/'};
+const accessCookie = ${JSON.stringify('levoks_session' + cookieSuffix)}, refreshCookie = ${JSON.stringify('levoks_refresh' + cookieSuffix)};
 const idleMs = ${idleMinutes} * 60 * 1000;
 const principal = user => ({sub: String(user._id), role: user.role || 'user', ...(user.tenantId ? {tenantId: String(user.tenantId)} : {})});
 const activeFilter = () => ({revokedAt: null, expiresAt: {$gt: new Date()}, lastUsedAt: {$gt: new Date(Date.now() - idleMs)}});
@@ -33,12 +35,12 @@ exports.checkOrigin = req => {
   const origins = (process.env.CORS_ORIGINS || 'http://localhost:3000').split(',').map(v => v.trim());
   if (!origins.includes(req.headers.origin)) throw fail(403, 'Origin not allowed');
 };
-exports.clear = res => { res.clearCookie('levoks_session', cookieOptions); res.clearCookie('levoks_refresh', cookieOptions); };
+exports.clear = res => { res.clearCookie(accessCookie, cookieOptions); res.clearCookie(refreshCookie, cookieOptions); };
 function setTokens(user, session, refresh, res) {
   const token = jwt.sign({...principal(user), sid: session._id}, process.env.JWT_SECRET, {algorithm: 'HS256', expiresIn: ${JSON.stringify(expiry)}});
   res.set('Cache-Control', 'no-store');
-  res.cookie('levoks_session', token, {...cookieOptions, maxAge: Math.max(0, (jwt.decode(token).exp * 1000) - Date.now())});
-  res.cookie('levoks_refresh', session._id + '.' + refresh, {...cookieOptions, maxAge: Math.max(0, session.expiresAt.getTime() - Date.now())});
+  res.cookie(accessCookie, token, {...cookieOptions, maxAge: Math.max(0, (jwt.decode(token).exp * 1000) - Date.now())});
+  res.cookie(refreshCookie, session._id + '.' + refresh, {...cookieOptions, maxAge: Math.max(0, session.expiresAt.getTime() - Date.now())});
 }
 exports.issue = async (user, req, res) => {
   const refresh = crypto.randomBytes(32).toString('base64url');
@@ -56,7 +58,7 @@ exports.verify = async decoded => {
 };
 exports.refresh = async (req, res) => {
   exports.checkOrigin(req);
-  const value = exports.cookie(req, 'levoks_refresh');
+  const value = exports.cookie(req, refreshCookie);
   const parts = value.split('.');
   if (parts.length !== 2 || !/^[a-f0-9-]{36}$/.test(parts[0]) || !/^[A-Za-z0-9_-]{43}$/.test(parts[1])) throw fail(401, 'Refresh token is invalid');
   const [id, secret] = parts, digest = hash(secret), next = crypto.randomBytes(32).toString('base64url');

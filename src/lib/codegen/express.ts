@@ -25,6 +25,7 @@ import { serviceSlug } from "@/lib/project/schema";
 import { authController } from "./auth";
 import { authSessionRuntime } from "./auth-session";
 import { authRecoveryRuntime, IDENTITY_EMAIL_WORKER } from "./auth-recovery";
+import { healthRuntime, healthConfiguration } from "./health";
 import { programFiles } from "@/lib/backend/program";
 
 // ─── Field type → Mongoose type ───
@@ -203,7 +204,9 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
     // 1. Generate models
     models.forEach((model) => {
         const config = model.config as DbModelConfig;
-        files[`${servicePath}/models/${config.tableName}.js`] = generateModel(model, identityModel);
+        let generatedModel = generateModel(model, identityModel);
+        if (identityModel && config.fields.some(f => f.name === "password")) generatedModel = generatedModel.replace('module.exports =', ['authReset', 'authVerify'].map(prefix => `${config.tableName}Schema.index({"${prefix}Mail.status": 1, "${prefix}Mail.dueAt": 1});\n${config.tableName}Schema.index({"${prefix}Hash": 1}, {sparse: true});`).join('\n') + '\nmodule.exports =');
+        files[`${servicePath}/models/${config.tableName}.js`] = generatedModel;
     });
 
     // 2. Generate auth middleware if needed
@@ -211,7 +214,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
     const hasAuth = programAuth || authBlocks.length > 0 || endpoints.some((e) => (e.config as EndpointConfig).authRequired || (e.config as EndpointConfig).policyIds?.length);
     if (endpoints.some(e => e.connections.length)) for (const [path, source] of Object.entries(programFiles(service))) files[`${servicePath}/${path}`] = source;
     if (hasAuth) {
-        files[`${servicePath}/middleware/auth.js`] = AUTH_MIDDLEWARE_TEMPLATE(identityModel, remoteIdentity ? `http://localhost:${remoteIdentity.port}` : undefined, introspectionPath);
+        files[`${servicePath}/middleware/auth.js`] = AUTH_MIDDLEWARE_TEMPLATE(identityModel, remoteIdentity ? `http://localhost:${remoteIdentity.port}` : undefined, introspectionPath, `levoks_session_${remoteIdentity?.port || service.port}`);
     }
 
     // 3. Generate routes
@@ -234,7 +237,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
             const config = authBlocks.find(b => (b.config as AuthConfig).strategy === "jwt")!.config as AuthConfig;
             const identityName = (models.find(m => (m.config as DbModelConfig).fields.some(f => f.name === "password"))!.config as DbModelConfig).tableName;
             files[`${servicePath}/controllers/identity.js`] = authController(identityName, Math.min(14, Math.max(10, config.hashRounds || 12)), config.requireVerifiedEmail);
-            files[`${servicePath}/identity/sessions.js`] = authSessionRuntime(identityName, config.tokenExpiry || "15m", config.refreshDays ?? 7, config.idleMinutes ?? 60);
+            files[`${servicePath}/identity/sessions.js`] = authSessionRuntime(identityName, config.tokenExpiry || "15m", config.refreshDays ?? 7, config.idleMinutes ?? 60, `_${service.port}`);
             files[`${servicePath}/identity/recovery.js`] = authRecoveryRuntime(identityName, Math.min(14, Math.max(10, config.hashRounds || 12)));
             files[`${servicePath}/workers/identity-email.js`] = IDENTITY_EMAIL_WORKER;
         }
@@ -317,6 +320,11 @@ exports.validateRules = (req, res, next) => {
     // 7. .gitignore
     files[`${servicePath}/.gitignore`] = `node_modules/\n.env\n.DS_Store`;
 
+    files[`${servicePath}/observability/health.js`] = healthRuntime(service, allServices);
+    for (const id of healthConfiguration(service).serviceIds) {
+        const target = allServices.find(s => s.id === id);
+        if (target) files[`${servicePath}/.env.example`] += `\nHEALTH_ORIGIN_${target.port}=http://localhost:${target.port}`;
+    }
     // 8. Dockerfile
     files[`${servicePath}/Dockerfile`] = DOCKERFILE_TEMPLATE(service.port);
 

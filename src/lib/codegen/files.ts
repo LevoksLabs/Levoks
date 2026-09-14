@@ -8,7 +8,7 @@ export function validateFiles(value: unknown): Record<string, string> {
   for (const [path, content] of entries) {
     if (
       path.length > 240 ||
-      !/^[a-zA-Z0-9_.\-/[\]()]+$/.test(path) ||
+      !/^[a-zA-Z0-9_.\-/[\]()]+$/.test(path.replace(/%5F/gi, "_")) ||
       path.startsWith("/") ||
       path
         .split("/")

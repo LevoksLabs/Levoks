@@ -926,11 +926,11 @@ export default function WorkspaceHub() {
                       <input
                         type="url"
                         placeholder="https://api.example.com"
-                        value={origins[`NEXT_PUBLIC_API_${service.port}`] || ""}
+                        value={origins[`API_ORIGIN_${service.port}`] || ""}
                         onChange={(e) =>
                           setOrigins({
                             ...origins,
-                            [`NEXT_PUBLIC_API_${service.port}`]: e.target.value,
+                            [`API_ORIGIN_${service.port}`]: e.target.value,
                           })
                         }
                       />
@@ -943,7 +943,7 @@ export default function WorkspaceHub() {
                       blocked ||
                       !vercelToken ||
                       backend.services.some(
-                        (s) => !origins[`NEXT_PUBLIC_API_${s.port}`],
+                        (s) => !origins[`API_ORIGIN_${s.port}`],
                       )
                     }
                     onClick={() =>

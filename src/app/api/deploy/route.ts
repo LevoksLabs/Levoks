@@ -29,7 +29,7 @@ export async function POST(request: Request) {
           .optional(),
         files: z.unknown().optional(),
         environment: z
-          .record(z.string().regex(/^NEXT_PUBLIC_API_\d+$/), publicOrigin)
+          .record(z.string().regex(/^(?:API_ORIGIN_\d+|NEXT_PUBLIC_API_\d+|APP_ORIGIN)$/), publicOrigin)
           .default({}),
       })
       .parse(await readJSON(request, 12_000_000));
@@ -58,7 +58,8 @@ export async function POST(request: Request) {
       data: Buffer.from(data).toString("base64"),
       encoding: "base64",
     }));
-    // These are public API origins, not credentials. Next reads them at build time.
+    // Origins are configuration, never credentials. API_ORIGIN values are read
+    // only by the generated server gateway; legacy public names remain accepted.
     deploymentFiles.push({
       file: ".env.production",
       data: Buffer.from(

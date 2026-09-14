@@ -2,9 +2,11 @@
 
 import React, { useState } from "react";
 import ProgramInspector from "./ProgramInspector";
+import HealthInspector from "./HealthInspector";
 import { useBackendStore } from "@/store/backendStore";
 import {
   EndpointConfig,
+  HealthConfig,
   DbModelConfig,
   MiddlewareConfig,
   AuthConfig,
@@ -238,6 +240,7 @@ const BackendInspector: React.FC = () => {
               }
             />
           )}
+          {block.type === "health_check" && <HealthInspector config={block.config as HealthConfig} serviceId={serviceId} onChange={updates => updateBlockConfig(serviceId, block.id, updates)}/>}
           {block.type === "env_var" && (
             <EnvVarEditor
               config={block.config as EnvVarConfig}
@@ -610,11 +613,23 @@ const AuthEditor: React.FC<{
           Manage encrypted secrets
         </button>
       </FieldRow>
-    <FieldRow label="Email verification">
-      <label><input type="checkbox" checked={config.requireVerifiedEmail ?? false} onChange={e => onChange({requireVerifiedEmail: e.target.checked})}/> Require verified email before login</label>
-      <small>Requires the generated email worker, sender and recovery-page configuration.</small>
-    </FieldRow>
-    <FieldRow label="Token Expiry">
+      <FieldRow label="Email verification">
+        <label>
+          <input
+            type="checkbox"
+            checked={config.requireVerifiedEmail ?? false}
+            onChange={(e) =>
+              onChange({ requireVerifiedEmail: e.target.checked })
+            }
+          />{" "}
+          Require verified email before login
+        </label>
+        <small>
+          Requires the generated email worker, sender and recovery-page
+          configuration.
+        </small>
+      </FieldRow>
+      <FieldRow label="Token Expiry">
         <input
           className="bi-input"
           value={config.tokenExpiry}

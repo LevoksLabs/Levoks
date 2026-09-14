@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { validateFiles } from "@/lib/codegen/files";
 import { programConfigs, controlSchema } from "@/lib/backend/program-schema";
+import { healthSchema } from "@/lib/backend/health-schema";
 
 const id = z
   .string()
@@ -134,6 +135,7 @@ const blockBase = z.object({
   connections: z.array(id).max(1000),
 });
 const block = z.discriminatedUnion("type", [
+  blockBase.extend({ type: z.literal("health_check"), config: healthSchema }),
   blockBase.extend({ type: z.literal("query"), config: programConfigs.query }),
   blockBase.extend({
     type: z.literal("transaction"),

@@ -22,5 +22,6 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: .verification/browsers
       - run: npm run test:e2e
+      - run: npm run test:generated-e2e
       - run: npm run build
       - run: npm audit --audit-level=high

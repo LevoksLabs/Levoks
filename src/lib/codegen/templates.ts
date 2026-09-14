@@ -42,6 +42,8 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || ${port};
+const health = require('./observability/health');
+health.mount(app);
 
 // ─── Built-in Middleware ───
 app.disable('x-powered-by');
@@ -60,11 +62,6 @@ ${imports}
 
 // ─── Routes ───
 ${routeSetup}
-
-// ─── Health Check ───
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
 
 // ─── Error Handler ───
 app.use((err, req, res, next) => {
@@ -86,7 +83,7 @@ mongoose.connect(MONGO_URI)
     const server = app.listen(PORT, () => {
       console.log(\`🚀 Server running on port \${PORT}\`);
     });
-    const shutdown = () => { server.close(() => { mongoose.disconnect().finally(() => process.exit(0)); }); setTimeout(() => process.exit(1), 10000).unref(); };
+    const shutdown = () => { health.drain(); server.close(() => { mongoose.disconnect().finally(() => process.exit(0)); }); setTimeout(() => process.exit(1), 10000).unref(); };
     process.once('SIGTERM', shutdown);
     process.once('SIGINT', shutdown);
   })
@@ -119,18 +116,19 @@ ${endpoints}
 module.exports = router;
 `.trim();
 
-export const AUTH_MIDDLEWARE_TEMPLATE = (identitySession = false, identityOrigin?: string, introspectionPath = "/api/auth/introspect") => `
+export const AUTH_MIDDLEWARE_TEMPLATE = (identitySession = false, identityOrigin?: string, introspectionPath = "/api/auth/introspect", accessCookie = "levoks_session") => `
 const jwt = require('jsonwebtoken');
 ${identitySession ? "const sessions = require('../identity/sessions');" : ""}
 
 const auth = async (req, res, next) => {
   try {
     const bearer = req.header('Authorization')?.replace('Bearer ', '');
-    const cookie = req.headers.cookie?.split(';').map(value => value.trim()).find(value => value.startsWith('levoks_session='))?.slice('levoks_session='.length);
+    const cookieName = ${JSON.stringify(accessCookie)};
+    const cookie = req.headers.cookie?.split(';').map(value => value.trim()).find(value => value.startsWith(cookieName + '='))?.slice(cookieName.length + 1);
     if (!bearer && cookie && !['GET', 'HEAD'].includes(req.method) && !(process.env.CORS_ORIGINS || 'http://localhost:3000').split(',').includes(req.headers.origin)) return res.status(403).json({ error: 'Origin not allowed' });
     const token = bearer || (cookie ? decodeURIComponent(cookie) : '');
     if (!token) {
-      return res.status(401).json({ error: 'Access denied. No token provided.' });
+      return res.set('X-Levoks-Session', 'invalid').status(401).json({ error: 'Access denied. No token provided.' });
     }
 
     if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) return res.status(503).json({ error: 'Authentication is not configured' });
@@ -138,13 +136,13 @@ const auth = async (req, res, next) => {
     ${identityOrigin ? `let response;
     try { response = await fetch((process.env.AUTH_IDENTITY_ORIGIN || ${JSON.stringify(identityOrigin)}).replace(/\\/$/, '') + ${JSON.stringify(introspectionPath)}, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000), headers: {Authorization: 'Bearer ' + token}}); }
     catch { return res.status(503).json({error: 'Identity service unavailable'}); }
-    if (!response.ok) return res.status([401, 403].includes(response.status) ? 401 : 503).json({error: 'Identity session unavailable or revoked'});
+    if (!response.ok) return res.set('X-Levoks-Session', [401, 403].includes(response.status) ? 'invalid' : 'unavailable').status([401, 403].includes(response.status) ? 401 : 503).json({error: 'Identity session unavailable or revoked'});
     const data = await response.json();
     if (typeof data.sub !== 'string' || data.sub !== decoded.sub || typeof data.sid !== 'string' || data.sid !== decoded.sid || typeof data.role !== 'string' || (data.tenantId !== undefined && typeof data.tenantId !== 'string')) return res.status(401).json({error: 'Invalid identity response'});
     req.user = {sub: data.sub, sid: data.sid, role: data.role, ...(data.tenantId ? {tenantId: data.tenantId} : {})};` : `req.user = ${identitySession ? "await sessions.verify(decoded)" : "decoded"};`}
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Invalid token.' });
+    res.set('X-Levoks-Session', 'invalid').status(401).json({ error: 'Invalid token.' });
   }
 };
 

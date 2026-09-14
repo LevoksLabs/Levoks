@@ -1,5 +1,9 @@
 /** A concrete, auditable auth controller for the built-in User/JWT template. */
-export const authController = (modelName: string, hashRounds: number, requireVerifiedEmail = false) =>
+export const authController = (
+  modelName: string,
+  hashRounds: number,
+  requireVerifiedEmail = false,
+) =>
   `
 const User = require('../models/${modelName}');
 const bcrypt = require('bcryptjs');

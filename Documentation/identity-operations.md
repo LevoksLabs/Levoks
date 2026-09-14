@@ -1,0 +1,25 @@
+# Generated identity operations
+
+The Authentication inspector now controls access-token lifetime, refresh lifetime, idle expiry, required email verification, and the identity service used by resource services. New Auth templates emit the lifecycle endpoints and a responsive account page at `/__levoks/account/<service-slug>`. Existing projects must add the corresponding endpoint blocks; generation does not silently rewrite their canvas.
+
+## Runtime configuration
+
+- Frontend: `APP_ORIGIN=https://app.example.com`, and `API_ORIGIN_<canvas-service-port>` for each backend's origin. These are server runtime settings. The generated Next gateway accepts only declared routes/methods and filters service-scoped cookies. The Ship adapter accepts these server settings; deployment remains frontend-only.
+- Identity backend: `MONGO_URI`, random `JWT_SECRET` of at least 32 characters, and exact frontend `CORS_ORIGINS`. Run `npm start` under a process supervisor. Production cookies require HTTPS.
+- Bound resource backend: the same JWT verification secret, its own database settings, and `AUTH_IDENTITY_ORIGIN` pointing to the selected identity service. The inspector reference must target an identity service with its POST introspection endpoint. Live introspection enforces session revocation and current account role/tenant state. An unbound JWT service lacks this lifecycle guarantee.
+- Identity backend and email worker: `IDENTITY_PUBLIC_URL` set to the full HTTPS generated account page URL; `IDENTITY_EMAIL_FROM` set to a verified sender; `IDENTITY_EMAIL_KEYS` containing a JSON map of key IDs to base64 random 32-byte keys; `IDENTITY_EMAIL_ACTIVE_KEY` selecting the current key. Store these only in runtime secret configuration. Retain previous keys until pending encrypted mail has drained or expired.
+- Email worker only: `RESEND_API_KEY`. Run `npm run worker:email` separately with the same identity database, URL, sender and keyring. The API does not need the provider token. Monitor process availability and its generic failure logs. The exported Compose stack does not yet supervise this worker.
+
+Registration with required verification rejects missing email configuration before creating an account. Verification and recovery return generic request responses, use expiring single-use token hashes, and atomically store encrypted delivery jobs on the account. The worker uses leases, bounded exponential retries and stable provider idempotency keys. Delivered payloads and expired challenges are removed. Recovery links carry tokens in URL fragments, which the account page removes and consumes only after the user submits the action. Opening a link on an already open account page works as well as opening a new page.
+
+Session state is durable in MongoDB. Refresh tokens rotate atomically; proven reuse revokes the family. Invalid random guesses do not revoke valid sessions. Password changes/resets invalidate prior sessions. Access checks reject disabled accounts. The account UI supports session inventory, individual revocation, logout, logout-all and password change. Cookies use a per-identity-service namespace so distinct identity services do not overwrite each other. Changing the service port changes that namespace and requires signing in again.
+
+## Verification and remaining gates
+
+`npm run test:integration` runs generated identity and resource servers against real MongoDB databases, and verifies session rotation/replay, authorization propagation, recovery CAS, encrypted delivery, retry idempotency, tamper rejection and expiry cleanup. `npm run test:generated-e2e` builds and runs the actual exported Next frontend, Express identity service, email worker and MongoDB in Chromium. It covers registration, verification, expired-cookie renewal, password recovery, logout-all, a 375px layout, CSRF rejection and gateway route bounds. Its email receiver is local; it does not prove Resend delivery.
+
+To verify live delivery, configure a Resend test account, verified sending domain and provider key in the worker environment, then use a recipient you control on the deployed HTTPS account page. Do not paste keys into chat. After access is available, verify delivery and single-use links, provider failures, worker restart, password reset invalidation and final-domain cookie behavior. No live email has been sent by these tests.
+
+Remaining internal requirements include administrative account lifecycle and tenant membership management, all alternate authentication strategies, a delivery operations UI, distributed abuse limits, fullstack worker orchestration, and complete authorization coverage. These are not credential blockers. The account subset does not make the entire authentication feature COMPLETE.
+
+References: [OWASP recovery guidance](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html), [Resend email API](https://resend.com/docs/api-reference/emails/send-email), and [Resend idempotency behavior](https://resend.com/docs/dashboard/emails/idempotency-keys).

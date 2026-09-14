@@ -209,8 +209,8 @@ test(
       assert.equal(user.role, "user");
       assert.notEqual(user.password, "correct-password-123");
       const original = await login();
-      assert.match(original, /levoks_refresh=/);
-      assert.match(original, /levoks_session=/);
+      assert.match(original, /levoks_refresh_3001=/);
+      assert.match(original, /levoks_session_3001=/);
       assert.equal(
         (await call("profile", undefined, original, "GET")).status,
         200,
@@ -227,10 +227,10 @@ test(
       assert.equal(rows.length, 1);
       assert.doesNotMatch(
         JSON.stringify(rows),
-        /levoks_session|levoks_refresh/,
+        /levoks_session_3001|levoks_refresh_3001/,
       );
       const refreshSecret = decodeURIComponent(
-        original.split("levoks_refresh=")[1],
+        original.split("levoks_refresh_3001=")[1],
       ).split(".")[1];
       assert.ok(
         !JSON.stringify(rows).includes(refreshSecret),
@@ -249,7 +249,7 @@ test(
       const rotated = cookies(refreshed);
       assert.notEqual(rotated, original);
       const invalidSecret = rotated.replace(
-        /(levoks_refresh=[^.;]+)[^;]*/,
+        /(levoks_refresh_3001=[^.;]+)[^;]*/,
         `$1.${"a".repeat(43)}`,
       );
       assert.equal((await call("refresh", {}, invalidSecret)).status, 401);
