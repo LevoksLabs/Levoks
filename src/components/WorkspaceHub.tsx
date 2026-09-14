@@ -51,9 +51,16 @@ import { validateFiles } from "@/lib/codegen/files";
 import "./workspace.css";
 import SecretsPanel from "./SecretsPanel";
 import GitHubPanel from "./GitHubPanel";
+import { readProposalStream, type GenerationProgress } from "@/lib/ai-stream";
 
 type Panel = "projects" | "ai" | "source" | "ship" | "secrets" | "connections";
 type Proposal = {
+  usage?: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+    totalTokens: number | null;
+  };
+  changes?: { op: string; path: string; before: string; after: string }[];
   summary: string;
   project?: ProjectDocument;
   files?: Record<string, string>;
@@ -64,6 +71,7 @@ async function api(
   body?: unknown,
   method = "POST",
   signal?: AbortSignal,
+  progress?: (event: GenerationProgress) => void,
 ) {
   const response = await fetch(path, {
     method,
@@ -72,6 +80,11 @@ async function api(
     headers: { "Content-Type": "application/json" },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
+  if (
+    response.ok &&
+    response.headers.get("content-type")?.includes("application/x-ndjson")
+  )
+    return readProposalStream(response, progress || (() => {}));
   const data = await response.json();
   if (!response.ok)
     throw new Error(data.error || `Request failed (${response.status})`);
@@ -79,7 +92,7 @@ async function api(
 }
 function projectSignature() {
   const p = currentProject();
-  return designFingerprint(p) + JSON.stringify(p.source || {});
+  return JSON.stringify([p.id, p.name, designFingerprint(p), p.source || null]);
 }
 
 export default function WorkspaceHub() {
@@ -100,7 +113,12 @@ export default function WorkspaceHub() {
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [mode, setMode] = useState("design");
+  const [mode, setMode] = useState("patch");
+  const [maxOutputTokens, setMaxOutputTokens] = useState(4096);
+  const [maxInputBytes, setMaxInputBytes] = useState(120000);
+  const [streaming, setStreaming] = useState(true);
+  const [streamText, setStreamText] = useState("");
+  const [generationStatus, setGenerationStatus] = useState("");
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [selectedFile, setSelectedFile] = useState("");
   const [query, setQuery] = useState("");
@@ -246,14 +264,41 @@ export default function WorkspaceHub() {
     const project = redactProject(currentProject());
     const basedOn = projectSignature();
     abort.current = new AbortController();
-    const result = await api(
-      "/api/ai",
-      { project, provider, apiKey, model, prompt, mode },
-      "POST",
-      abort.current.signal,
-    );
-    setProposal({ ...result, basedOn });
-    setMessage("Proposal ready. Review it before applying.");
+    setProposal(null);
+    setStreamText("");
+    setGenerationStatus("Connecting to provider…");
+    try {
+      const result = await api(
+        "/api/ai",
+        {
+          project,
+          provider,
+          apiKey,
+          model,
+          prompt,
+          mode,
+          maxOutputTokens,
+          maxInputBytes,
+          stream: streaming,
+        },
+        "POST",
+        abort.current.signal,
+        (event) => {
+          if (event.type === "status") setGenerationStatus(event.message);
+          else setStreamText((value) => (value + event.text).slice(-12000));
+        },
+      );
+      setProposal({ ...result, basedOn });
+      setGenerationStatus("Proposal validated and ready for review.");
+      setMessage("Proposal ready. Review it before applying.");
+    } catch (error) {
+      setGenerationStatus(
+        abort.current.signal.aborted
+          ? "Generation cancelled. No changes were applied."
+          : "Generation failed. No changes were applied.",
+      );
+      throw error;
+    }
   }
   const openPanel = (next: Panel) => {
     setPanel(next);
@@ -675,6 +720,9 @@ export default function WorkspaceHub() {
                       value={mode}
                       onChange={(e) => setMode(e.target.value)}
                     >
+                      <option value="patch">
+                        Incremental visual changes → review affected fields
+                      </option>
                       <option value="design">
                         Visual design → editable canvas
                       </option>
@@ -693,6 +741,41 @@ export default function WorkspaceHub() {
                       placeholder="Create a pricing page with three plans, a comparison section, and a clear call to action…"
                     />
                   </label>
+                  <label>
+                    Maximum output tokens
+                    <input
+                      type="number"
+                      min={256}
+                      max={16000}
+                      value={maxOutputTokens}
+                      onChange={(e) =>
+                        setMaxOutputTokens(Number(e.target.value))
+                      }
+                    />
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={streaming}
+                      onChange={(e) => setStreaming(e.target.checked)}
+                    />
+                    Show generation as it arrives
+                  </label>
+                  <label>
+                    Maximum input size (bytes)
+                    <input
+                      type="number"
+                      min={1000}
+                      max={1000000}
+                      value={maxInputBytes}
+                      onChange={(e) => setMaxInputBytes(Number(e.target.value))}
+                    />
+                  </label>
+                  <p>
+                    Input size is checked before contacting the provider. Token
+                    limits constrain each request; they are not a currency
+                    spending budget.
+                  </p>
                   <button
                     className="primary"
                     disabled={
@@ -710,9 +793,44 @@ export default function WorkspaceHub() {
                 </section>
                 <section>
                   <h2>Review proposed changes</h2>
+                  {generationStatus && <p role="status">{generationStatus}</p>}
+                  {busy && streamText && (
+                    <details open>
+                      <summary>Incoming proposal (not applied)</summary>
+                      <pre className="workspace-json">{streamText}</pre>
+                    </details>
+                  )}
                   {proposal ? (
                     <>
                       <p>{proposal.summary}</p>
+                      {proposal.usage && (
+                        <p>
+                          Provider-reported tokens: input{" "}
+                          {proposal.usage.inputTokens ?? "unavailable"} · output{" "}
+                          {proposal.usage.outputTokens ?? "unavailable"} · total{" "}
+                          {proposal.usage.totalTokens ?? "unavailable"}
+                        </p>
+                      )}
+                      {proposal.changes && (
+                        <details open>
+                          <summary>
+                            {proposal.changes.length} affected fields
+                          </summary>
+                          <div className="workspace-json">
+                            {proposal.changes.map((change, i) => (
+                              <div key={i}>
+                                <strong>
+                                  {change.op} {change.path}
+                                </strong>
+                                <pre>
+                                  Before: {change.before}
+                                  {"\n"}After: {change.after}
+                                </pre>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
                       <div className="workspace-stat">
                         {proposal.project
                           ? `${proposal.project.editor.pages.length} pages · ${Object.keys(proposal.project.editor.elementsById).length} elements · ${proposal.project.backend.services.length} services`

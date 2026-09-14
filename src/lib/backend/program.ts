@@ -143,6 +143,9 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
           "role",
           "permission",
           "env_var",
+          "health_check",
+          "error_handler",
+          "audit_log",
           "relation",
           "middleware",
           "auth_block",
@@ -186,7 +189,7 @@ export function programFiles(
       {
         version: 1,
         blocks: service.blocks.filter(
-          (b) => !["env_var", "auth_block", "middleware"].includes(b.type),
+          (b) => !["env_var", "auth_block", "middleware", "health_check", "error_handler", "audit_log"].includes(b.type),
         ),
       },
       null,
@@ -196,7 +199,7 @@ export function programFiles(
 const program = require('./program.json');
 const mongoose = require('mongoose');
 const models = {${models.map((b) => `${JSON.stringify(b.id)}: require('../models/${(b.config as DbModelConfig).tableName}')`).join(",")}};
-module.exports = createWorkflow(program, models, mongoose);
+module.exports = createWorkflow(program, models, mongoose, require('../observability'));
 `,
   };
 }

@@ -69,15 +69,79 @@ export function compileProject(value: ProjectDocument) {
   }
   for (const service of backend.services) {
     diagnostics.push(...programDiagnostics(service));
-    const healthBlocks = service.blocks.filter(b => b.type === 'health_check');
-    if (healthBlocks.length > 1) problem(service.id, 'Use one Health Check block per service.');
-    const healthRoutes = new Set(['/health', '/health/live', '/health/ready', ...healthBlocks.map(b => b.config.type === undefined && 'route' in b.config ? b.config.route : '')]);
+    for (const type of ["error_handler", "audit_log"])
+      if (service.blocks.filter((b) => b.type === type).length > 1)
+        problem(
+          service.id,
+          `Use one ${type.replaceAll("_", " ")} block per service.`,
+        );
     for (const block of service.blocks) {
-      if (block.type === 'rest_endpoint' && healthRoutes.has(block.config.route)) problem(block.id, 'This route is reserved for service health checks.');
-      if (block.type === 'health_check') {
-        if (block.config.route === '/health/live' || block.config.route.includes('//') || block.config.route.endsWith('/')) problem(block.id, 'Choose a readiness path distinct from /health/live, without empty segments or a trailing slash.');
-        for (const id of block.config.serviceIds) if (id === service.id || !backend.services.some(s => s.id === id)) problem(block.id, 'Health dependencies must reference other existing services.');
-        if (block.connections.length) problem(block.id, 'Health checks are service configuration, not workflow steps.');
+      if (block.type === "error_handler" || block.type === "audit_log") {
+        if (block.connections.length)
+          problem(
+            block.id,
+            "Observability settings are service configuration, not workflow steps.",
+          );
+      }
+      if (block.type === "audit_log")
+        for (const id of block.config.endpointIds)
+          if (
+            !service.blocks.some(
+              (b) => b.id === id && b.type === "rest_endpoint",
+            )
+          )
+            problem(
+              block.id,
+              "Audit scope must reference existing endpoints in this service.",
+            );
+      if (
+        block.type === "error_handler" &&
+        new Set(block.config.rules.map((r) => r.kind)).size !==
+          block.config.rules.length
+      )
+        problem(
+          block.id,
+          "Each error classification must have at most one response rule.",
+        );
+    }
+    const healthBlocks = service.blocks.filter(
+      (b) => b.type === "health_check",
+    );
+    if (healthBlocks.length > 1)
+      problem(service.id, "Use one Health Check block per service.");
+    const healthRoutes = new Set([
+      "/health",
+      "/health/live",
+      "/health/ready",
+      ...healthBlocks.map((b) => b.config.route),
+    ]);
+    for (const block of service.blocks) {
+      if (
+        block.type === "rest_endpoint" &&
+        healthRoutes.has(block.config.route)
+      )
+        problem(block.id, "This route is reserved for service health checks.");
+      if (block.type === "health_check") {
+        if (
+          block.config.route === "/health/live" ||
+          block.config.route.includes("//") ||
+          block.config.route.endsWith("/")
+        )
+          problem(
+            block.id,
+            "Choose a readiness path distinct from /health/live, without empty segments or a trailing slash.",
+          );
+        for (const id of block.config.serviceIds)
+          if (id === service.id || !backend.services.some((s) => s.id === id))
+            problem(
+              block.id,
+              "Health dependencies must reference other existing services.",
+            );
+        if (block.connections.length)
+          problem(
+            block.id,
+            "Health checks are service configuration, not workflow steps.",
+          );
       }
     }
     const identityModel = service.blocks.find(
@@ -349,13 +413,11 @@ export function compileProject(value: ProjectDocument) {
   files["frontend/.env.example"] =
     "APP_ORIGIN=http://localhost:3000\n" +
     backend.services
-      .map(
-        (s) =>
-          `API_ORIGIN_${s.port}=http://localhost:${s.port}`,
-      )
+      .map((s) => `API_ORIGIN_${s.port}=http://localhost:${s.port}`)
       .join("\n");
   files["frontend/lib/api.js"] = apiClientSource(backend.services);
-  const buildOrigins = "# Set APP_ORIGIN and API_ORIGIN_<port> on the runtime container.";
+  const buildOrigins =
+    "# Set APP_ORIGIN and API_ORIGIN_<port> on the runtime container.";
   files["frontend/Dockerfile"] =
     `FROM node:22-alpine AS build\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install --package-lock-only --ignore-scripts && npm ci\nCOPY . .\n${buildOrigins}\nRUN npm run build\nFROM node:22-alpine\nWORKDIR /app\nENV NODE_ENV=production HOSTNAME=0.0.0.0\nCOPY --from=build --chown=node:node /app/.next/standalone ./\nCOPY --from=build --chown=node:node /app/.next/static ./.next/static\nUSER node\nEXPOSE 3000\nCMD ["node", "server.js"]\n`;
   files["frontend/.dockerignore"] = "node_modules\n.next\n.env*\n.git\n";
@@ -371,7 +433,8 @@ export function compileProject(value: ProjectDocument) {
     null,
     2,
   );
-  files["IDENTITY.md"] = `# Generated accounts\n\nIdentity services expose /__levoks/account/<service-slug> on the frontend for registration, sign-in, verification, password recovery, session inventory and revocation. New Auth templates include these endpoints; older projects need the matching endpoint blocks.\n\nSet frontend APP_ORIGIN to its public HTTPS origin and API_ORIGIN_<port> to each backend origin at runtime. API routes are proxied through the same frontend origin with a declared-route allowlist and service-scoped HttpOnly cookies. Keep these values in the hosting environment.\n\nEach identity backend needs MONGO_URI, a random JWT_SECRET of at least 32 characters and exact frontend CORS_ORIGINS. Resource services must bind to the identity service in their Authentication inspector and configure AUTH_IDENTITY_ORIGIN to that service. Bare JWT verification does not revoke sessions.\n\nEmail verification/recovery requires IDENTITY_PUBLIC_URL (the full HTTPS account page URL), IDENTITY_EMAIL_FROM (verified sender), IDENTITY_EMAIL_KEYS (JSON keyring of base64 random 32-byte keys), and IDENTITY_EMAIL_ACTIVE_KEY. Run npm run worker:email separately with the same database and keyring plus RESEND_API_KEY. Keep the provider key on the worker. Enable the verified-email requirement in the Authentication inspector when required. Retain old encryption keys until pending mail has drained or expired. Never put keys in canvas state or generated source.\n\nThe worker uses encrypted durable delivery records, bounded retries, provider idempotency and expiring single-use links. Email provider setup and sender verification are external deployment actions. Supervise both processes, use HTTPS, persist and back up MongoDB, monitor worker failures, and verify real email delivery before release.\n`;
+  files["IDENTITY.md"] =
+    `# Generated accounts\n\nIdentity services expose /__levoks/account/<service-slug> on the frontend for registration, sign-in, verification, password recovery, session inventory and revocation. New Auth templates include these endpoints; older projects need the matching endpoint blocks.\n\nSet frontend APP_ORIGIN to its public HTTPS origin and API_ORIGIN_<port> to each backend origin at runtime. API routes are proxied through the same frontend origin with a declared-route allowlist and service-scoped HttpOnly cookies. Keep these values in the hosting environment.\n\nEach identity backend needs MONGO_URI, a random JWT_SECRET of at least 32 characters and exact frontend CORS_ORIGINS. Resource services must bind to the identity service in their Authentication inspector and configure AUTH_IDENTITY_ORIGIN to that service. Bare JWT verification does not revoke sessions.\n\nEmail verification/recovery requires IDENTITY_PUBLIC_URL (the full HTTPS account page URL), IDENTITY_EMAIL_FROM (verified sender), IDENTITY_EMAIL_KEYS (JSON keyring of base64 random 32-byte keys), and IDENTITY_EMAIL_ACTIVE_KEY. Run npm run worker:email separately with the same database and keyring plus RESEND_API_KEY. Keep the provider key on the worker. Enable the verified-email requirement in the Authentication inspector when required. Retain old encryption keys until pending mail has drained or expired. Never put keys in canvas state or generated source.\n\nThe worker uses encrypted durable delivery records, bounded retries, provider idempotency and expiring single-use links. Email provider setup and sender verification are external deployment actions. Supervise both processes, use HTTPS, persist and back up MongoDB, monitor worker failures, and verify real email delivery before release.\n`;
   files["README.md"] =
     `# ${project.name}\n\nGenerated by Levoks. Node.js 22+ required.\n\n## Frontend\n\nIn frontend/: npm install, copy .env.example to .env.local, then npm run dev. Production: npm run build && npm start.\n\n## Backend\n\nIn backend/: docker compose up --build. Configure JWT_SECRET and allowed CORS origins before exposing services. Each service also runs with npm install && npm start.\n\n## Deployment\n\nDeploy frontend/ as a Next.js project. Run Express services on a container host with MongoDB and configure server-only API_ORIGIN_<port> for each service origin and APP_ORIGIN for the frontend public origin at runtime. The generated gateway keeps browser requests on the frontend origin. See IDENTITY.md for account pages and the separately supervised email worker. Keep credentials in the hosting provider's secret store.\n\n## Source of truth\n\nlevoks.project.json restores the visual workspace. levoks.ir.json includes the resolved flows. Secret values are omitted. Review generated code and test application-specific authorization before release.\n`;
   if (project.source) {

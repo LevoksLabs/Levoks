@@ -1,12 +1,15 @@
-import { healthSchema, type HealthConfig } from '@/lib/backend/health-schema';
-import type { ServiceContainer } from '@/types/backend';
+import { healthSchema, type HealthConfig } from "@/lib/backend/health-schema";
+import type { ServiceContainer } from "@/types/backend";
 
-export function healthRuntime(service: ServiceContainer, services: ServiceContainer[]) {
-  const block = service.blocks.find(b => b.type === 'health_check');
+export function healthRuntime(
+  service: ServiceContainer,
+  services: ServiceContainer[],
+) {
+  const block = service.blocks.find((b) => b.type === "health_check");
   const config = healthSchema.parse(block?.config || {});
-  const dependencies = config.serviceIds.flatMap(id => {
-    const target = services.find(s => s.id === id);
-    return target ? [{id, port: target.port}] : [];
+  const dependencies = config.serviceIds.flatMap((id) => {
+    const target = services.find((s) => s.id === id);
+    return target ? [{ id, port: target.port }] : [];
   });
   return `
 const mongoose = require('mongoose');
@@ -56,5 +59,7 @@ exports.mount = app => {
 }
 
 export function healthConfiguration(service: ServiceContainer): HealthConfig {
-  return healthSchema.parse(service.blocks.find(b => b.type === 'health_check')?.config || {});
+  return healthSchema.parse(
+    service.blocks.find((b) => b.type === "health_check")?.config || {},
+  );
 }

@@ -12,6 +12,8 @@ import {
   type ControlConfig,
 } from "@/lib/backend/program-schema";
 import { healthSchema, type HealthConfig } from "@/lib/backend/health-schema";
+import { errorHandlerSchema, auditLogSchema, type ErrorHandlerConfig, type AuditLogConfig } from "@/lib/backend/observability-schema";
+export type { ErrorHandlerConfig, AuditLogConfig } from "@/lib/backend/observability-schema";
 export type { HealthConfig } from "@/lib/backend/health-schema";
 export type BackendBlockType =
   | ProgramBlockType
@@ -25,6 +27,8 @@ export type BackendBlockType =
   | "validation"
   | "relation"
   | "health_check"
+  | "error_handler"
+  | "audit_log"
   | "env_var";
 
 // ─── Block Configs ───
@@ -137,6 +141,8 @@ export interface EnvVarConfig {
 
 // Union config type
 export type BlockConfig =
+  | ErrorHandlerConfig
+  | AuditLogConfig
   | HealthConfig
   | ProgramConfig
   | EndpointConfig
@@ -272,6 +278,8 @@ export const DEFAULT_ENV_VAR_CONFIG: EnvVarConfig = {
 // Map block type → default config
 export const DEFAULT_BLOCK_CONFIGS: Record<BackendBlockType, BlockConfig> = {
   health_check: healthSchema.parse({}),
+  error_handler: errorHandlerSchema.parse({}),
+  audit_log: auditLogSchema.parse({}),
   ...PROGRAM_DEFAULTS,
   rest_endpoint: DEFAULT_ENDPOINT_CONFIG,
   db_model: DEFAULT_DB_MODEL_CONFIG,
@@ -294,7 +302,7 @@ export interface BackendSidebarCategory {
 }
 
 export const BACKEND_SIDEBAR_CATEGORIES: BackendSidebarCategory[] = [
-  {id: 'observability', label: 'Observability', items: [{type: 'health_check', label: 'Health Check', icon: 'validation'}]},
+  {id: 'observability', label: 'Observability', items: [{type: 'health_check', label: 'Health Check', icon: 'validation'}, {type: 'error_handler', label: 'Error Handler', icon: 'trycatch'}, {type: 'audit_log', label: 'Audit Log', icon: 'logger'}]},
   {
     id: "endpoints",
     label: "Endpoints",

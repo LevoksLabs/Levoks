@@ -10,6 +10,7 @@ import { FlowGraph } from "@/types/ir";
 import { serviceSlug } from "@/lib/project/schema";
 import type { AuthConfig } from "@/types/backend";
 import { generateServiceCode } from "./express";
+import { healthConfiguration } from "./health";
 import { DOCKER_COMPOSE_TEMPLATE, README_TEMPLATE } from "./templates";
 
 /**
@@ -43,6 +44,7 @@ export function generateProject(
                 name: s.name,
                 port: s.port,
                 identityOrigin: target ? `http://${serviceSlug(target.name)}:${target.port}` : undefined,
+                healthOrigins: Object.fromEntries(healthConfiguration(s).serviceIds.flatMap(id => {const target = services.find(v => v.id === id); return target ? [[`HEALTH_ORIGIN_${target.port}`, `http://${serviceSlug(target.name)}:${target.port}`]] : [];})),
             }; })
         );
     }

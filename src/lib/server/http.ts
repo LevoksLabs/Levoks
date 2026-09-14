@@ -70,7 +70,7 @@ export function apiError(error: unknown) {
     { status: 500 },
   );
 }
-export async function providerJSON(
+export async function providerResponse(
   url: string,
   token: string,
   init: RequestInit = {},
@@ -98,7 +98,8 @@ export async function providerJSON(
       ...init.headers,
     },
   });
-  if (!response.ok)
+  if (!response.ok) {
+    await response.body?.cancel();
     throw new HttpError(
       response.status === 403 &&
         response.headers.get("x-ratelimit-remaining") === "0"
@@ -108,6 +109,15 @@ export async function providerJSON(
           : 502,
       `Provider request failed (${response.status}). Check your credentials, permissions, and quota.`,
     );
+  }
+  return response;
+}
+export async function providerJSON(
+  url: string,
+  token: string,
+  init: RequestInit = {},
+) {
+  const response = await providerResponse(url, token, init);
   const reader = response.body?.getReader();
   if (!reader) throw new HttpError(502, "Provider returned an empty response.");
   const chunks: Uint8Array[] = [];

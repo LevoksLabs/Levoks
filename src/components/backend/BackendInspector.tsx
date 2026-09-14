@@ -3,10 +3,13 @@
 import React, { useState } from "react";
 import ProgramInspector from "./ProgramInspector";
 import HealthInspector from "./HealthInspector";
+import { AuditInspector, ErrorInspector } from "./ObservabilityInspector";
 import { useBackendStore } from "@/store/backendStore";
 import {
   EndpointConfig,
   HealthConfig,
+  AuditLogConfig,
+  ErrorHandlerConfig,
   DbModelConfig,
   MiddlewareConfig,
   AuthConfig,
@@ -241,6 +244,8 @@ const BackendInspector: React.FC = () => {
             />
           )}
           {block.type === "health_check" && <HealthInspector config={block.config as HealthConfig} serviceId={serviceId} onChange={updates => updateBlockConfig(serviceId, block.id, updates)}/>}
+          {block.type === "error_handler" && <ErrorInspector config={block.config as ErrorHandlerConfig} onChange={updates => updateBlockConfig(serviceId, block.id, updates)}/>}
+          {block.type === "audit_log" && <AuditInspector config={block.config as AuditLogConfig} service={services.find(s => s.id === serviceId)!} onChange={updates => updateBlockConfig(serviceId, block.id, updates)}/>}
           {block.type === "env_var" && (
             <EnvVarEditor
               config={block.config as EnvVarConfig}

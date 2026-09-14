@@ -86,13 +86,13 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | BE45 | Middleware: global/service/endpoint scopes | PARTIAL | B applies service middleware; endpoint middlewareIds not respected. |
 | BE46 | CORS origins/methods/headers/credentials | PARTIAL | Origin/credentials subset emitted; complete controls and runtime coverage absent. |
 | BE47 | Rate limits: key strategy/window/limit/error | PARTIAL | Express process-local limit; distributed limit/scope configuration missing. |
-| BE48 | Request/error/metadata logging with redaction | PARTIAL | Morgan/default errors; configurable redaction and retention absent. |
+| BE48 | Request/error/metadata logging with redaction | PARTIAL | Logger emits selected request metadata without bodies/headers/query strings; Error Handler logs classifications and Audit Log adds durable retention. Hosted aggregation and all response paths remain. |
 | BE49 | Custom middleware extension | PARTIAL | Raw string setting, export blocked; trusted extension contract absent. |
 | BE50 | Environment development/production configuration | PARTIAL | Env blocks/examples; per-environment model and management missing. |
 | BE51 | Secrets by reference, Google Cloud Secret Manager | PARTIAL | Encrypted durable owner/project vault, metadata-only access and key rotation pass real MongoDB tests. GCP adapter, host injection and live provider acceptance remain. |
-| BE52 | Error Handler: classification/logging/status/exposure | PARTIAL | Fixed generic handler; no configurable block. |
-| BE53 | Health Check: database/storage/dependency readiness | PARTIAL | Fixed liveness `/health`; no dependency/configurable checks. |
-| BE54 | Audit Log: actor/event/context/persistence/retention | MISSING | No durable audit records. |
+| BE52 | Error Handler: classification/logging/status/exposure | PARTIAL | Error Handler inspector emits per-class HTTP status/client-message rules and metadata-only logging; generated Mongo duplicate errors and workflow failures reach it. All identity/validation response paths and hosted logs remain. |
+| BE53 | Health Check: database/storage/dependency readiness | PARTIAL | Health Check inspector/IR emits configurable readiness, real MongoDB and service liveness probes, bounds/cache/concurrency and shutdown draining. Real runtime and browser export tests passed. Storage probes and deployed-container acceptance remain. |
+| BE54 | Audit Log: actor/event/context/persistence/retention | PARTIAL | Inspector scopes durable Mongo request-start/outcome records, actor/tenant metadata, TTL retention and fail-closed behavior. Real generated JWT/Express/Mongo tests pass. Transaction blocks now insert audit events in the same MongoDB session, with real rollback/failed-audit tests. Standalone CRUD transaction conversion, background events, completion reconciliation and audit browsing remain. |
 | BE55 | Editable Auth template | PARTIAL | Ordinary blocks; lifecycle/authorization/live tests incomplete. |
 | BE56 | Editable CRUD template | PARTIAL | Ordinary blocks; explicit query binding/access policies missing. |
 | BE57 | Functional editable Chat template | PARTIAL | Static architecture; no real-time runtime, multimodel export blocked. |
@@ -114,10 +114,10 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | AI01 | BYOK model selection/Hugging Face inference | PARTIAL | `/api/ai`; live responses/model capability discovery unverified. |
 | AI02 | Specialized/fine-tuned IR agents | MISSING | Generic completion prompting is not trained specialized agents. Model selection/training artifacts required; internal orchestration missing. |
 | AI03 | Robust complete IR-to-code generation | PARTIAL | Validated JSON/proposals; backend IR and source semantic analysis incomplete. |
-| AI04 | Incremental proposals, streaming, cancellation | PARTIAL | Whole-document proposal/cancellation; incremental edits and streaming absent. |
+| AI04 | Incremental proposals, streaming, cancellation | PARTIAL | Bounded incremental IR patches, preconditions, field review and cancellation are implemented. Streaming and contextual selection remain missing; live model output is unverified. |
 | AI05 | Generated source syntax/security/dependency analysis | PARTIAL | File-path/size validation only; arbitrary proposals not built/analyzed. |
-| AI06 | Review, diff, checkpoint, stale-proposal protection | PARTIAL | W review/checkpoints; meaningful change diff and browser coverage absent. |
-| AI07 | Usage/cost budgets and inference controls | PARTIAL | Token cap/process-local rate limit; spend/usage ledger absent. |
+| AI06 | Review, diff, checkpoint, stale-proposal protection | PARTIAL | Incremental field before/after review, checkpoints and stale identity/name/design/source checks pass browser review/save tests with controlled model output. Rich source diffs and live-model acceptance remain. |
+| AI07 | Usage/cost budgets and inference controls | PARTIAL | Configurable input-size preflight and provider output token caps; reported token usage shown in proposals. Durable spend/usage ledger and monetary budgets remain missing. |
 | AI08 | Paid plans/profile billing/metering | MISSING | Informational profile only; provider credential needed after internal implementation. |
 
 ## Persistence, connections and deployment
@@ -202,3 +202,11 @@ This order does not waive any row. Update row evidence and readiness after each 
 Stage 3 verification: TypeScript and all 28 unit tests passed; lint had 0 errors and 71 existing warnings. Three real-Mongo integration tests, three real Chromium E2E tests, editor production build and exported two-page frontend build passed. Editor and generated backend audits each returned zero vulnerabilities. Windows Playwright cleanup required running the test command with permission to terminate its own server processes; the rerun exited normally with 3 passed in 15.9 seconds. Stage 4 adds another real integration test and requires another full verification pass after the remaining changes. Docker is still unavailable.
 
 Stage 4 verification: 31 unit tests, five real-Mongo integration tests and the exported application Chromium account workflow pass. Editor production build also passed. The generated browser suite builds Next.js and runs actual Express, MongoDB and the separate email worker; only external email transport is replaced by a local HTTP receiver. Cookie forwarding is tested against an actual HTTP server, including rejection of unrelated cookies and upstream cookie writes. Email challenge expiry removes ciphertext without deleting accounts. Operating instructions and remaining internal/live gates are in [identity-operations.md](identity-operations.md). Full feature rows remain PARTIAL; no UI-only completion claim is made.
+
+Stage 5 health evidence: [observability-operations.md](observability-operations.md) records configuration, execution behavior and deployment limits. Two health integration tests and four editor Chromium workflows pass. Docker readiness commands are generated but have not run in a container. BE53 stays PARTIAL; deployment orchestration and storage readiness are not complete.
+
+Stage 5 observability expansion: Error Handler and Audit Log now have validated configurations, compiler diagnostics, inspector controls and emitted runtime behavior. Eight integration tests and four editor Chromium workflows pass, including all three observability inspectors. Audit completion is not atomic with business mutations; unfinished records preserve uncertainty. See [observability-operations.md](observability-operations.md) for precise guarantees and remaining internal work.
+
+Stage 5 transaction follow-through: the Audit Log inspector can enable atomic workflow-transaction events. A real replica-set test proves business/audit commit together, business rollback leaves no committed audit, and audit validation failure aborts business writes. HTTP completion metadata remains separate and can remain unknown after a crash; generic CRUD and custom-source auditing are not covered by this guarantee.
+
+Stage 6 incremental AI: [ai-operations.md](ai-operations.md) records implemented patch validation, field review, stale-proposal protection and per-request input/output limits. Browser testing exposed and fixed overwrite of later project renames. Live inference remains unverified; streaming, durable usage/cost accounting and source analysis are still internal gaps.

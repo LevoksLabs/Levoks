@@ -26,6 +26,7 @@ import { authController } from "./auth";
 import { authSessionRuntime } from "./auth-session";
 import { authRecoveryRuntime, IDENTITY_EMAIL_WORKER } from "./auth-recovery";
 import { healthRuntime, healthConfiguration } from "./health";
+import { observabilityRuntime } from "./observability";
 import { programFiles } from "@/lib/backend/program";
 
 // ─── Field type → Mongoose type ───
@@ -159,7 +160,7 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
 
     const authMiddleware = config.authRequired ? "auth, " : "";
     const inputFields = config.requestBody.length ? config.requestBody : fields.filter(f => !/password|token|secret|role/i.test(f.name));
-    return `router.${method}(${JSON.stringify(config.route)}, ${authMiddleware}validateBody(${JSON.stringify(inputFields)}), validateRules, async (req, res) => {\n${handlerBody.replaceAll('res.status(500).json({ error: error.message })', 'res.status(500).json({ error: "Request failed" })')}\n});`;
+    return `router.${method}(${JSON.stringify(config.route)}, ${authMiddleware}validateBody(${JSON.stringify(inputFields)}), validateRules, async (req, res, next) => {\n${handlerBody.replaceAll(/res.status\((400|500)\).json\(\{ error: error.message \}\)/g, 'next(error)')}\n});`;
 }
 
 // ─── Generate middleware setup ───
@@ -173,7 +174,7 @@ function generateMiddlewareSetup(block: BackendBlock): string {
         case "helmet":
             return `app.use(helmet());`;
         case "logger":
-            return `// Logger already set up with morgan`;
+            return `// Error and audit logging use the central metadata-only observability runtime.`;
         case "bodyParser":
             return `// Body parser already configured`;
         case "custom":
@@ -321,6 +322,24 @@ exports.validateRules = (req, res, next) => {
     files[`${servicePath}/.gitignore`] = `node_modules/\n.env\n.DS_Store`;
 
     files[`${servicePath}/observability/health.js`] = healthRuntime(service, allServices);
+    files[`${servicePath}/observability/index.js`] = observabilityRuntime(service);
+    files[`${servicePath}/scripts/check.js`] = `const {readdirSync, readFileSync} = require('node:fs');
+const path = require('node:path');
+const {spawnSync} = require('node:child_process');
+let count = 0;
+function check(directory) {
+  for (const entry of readdirSync(directory, {withFileTypes: true})) {
+    if (entry.isSymbolicLink() || ['node_modules', '.git'].includes(entry.name)) continue;
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) check(file);
+    else if (file.endsWith('.js')) {
+      const result = spawnSync(process.execPath, ['--check', file], {stdio: 'inherit', windowsHide: true});
+      if (result.error || result.status !== 0) process.exit(1); count++;
+    } else if (file.endsWith('.json')) JSON.parse(readFileSync(file, 'utf8'));
+  }
+}
+check(path.resolve(__dirname, '..')); console.log('Validated ' + count + ' JavaScript modules and project JSON.');`;
+    files[`${servicePath}/observability/check.js`] = `fetch('http://127.0.0.1:' + (process.env.PORT || ${service.port}) + '/health', {signal: AbortSignal.timeout(4000)}).then(async response => {await response.body?.cancel(); process.exitCode = response.ok ? 0 : 1;}).catch(() => {process.exitCode = 1;});`;
     for (const id of healthConfiguration(service).serviceIds) {
         const target = allServices.find(s => s.id === id);
         if (target) files[`${servicePath}/.env.example`] += `\nHEALTH_ORIGIN_${target.port}=http://localhost:${target.port}`;

@@ -28,6 +28,16 @@ test(
         values: { title: "$request.body.title" },
       }),
       block("tx", "transaction", { steps: ["create", "second"] }),
+      block("single_tx", "transaction", { steps: ["create"] }),
+      block("audit", "audit_log", {
+        endpointIds: ["tx_endpoint", "single_tx_endpoint"],
+      }),
+      block(
+        "single_tx_endpoint",
+        "rest_endpoint",
+        { route: "/single-atomic", method: "POST", authRequired: true },
+        ["single_tx"],
+      ),
       block(
         "tx_endpoint",
         "rest_endpoint",
@@ -56,6 +66,7 @@ test(
           tenantId: string;
         }>;
       await Entry.init();
+      await require("./workflow-service/observability").initialize();
       const execute = require("./workflow-service/workflow/index.js") as (
         id: string,
         request: unknown,
@@ -110,6 +121,47 @@ test(
         "first write must roll back after second write fails",
       );
       assert.equal(await Entry.countDocuments({ title: "A" }), 1);
+      const audit = mongoose.connection.db!.collection("levoks_audit");
+      assert.equal(
+        await audit.countDocuments({ phase: "transaction_committed" }),
+        0,
+        "rolled-back transactions leave no committed audit event",
+      );
+      await execute("single_tx_endpoint", {
+        user: a,
+        body: { title: "atomic-audit" },
+        levoksRequestId: "transaction-request",
+      });
+      const committed = await audit.findOne({ phase: "transaction_committed" });
+      assert.equal(committed?.actorId, "alice");
+      assert.equal(committed?.tenantId, "tenant-a");
+      assert.equal(committed?.requestId, "transaction-request");
+      assert.equal(await Entry.countDocuments({ title: "atomic-audit" }), 1);
+      await mongoose.connection.db!.command({
+        collMod: "levoks_audit",
+        validator: { phase: { $ne: "transaction_committed" } },
+        validationLevel: "strict",
+      });
+      await assert.rejects(
+        execute("single_tx_endpoint", {
+          user: a,
+          body: { title: "audit-rejected" },
+        }),
+        /validation/i,
+      );
+      assert.equal(
+        await Entry.countDocuments({ title: "audit-rejected" }),
+        0,
+        "audit write failure rolls back the business write in the same transaction",
+      );
+      assert.equal(
+        await audit.countDocuments({ phase: "transaction_committed" }),
+        1,
+      );
+      await mongoose.connection.db!.command({
+        collMod: "levoks_audit",
+        validator: {},
+      });
       // Exercise the emitted Express server over HTTP, including its real JWT and validation middleware.
       const reservation = createServer();
       await new Promise<void>((resolve) =>

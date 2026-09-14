@@ -42,7 +42,7 @@ function publicValue(value, depth = 0) {
   if (Array.isArray(value)) return value.map(item => publicValue(item, depth + 1));
   return Object.fromEntries(Object.entries(value).filter(([key]) => safeKey(key) && !/password|secret|token/i.test(key)).map(([key, child]) => [key, publicValue(child, depth + 1)]));
 }
-exports.createWorkflow = (program, models, database) => {
+exports.createWorkflow = (program, models, database, observability) => {
   const blocks = Object.fromEntries(program.blocks.map(block => [block.id, block]));
   function policy(id, principal) {
     const block = blocks[id];
@@ -121,7 +121,7 @@ exports.createWorkflow = (program, models, database) => {
             const before = structuredClone(context);
             const beforeResponse = response;
             try {
-              await transaction.withTransaction(async () => { context = structuredClone(before); response = beforeResponse; await run(c.steps, transaction, depth + 1); });
+              await transaction.withTransaction(async () => { context = structuredClone(before); response = beforeResponse; await run(c.steps, transaction, depth + 1); if (observability?.transaction) await observability.transaction(request, endpoint.id, block.id, transaction); }, {readConcern: {level: 'snapshot'}, writeConcern: {w: 'majority'}, maxCommitTimeMS: 5000});
               context[c.output] = context.result ?? null;
             } catch (error) { context = before; response = beforeResponse; throw error; }
             finally { await transaction.endSession(); }

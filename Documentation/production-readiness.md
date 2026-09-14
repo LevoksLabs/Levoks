@@ -94,3 +94,11 @@ The root production build and exported two-page frontend build were exercised in
 - Expand real browser/accessibility and real-database concurrency coverage; run live provider tests, load tests, monitoring/alerting and backup restoration drills before a production launch.
 
 These are explicit implementation boundaries, not evidence that the full vision has shipped.
+
+Stage 5 adds [configured health readiness](observability-operations.md). Health Check inspector settings compile into real database/service probes, bounded timeouts, shared concurrent probes, cache policy, readiness/liveness separation and shutdown draining. Real MongoDB/HTTP tests and the editor inspector → reload → source/ZIP browser workflow passed. Exported Docker health commands and Compose dependency origins are emitted; Docker execution, storage-specific probes and full deployment health gates remain unverified/incomplete.
+
+Stage 5 also implements Error Handler classifications/response rules, metadata-only request/error logging and scoped durable Audit Log start/outcome records with retention and fail-closed controls. Generated JWT/Express/MongoDB verification and all three inspector persistence/export checks pass. Business-event transaction atomicity, crash reconciliation, background-event auditing and hosted log operations remain internal gaps; see [observability guarantees](observability-operations.md).
+
+Atomic audit follow-through: workflow Transaction blocks now write audit events using their MongoDB transaction session when enabled in Audit Log. Real replica-set tests verify joint commit and rollback in both failure directions. Standalone CRUD/custom code and HTTP completion reconciliation remain separate internal requirements.
+
+Stage 6 adds [incremental AI proposal controls](ai-operations.md): bounded IR patches with preconditions, affected-field review, atomic schema/graph/compiler validation and stale checks that include project identity/name. Input bytes are checked before a provider request, output tokens are capped, and reported usage is displayed. Real browser review/save tests use controlled model output; live inference, streaming, durable budgets and source analysis remain unfinished.

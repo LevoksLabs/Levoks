@@ -35,7 +35,8 @@ function launch(args: string[], env: Record<string, string>, cwd = root) {
   return child;
 }
 async function finish(child: ChildProcess) {
-  if (child.exitCode !== null || child.signalCode !== null) return child.exitCode;
+  if (child.exitCode !== null || child.signalCode !== null)
+    return child.exitCode;
   return new Promise<number | null>((resolve, reject) => {
     child.once("error", reject);
     child.once("exit", resolve);
@@ -44,7 +45,11 @@ async function finish(child: ChildProcess) {
 test.beforeAll(async () => {
   test.setTimeout(120000);
   const next = path.join(root, "frontend/node_modules/next/dist/bin/next");
-  const build = launch([next, "build"], {NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1"}, path.join(root, "frontend"));
+  const build = launch(
+    [next, "build"],
+    { NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1" },
+    path.join(root, "frontend"),
+  );
   expect(await finish(build), logs).toBe(0);
   database = await MongoMemoryServer.create({
     binary: { downloadDir: path.resolve(".verification/mongodb-bin") },
@@ -82,6 +87,26 @@ test.beforeAll(async () => {
     [path.join(root, "backend/auth-service/workers/identity-email.js")],
     env,
   );
+  await expect
+    .poll(
+      async () => {
+        try {
+          const response = await fetch(
+            `http://127.0.0.1:${backendPort}/health`,
+          );
+          await response.body?.cancel();
+          return response.status;
+        } catch {
+          return 0;
+        }
+      },
+      {
+        timeout: 30000,
+        message:
+          "Generated backend must become ready before the browser workflow starts",
+      },
+    )
+    .toBe(200);
   const frontendEnv = {
     NODE_ENV: "production",
     NEXT_TELEMETRY_DISABLED: "1",
@@ -105,6 +130,13 @@ test.beforeAll(async () => {
       { timeout: 30000 },
     )
     .toBe(200);
+});
+test.afterEach(async ({}, info) => {
+  if (info.status !== info.expectedStatus)
+    await info.attach("generated-process-logs", {
+      body: logs,
+      contentType: "text/plain",
+    });
 });
 test.afterAll(async () => {
   for (const child of processes.slice().reverse())

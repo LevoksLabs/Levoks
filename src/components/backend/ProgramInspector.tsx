@@ -25,6 +25,8 @@ const configuration = new Set([
   "relation",
   "env_var",
   "health_check",
+  "error_handler",
+  "audit_log",
 ]);
 
 function Binding({

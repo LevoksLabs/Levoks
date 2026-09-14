@@ -5,11 +5,24 @@ import type {
 } from "@/types/backend";
 
 export function gatewaySource(services: ServiceContainer[]) {
-  const cookieNames = Object.fromEntries(services.map(s => {
-    const auth = s.blocks.find(b => b.type === 'auth_block')?.config as AuthConfig | undefined;
-    const identity = auth?.identityServiceId ? services.find(v => v.id === auth.identityServiceId) : s;
-    return [s.port, auth && identity ? [`levoks_session_${identity.port}`, `levoks_refresh_${identity.port}`] : []];
-  }));
+  const cookieNames = Object.fromEntries(
+    services.map((s) => {
+      const auth = s.blocks.find((b) => b.type === "auth_block")?.config as
+        AuthConfig | undefined;
+      const identity = auth?.identityServiceId
+        ? services.find((v) => v.id === auth.identityServiceId)
+        : s;
+      return [
+        s.port,
+        auth && identity
+          ? [
+              `levoks_session_${identity.port}`,
+              `levoks_refresh_${identity.port}`,
+            ]
+          : [],
+      ];
+    }),
+  );
   const endpoints = Object.fromEntries(
     services.map((s) => [
       s.port,

@@ -33,6 +33,9 @@ const METHOD_COLORS: Record<string, string> = {
 
 // Block type labels
 const BLOCK_TYPE_LABELS: Record<string, string> = {
+    health_check: "Health Check",
+    error_handler: "Error Handler",
+    audit_log: "Audit Log",
     rest_endpoint: "Endpoint",
     db_model: "Model",
     middleware: "Middleware",

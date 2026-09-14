@@ -138,6 +138,64 @@ test("AI proposals are schema-validated and do not mutate the project", async (t
   assert.match((await response.json()).error, /failed validation/);
   assert.equal(p.schemaVersion, 1);
 });
+test("AI input budgets reject oversized context before a paid provider request", async (t) => {
+  const provider = t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("Provider must not be called");
+  });
+  const response = await generate(
+    request({
+      project: emptyProject(),
+      mode: "patch",
+      provider: "huggingface",
+      apiKey: "test-key-12345",
+      model: "test/model",
+      prompt: "Edit",
+      maxInputBytes: 1000,
+      maxOutputTokens: 256,
+    }),
+  );
+  assert.equal(response.status, 413);
+  assert.equal(provider.mock.callCount(), 0);
+});
+test("AI incremental proposals return validated field changes and reject stale preconditions", async (t) => {
+  const project = emptyProject("Before");
+  let expected = "Before";
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              summary: "Rename project",
+              operations: [
+                { op: "test", path: "/name", value: expected },
+                { op: "replace", path: "/name", value: "After" },
+              ],
+            }),
+          },
+        },
+      ],
+    }),
+  );
+  const payload = {
+    project,
+    mode: "patch",
+    provider: "huggingface",
+    apiKey: "test-key-12345",
+    model: "test/model",
+    prompt: "Rename this project",
+  };
+  let response = await generate(request(payload));
+  assert.equal(response.status, 200);
+  const proposal = await response.json();
+  assert.equal(proposal.project.name, "After");
+  assert.equal(proposal.changes[0].path, "/name");
+  assert.equal(project.name, "Before");
+  expected = "Outdated";
+  response = await generate(request(payload));
+  assert.equal(response.status, 502);
+  assert.match((await response.json()).error, /precondition/);
+});
 
 test("Vercel receives only frontend source and reports queued state", async (t) => {
   let payload: { files: { file: string }[] } | undefined;

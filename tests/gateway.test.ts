@@ -26,26 +26,59 @@ test("Next encoded-underscore routes are exportable while encoded traversal and 
     assert.throws(() => validateFiles({ [file]: "secret" }), /Unsafe/);
 });
 test("generated gateway forwards only the destination identity cookies and rejects unrelated upstream cookie writes", async () => {
-  const p = emptyProject(); restoreProject(p); useBackendStore.getState().loadAuthTemplate();
+  const p = emptyProject();
+  restoreProject(p);
+  useBackendStore.getState().loadAuthTemplate();
   const services = captureProject(p.id, p.name).backend.services;
   let received = "";
   const server = createServer((req, res) => {
     received = req.headers.cookie || "";
-    res.writeHead(200, {"Content-Type": "application/json", "Set-Cookie": ["levoks_session_3001=renewed; HttpOnly", "levoks_session_3002=overwrite", "editor_session=overwrite"]}).end('{"ok":true}');
+    res
+      .writeHead(200, {
+        "Content-Type": "application/json",
+        "Set-Cookie": [
+          "levoks_session_3001=renewed; HttpOnly",
+          "levoks_session_3002=overwrite",
+          "editor_session=overwrite",
+        ],
+      })
+      .end('{"ok":true}');
   });
-  await new Promise<void>(r => server.listen(0, "127.0.0.1", r));
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const old = process.env.API_ORIGIN_3001;
-  process.env.API_ORIGIN_3001 = `http://127.0.0.1:${(server.address() as {port:number}).port}`;
+  process.env.API_ORIGIN_3001 = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   try {
-    const gateway = await import('data:text/javascript;base64,' + Buffer.from(gatewaySource(services)).toString('base64'));
-    const response = await gateway.GET(new Request("https://frontend.test/__levoks/api/3001/api/auth/profile", {headers: {cookie: "editor_session=private; levoks_session_3001=access; levoks_refresh_3001=refresh; levoks_session_3002=other"}}), {params: Promise.resolve({service: "3001", path: ["api", "auth", "profile"]})}) as Response;
+    const gateway = await import(
+      "data:text/javascript;base64," +
+        Buffer.from(gatewaySource(services)).toString("base64")
+    );
+    const response = (await gateway.GET(
+      new Request("https://frontend.test/__levoks/api/3001/api/auth/profile", {
+        headers: {
+          cookie:
+            "editor_session=private; levoks_session_3001=access; levoks_refresh_3001=refresh; levoks_session_3002=other",
+        },
+      }),
+      {
+        params: Promise.resolve({
+          service: "3001",
+          path: ["api", "auth", "profile"],
+        }),
+      },
+    )) as Response;
     assert.equal(response.status, 200);
-    assert.equal(received, "levoks_session_3001=access; levoks_refresh_3001=refresh");
-    assert.deepEqual(response.headers.getSetCookie(), ["levoks_session_3001=renewed; HttpOnly"]);
-    assert.deepEqual(await response.json(), {ok: true});
+    assert.equal(
+      received,
+      "levoks_session_3001=access; levoks_refresh_3001=refresh",
+    );
+    assert.deepEqual(response.headers.getSetCookie(), [
+      "levoks_session_3001=renewed; HttpOnly",
+    ]);
+    assert.deepEqual(await response.json(), { ok: true });
   } finally {
-    if (old === undefined) delete process.env.API_ORIGIN_3001; else process.env.API_ORIGIN_3001 = old;
-    await new Promise<void>(r => server.close(() => r()));
+    if (old === undefined) delete process.env.API_ORIGIN_3001;
+    else process.env.API_ORIGIN_3001 = old;
+    await new Promise<void>((r) => server.close(() => r()));
   }
 });
 test("identity account UI and gateway are emitted from the auth template and reserved routes cannot collide with canvas pages", () => {
