@@ -62,6 +62,29 @@ test("workflow compiler rejects missing model bindings, cycles and unsafe output
   assert.ok(issues.some((d) => /Recursive/.test(d.message)));
   assert.ok(issues.some((d) => /reserved/.test(d.message)));
 });
+test("endpoint policies validate fields and conflicting scopes across nested operations", () => {
+  const service = programFixture();
+  service.blocks.push(
+    block("inherited", "access_policy", { ownerField: "missingOwner", tenantField: "" }),
+    block("nested", "function", { steps: ["list"] }),
+    block("inherited_endpoint", "rest_endpoint", { policyIds: ["inherited"] }, ["nested"]),
+    block("conflicting", "access_policy", { ownerField: "", tenantField: "ownerId" }),
+    block("conflicting_endpoint", "rest_endpoint", { policyIds: ["conflicting"] }, ["nested"]),
+  );
+  const issues = programDiagnostics(service);
+  assert.ok(issues.some(issue => issue.nodeId === "list" && /missingOwner.*absent/.test(issue.message)));
+  assert.ok(issues.some(issue => issue.nodeId === "list" && /conflicting ownership/.test(issue.message)));
+});
+test("aggregation rejects sensitive fields, nonnumeric sums and invalid result sorting", () => {
+  const service = programFixture();
+  service.blocks.push(block("aggregate", "query", { modelId: "model", operation: "aggregate", sortField: "title", aggregation: { groupBy: "missing", metrics: [{ name: "total", operation: "sum", field: "title" }] } }));
+  const issues = programDiagnostics(service);
+  assert.ok(issues.some(issue => /Aggregation field missing/.test(issue.message)));
+  assert.ok(issues.some(issue => /Aggregation field title.*numeric/.test(issue.message)));
+  assert.ok(issues.some(issue => /Sort aggregate results/.test(issue.message)));
+  const base = emptyProject();
+  assert.throws(() => parseProject({ ...base, backend: { ...base.backend, services: [{ ...service, blocks: [...service.blocks, block("unsafe", "query", { modelId: "model", operation: "aggregate", aggregation: { groupBy: "", metrics: [{ name: "__proto__", operation: "count", field: "" }] } })] }] } }));
+});
 test("bounded branching, functions and transforms run without evaluating code", async () => {
   const blocks = [
     block("endpoint", "rest_endpoint", {}, ["condition", "reply"]),

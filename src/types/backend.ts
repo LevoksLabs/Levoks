@@ -163,13 +163,14 @@ export interface BackendBlock {
   type: BackendBlockType;
   label: string;
   config: BlockConfig;
-  position: { x: number; y: number };
+  position: { x: number; y: number; placed?: boolean };
   connections: string[]; // IDs of connected blocks
 }
 
 // ─── Service Container ───
 
 export interface ServiceContainer {
+  position?: {x:number;y:number};
   id: string;
   name: string;
   description: string;

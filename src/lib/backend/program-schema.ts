@@ -14,6 +14,28 @@ export const binding = z.union([
   z.null(),
 ]);
 const mapping = z.record(name, binding);
+export const aggregationSchema = z.object({
+  groupBy: z.string().max(100).default(""),
+  metrics: z
+    .array(
+      z.object({
+        name: name.refine(
+          (value) =>
+            !["_id", "__proto__", "constructor", "prototype"].includes(value),
+        ),
+        operation: z.enum(["count", "sum", "avg", "min", "max"]),
+        field: z.string().max(100).default(""),
+      }),
+    )
+    .min(1)
+    .max(8)
+    .refine(
+      (metrics) =>
+        new Set(metrics.map((metric) => metric.name)).size === metrics.length,
+      "Metric names must be unique",
+    ),
+});
+export type AggregationConfig = z.infer<typeof aggregationSchema>;
 export const programConfigs = {
   query: z.object({
     modelId: ref,
@@ -24,6 +46,7 @@ export const programConfigs = {
       "update",
       "delete",
       "count",
+      "aggregate",
     ]),
     filter: mapping,
     values: mapping,
@@ -32,6 +55,10 @@ export const programConfigs = {
     limit: z.number().int().min(1).max(100),
     output: name,
     policyId: ref,
+    aggregation: aggregationSchema.default({
+      groupBy: "",
+      metrics: [{ name: "count", operation: "count", field: "" }],
+    }),
   }),
   transaction: z.object({ steps, output: name }),
   transform: z.object({ fields: mapping, output: name }),
@@ -62,6 +89,10 @@ export const PROGRAM_DEFAULTS: Record<ProgramBlockType, ProgramConfig> = {
     limit: 20,
     output: "result",
     policyId: "",
+    aggregation: {
+      groupBy: "",
+      metrics: [{ name: "count", operation: "count", field: "" }],
+    },
   },
   transaction: { steps: [], output: "transactionResult" },
   transform: { fields: {}, output: "result" },

@@ -132,7 +132,7 @@ const configs = {
 const blockBase = z.object({
   id,
   label: text,
-  position: z.object({ x: finite, y: finite }),
+  position: z.object({ x: finite, y: finite, placed: z.boolean().optional() }),
   connections: z.array(id).max(1000),
 });
 const block = z.discriminatedUnion("type", [
@@ -195,7 +195,14 @@ const block = z.discriminatedUnion("type", [
   blockBase.extend({ type: z.literal("env_var"), config: configs.env_var }),
 ]);
 
+const responsiveLayout = z.object({ x: finite, y: finite, w: finite.nonnegative(), h: finite.nonnegative(), position: z.enum(["absolute", "relative", "static", "fixed", "sticky"]), opacity: finite.min(0).max(1), rotation: finite, visible: z.boolean(), locked: z.boolean() }).partial();
+const responsiveOverride = z.object({ layout: responsiveLayout.optional(), styles: z.record(z.string(), z.union([text, finite])).optional() });
+const vectorCoordinate = finite.min(-10000).max(10000);
 export const elementSchema = z.object({
+  responsive: z.object({ tablet: responsiveOverride.optional(), mobile: responsiveOverride.optional() }).optional(),
+  vector: z.object({ points: z.array(z.object({ x: vectorCoordinate, y: vectorCoordinate, inX: vectorCoordinate.optional(), inY: vectorCoordinate.optional(), outX: vectorCoordinate.optional(), outY: vectorCoordinate.optional() }).refine(point => (point.inX === undefined) === (point.inY === undefined) && (point.outX === undefined) === (point.outY === undefined), "Curve handles require both coordinates")).min(2).max(500), closed: z.boolean(), stroke: text.regex(/^(none|#[0-9a-fA-F]{3,8})$/), strokeWidth: finite.min(0).max(100), fill: text.regex(/^(none|#[0-9a-fA-F]{3,8})$/) }).optional(),
+  motion: z.object({ duration: finite.min(0.05).max(120), delay: finite.min(0).max(120), iterations: z.number().int().min(1).max(100), easing: z.enum(["linear", "ease-in", "ease-out", "ease-in-out"]), frames: z.array(z.object({ time: finite.min(0).max(1), x: vectorCoordinate, y: vectorCoordinate, scale: finite.min(0.01).max(20), rotation: finite.min(-3600).max(3600), opacity: finite.min(0).max(1) })).min(2).max(100).refine(frames => new Set(frames.map(f => f.time)).size === frames.length, "Keyframes must have unique times") }).optional(),
+  component: z.object({ id, node: id, overrides: z.array(text).max(500) }).optional(),
   id,
   type: z.enum([
     "section",
@@ -288,6 +295,9 @@ export const projectSchema = z.object({
     .object({ basedOn: z.string(), files: z.record(z.string(), z.string()) })
     .optional(),
   editor: z.object({
+    assets: z.record(id, z.object({ name: z.string().min(1).max(200), mime: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif", "font/woff", "font/woff2"]), source: z.string().max(1_400_000).regex(/^data:(image\/(png|jpeg|webp|gif)|font\/woff2?);base64,[A-Za-z0-9+/]+={0,2}$/), width: finite.positive().max(100000).optional(), height: finite.positive().max(100000).optional() }).refine(asset => asset.source.startsWith(`data:${asset.mime};base64,`), "Asset type must match its data")).optional(),
+    tokens: z.record(id, z.object({ name: z.string().min(1).max(100), value: z.string().min(1).max(200).regex(/^[^;{}<>]+$/).refine(value => !/url\s*\(|expression\s*\(/i.test(value), "Tokens cannot contain URLs or expressions"), kind: z.enum(["color", "dimension", "font"]) })).optional(),
+    components: z.record(id, z.object({ name: z.string().min(1).max(100), rootId: id, nodes: z.record(id, elementSchema) })).optional(),
     elementsById: z.record(id, elementSchema),
     rootIds: z.array(id),
     globalRootIds: z.array(id),
@@ -322,6 +332,7 @@ export const projectSchema = z.object({
           color: text,
           blocks: z.array(block).max(1000),
           collapsed: z.boolean(),
+          position: z.object({x:finite,y:finite}).optional(),
         }),
       )
       .max(100),
@@ -378,6 +389,18 @@ export function parseProject(value: unknown): ProjectDocument {
   const unique = (ids: string[], label: string) => {
     if (new Set(ids).size !== ids.length) fail(`Duplicate ${label}.`);
   };
+  for (const definition of Object.values(editor.components || {})) {
+    const seen = new Set<string>();
+    const walk = (key: string, parent: string | null, depth: number) => {
+      const node = definition.nodes[key];
+      if (!node || node.id !== key || node.parentId !== parent || seen.has(key) || depth > 100) fail("Invalid component tree.");
+      seen.add(key); node.children.forEach(child => walk(child, key, depth + 1));
+    };
+    walk(definition.rootId, null, 0);
+    if (seen.size !== Object.keys(definition.nodes).length || seen.size > 1000) fail("Invalid component size or detached nodes.");
+  }
+  for (const node of Object.values(editor.elementsById)) if (node.props.assetId && !editor.assets?.[String(node.props.assetId)]) fail("Unknown asset reference.");
+  for (const node of Object.values(editor.elementsById)) if (node.component && !editor.components?.[node.component.id]?.nodes[node.component.node]) fail("Unknown component reference.");
   unique(
     editor.pages.map((p) => p.id),
     "page IDs",

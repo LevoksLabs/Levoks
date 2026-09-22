@@ -1,3 +1,5 @@
+import { projectHistory } from "./projectHistory";
+import { reconcileRouting } from "@/lib/project/links";
 import { create } from "zustand";
 import { useEditorStore } from "./editorStore";
 import { useBackendStore } from "./backendStore";
@@ -166,13 +168,12 @@ export async function applyDesign(
   const parsed = parseProject({
     ...document,
     id: state.id,
-    name: state.name,
     source: resetSource ? undefined : document.source,
   });
   switching = true;
   try {
     restoreProject(parsed);
-    useWorkspaceStore.setState({ source: parsed.source });
+    useWorkspaceStore.setState({ source: parsed.source, name: parsed.name });
   } finally {
     switching = false;
   }
@@ -219,6 +220,7 @@ export function initializeWorkspace() {
     useEditorStore.subscribe((next, prev) => {
       if (
         [
+          "assets", "tokens", "components",
           "elementsById",
           "rootIds",
           "globalRootIds",
@@ -231,7 +233,7 @@ export function initializeWorkspace() {
             next[key as keyof typeof next] !== prev[key as keyof typeof prev],
         )
       ) {
-        reconcileRouting();
+        if (!projectHistory.restoring) reconcileRouting();
         markDirty();
       }
     });
@@ -240,7 +242,7 @@ export function initializeWorkspace() {
         next.services !== prev.services ||
         next.connections !== prev.connections
       ) {
-        reconcileRouting();
+        if (!projectHistory.restoring) reconcileRouting();
         markDirty();
       }
     });
@@ -263,26 +265,4 @@ export function initializeWorkspace() {
     });
   })();
   return init;
-}
-function reconcileRouting() {
-  const e = useEditorStore.getState();
-  const b = useBackendStore.getState();
-  const r = useRoutingStore.getState();
-  const nodes = r.nodes.filter((n) =>
-    (n.type === "page" ? e.pages : b.services).some(
-      (item) => item.id === n.refId,
-    ),
-  );
-  const connections = r.connections.filter(
-    (c) =>
-      nodes.some((n) => n.id === c.fromNodeId) &&
-      nodes.some((n) => n.id === c.toNodeId) &&
-      r.getPortsForNode(c.fromNodeId).some((p) => p.id === c.fromPortId) &&
-      r.getPortsForNode(c.toNodeId).some((p) => p.id === c.toPortId),
-  );
-  if (
-    nodes.length !== r.nodes.length ||
-    connections.length !== r.connections.length
-  )
-    useRoutingStore.setState({ nodes, connections });
 }

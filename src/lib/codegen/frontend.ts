@@ -1,7 +1,14 @@
-import { ElementNode, Page } from "@/types";
+import { ElementNode, Page, DesignToken, DesignAsset } from "@/types";
 import { FlowGraph, Flow, ApiCallStep, NavigateStep } from "@/types/ir";
 import { ElementWiring, EndpointTarget, PageTarget } from "./connectionResolver";
 import { generateAnimationCSS, generateAnimationUseEffect } from "./animationCodegen";
+
+import { assetElement, assetFonts } from "@/lib/design-assets";
+import { SHAPE_PATHS } from "@/lib/shape-paths";
+import { ICON_PATHS } from "@/lib/icon-paths";
+import { widgetNumber, tabLabels } from "@/lib/widgets";
+import { widgetRuntime } from "./widget-runtime";
+import { resolveElement, vectorPath, motionFrames, fontFamily } from "@/lib/design";
 
 type FrontendCodeResult = {
     files: Record<string, string>;
@@ -33,7 +40,7 @@ const cssFromStyles = (styles: Record<string, string | number>): string => {
             const prop = k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
             if (!/^[a-zA-Z-]+$/.test(k) || /[<>;{}]/.test(String(v))) return "";
             const val = typeof v === "number" && ["opacity", "zIndex", "fontWeight", "lineHeight", "flexGrow", "flexShrink", "order"].includes(k) ? String(v) : SAFE_UNIT(v, String(v));
-            return `${prop}: ${val};`;
+            return `${prop}: ${k === "fontFamily" ? fontFamily(val) : val};`;
         });
     return entries.join(" ");
 };
@@ -125,7 +132,7 @@ const renderElement = (
     flowMap: Map<string, Flow> = new Map(),
     elementsById: Record<string, ElementNode> = {}
 ): string => {
-    if (!el.layout.visible) return "";
+
     const className = classNameFor(el);
     const tag = (() => {
         if (el.type === "section") return "section";
@@ -204,11 +211,22 @@ const renderElement = (
         baseStyles.fontWeight = el.styles?.fontWeight || "500";
     }
 
-    const mergedStyles = { ...baseStyles, ...(el.styles || {}), opacity: el.layout.opacity, ...(el.layout.rotation ? { transform: `rotate(${el.layout.rotation}deg)` } : {}) };
+    if (!["title", "text", "paragraph"].includes(el.type)) baseStyles.height = `${el.layout.h}px`;
+    const mergedStyles = { ...baseStyles, ...(el.styles || {}), ...(!el.layout.visible ? { display: "none" } : {}), opacity: el.layout.opacity, ...(el.layout.rotation ? { transform: `rotate(${el.layout.rotation}deg)` } : {}) };
     const css = cssFromStyles(mergedStyles);
     cssOut.add(`.${className} { ${css} }`);
+    for (const breakpoint of ["tablet", "mobile"] as const) {
+        if (!el.responsive?.[breakpoint]) continue;
+        const resolved = resolveElement(el, breakpoint), layout = resolved.layout;
+        const override = { ...resolved.styles, left: `${layout.x}px`, top: `${layout.y}px`, width: `${layout.w}px`, minHeight: `${layout.h}px`, ...(!["title", "text", "paragraph"].includes(el.type) ? { height: `${layout.h}px` } : {}), opacity: layout.opacity, transform: `rotate(${layout.rotation}deg)`, display: layout.visible ? String(resolved.styles.display || baseStyles.display || "block") : "none" };
+        cssOut.add(`@media (max-width: ${breakpoint === "tablet" ? 1024 : 600}px) { .page .${className} { ${cssFromStyles(override)} } }`);
+    }
+    if (el.motion) {
+        const keyframes = motionFrames(el.motion).map(frame => `${frame.offset * 100}% { opacity: ${frame.opacity}; transform: ${frame.transform}; }`).join(" ");
+        cssOut.add(`@keyframes motion-${className} { ${keyframes} } .${className} { animation: motion-${className} ${el.motion.duration}s ${el.motion.easing} ${el.motion.delay}s ${el.motion.iterations} both; }`);
+    }
 
-    const children = (el.children || []).map((childId) => {
+    const children = (el.type === "tabs" ? [] : el.children || []).map((childId) => {
         const child = elementsById[childId];
         return child ? renderElement(child, false, cssOut, mode, flowMap, elementsById) : "";
     }).join("");
@@ -248,8 +266,17 @@ const renderElement = (
         }
         case "accordion":
             return `<details ${clsAttr}="${className}"><summary>${escapeMarkup(el.props?.headerText || "Accordion")}</summary><div>${children || "Accordion content"}</div></details>`;
-        case "tabs":
-            return `<div ${clsAttr}="${className}"><div ${clsAttr}="${className}__tabs">${String(el.props?.tabTitles || "Tab 1,Tab 2").split(",").map((t) => `<button>${escapeMarkup(t.trim())}</button>`).join("")}</div><div ${clsAttr}="${className}__body">${children || "Tab content"}</div></div>`;
+        case "tabs": {
+            const labels = tabLabels(el), active = widgetNumber(el.props.activeTab, 0, 0, labels.length - 1);
+            cssOut.add(`.${className} > [role="tablist"] { display:flex; gap:4px; border-bottom:1px solid #d1d5db; } .${className} > [role="tablist"] button { border:0; padding:12px 16px; background:transparent; color:inherit; } .${className} [role="tab"][aria-selected="true"] { box-shadow: inset 0 -2px currentColor; font-weight:600; } .${className} > [role="tabpanel"] { position:relative; padding:16px; min-height:120px; } .${className} > [hidden] { display:none !important; }`);
+            return `<div ${clsAttr}="${className}" data-levoks-tabs="true" data-active-tab="${active}"><div role="tablist" aria-label="${escapeMarkup(el.label || "Content tabs")}">${labels.map((label, index) => `<button type="button" role="tab" aria-selected="${index === active}" ${mode === "jsx" ? "tabIndex" : "tabindex"}="${index === active ? 0 : -1}">${escapeMarkup(label)}</button>`).join("")}</div>${labels.map((_, index) => `<div role="tabpanel" ${index !== active ? "hidden" : ""}>${el.children[index] && elementsById[el.children[index]] ? renderElement(elementsById[el.children[index]], false, cssOut, mode, flowMap, elementsById) : ""}</div>`).join("")}</div>`;
+        }
+        case "gallery":
+            cssOut.add(`.${className} { display:grid; grid-template-columns:repeat(${widgetNumber(el.props.columns, 3, 1, 8)}, minmax(0, 1fr)); gap:${widgetNumber(el.props.gap, 8, 0, 100)}px; } .${className} > * { position:relative !important; left:auto !important; top:auto !important; width:100%; max-width:100%; }`);
+            return `<div ${clsAttr}="${className}">${children}</div>`;
+        case "repeater":
+            cssOut.add(`.${className} { display:flex; flex-direction:${el.props.direction === "row" ? "row" : "column"}; } .${className} > .repeat-item { position:relative; flex:1; min-width:0; } .${className} > .repeat-item > * { position:relative !important; left:auto !important; top:auto !important; max-width:100%; }`);
+            return `<div ${clsAttr}="${className}">${Array.from({ length: widgetNumber(el.props.repeatCount, 3, 1, 20) }, () => `<div ${clsAttr}="repeat-item">${children}</div>`).join("")}</div>`;
         case "form": {
             const requestMethod = String(el.props?.requestMethod || "POST").toUpperCase();
             const htmlMethod = requestMethod === "GET" ? "get" : "post";
@@ -276,7 +303,16 @@ const renderElement = (
             return `<input ${clsAttr}="${className}" type="${inputType}"${nameAttr} placeholder="${placeholder}"${requiredAttr}${maxLengthAttr} />`;
         }
         case "shape":
+            if (el.vector) return `<svg ${clsAttr}="${className}" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${escapeMarkup(el.label || "Vector shape")}"><path d="${vectorPath(el.vector)}" fill="${el.vector.closed ? el.vector.fill : "none"}" stroke="${el.vector.stroke}" ${mode === "jsx" ? "strokeWidth" : "stroke-width"}="${el.vector.strokeWidth}" ${mode === "jsx" ? "vectorEffect" : "vector-effect"}="non-scaling-stroke" /></svg>`;
+            if (SHAPE_PATHS[String(el.props.shapeType)]) {
+                cssOut.add(`.${className} { background-color: transparent !important; } .${className} path { ${cssFromStyles({ fill: el.styles.backgroundColor || "#6366f1" })} }`);
+                for (const bp of ["tablet", "mobile"] as const) if (el.responsive?.[bp]) cssOut.add(`@media (max-width: ${bp === "tablet" ? 1024 : 600}px) { .${className} path { ${cssFromStyles({ fill: resolveElement(el, bp).styles.backgroundColor || "#6366f1" })} } }`);
+                return `<div ${clsAttr}="${className}"><svg viewBox="0 0 100 100" width="100%" height="100%" role="img" aria-label="${escapeMarkup(el.label || "Shape")}"><path d="${SHAPE_PATHS[String(el.props.shapeType)]}" /></svg></div>`;
+            }
             return `<div ${clsAttr}="${className}"></div>`;
+        case "icon":
+            cssOut.add(`.${className} { display:flex; align-items:center; justify-content:center; }`);
+            return `<div ${clsAttr}="${className}"><svg viewBox="0 0 24 24" width="${widgetNumber(el.props.iconSize, 32, 8, 256)}" height="${widgetNumber(el.props.iconSize, 32, 8, 256)}" fill="${escapeMarkup(el.props.iconColor || "#374151")}" role="img" aria-label="${escapeMarkup(el.label || el.props.icon || "Icon")}"><path d="${ICON_PATHS[String(el.props.icon || "star")] || ICON_PATHS.star}" /></svg></div>`;
         case "spacer":
             return `<div ${clsAttr}="${className}"></div>`;
         default:
@@ -291,7 +327,9 @@ export function generateFrontendProject(
     page?: Page,
     allPages?: Page[],
     wirings?: ElementWiring[],
-    flowGraph?: FlowGraph
+    flowGraph?: FlowGraph,
+    tokens: Record<string, DesignToken> = {},
+    assets: Record<string, DesignAsset> = {}
 ): FrontendCodeResult {
     // Build flow map keyed by trigger elementId (IR-first)
     const flowMap = new Map<string, Flow>();
@@ -339,12 +377,12 @@ export function generateFrontendProject(
     }
     const cssParts = new Set<string>();
 
-    const safeGlobal = Array.isArray(globalElements) ? globalElements : [];
+    const safeGlobal = Array.isArray(globalElements) ? globalElements.map(el => assetElement(el, assets)) : [];
 
     // In the flat-map model, all elements are passed in the `elements` array
     // Page-specific elements are managed by the caller
     let allElements: ElementNode[] = [];
-    const safeElements = Array.isArray(elements) ? elements : [];
+    const safeElements = Array.isArray(elements) ? elements.map(el => assetElement(el, assets)) : [];
     allElements = [...safeElements];
 
     const htmlParts: string[] = [];
@@ -355,6 +393,15 @@ export function generateFrontendProject(
     const addToLookup = (els: ElementNode[]) => { for (const e of els) codegenElementsById[e.id] = e; };
     addToLookup(safeGlobal);
     addToLookup(allElements);
+
+    let expandedCount = 0;
+    const countOutput = (element: ElementNode, copies: number, depth: number) => {
+        expandedCount += copies;
+        if (expandedCount > 10000 || depth > 100) throw new Error("This page expands beyond 10,000 rendered elements or 100 nested levels. Reduce nested repeaters or split the page.");
+        const next = copies * (element.type === "repeater" ? widgetNumber(element.props.repeatCount, 3, 1, 20) : 1);
+        element.children.forEach(id => { if (codegenElementsById[id]) countOutput(codegenElementsById[id], next, depth + 1); });
+    };
+    [...safeGlobal, ...allElements].filter(el => !el.parentId).forEach(el => countOutput(el, 1, 0));
 
     safeGlobal.filter(el => !el.parentId).forEach((el) => {
         htmlParts.push(renderElement(el, false, cssParts, "html", flowMap, codegenElementsById));
@@ -372,7 +419,7 @@ export function generateFrontendProject(
 
     const collectAnimations = (els: ElementNode[]) => {
         for (const el of els) {
-            if (el.animation && el.animation.type !== "none") {
+            if (!el.motion && el.animation && el.animation.type !== "none") {
                 const cn = classNameFor(el);
                 const { keyframeCss, classCss, needsJsSetup: needsJs } = generateAnimationCSS(el, cn);
                 if (keyframeCss) animKeyframes.add(keyframeCss);
@@ -396,8 +443,11 @@ export function generateFrontendProject(
     const canvasHeight = Math.max(200, Number(canvasSettings.height) || 900);
     const bg = String(canvasSettings.backgroundColor || "#ffffff").replace(/[<>;{}]/g, "");
 
+    const hasResponsive = [...safeGlobal, ...allElements].some(element => element.responsive && Object.keys(element.responsive).length);
     const baseCss = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+${assetFonts(assets)}
+:root { ${Object.entries(tokens).map(([id, token]) => `--lv-${id}: ${token.value};`).join(" ")} }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { margin: 0; font-family: Inter, system-ui, -apple-system, sans-serif; background: ${bg}; color: #0f172a; }
 .page { position: relative; width: min(100%, ${canvasWidth}px); min-height: ${canvasHeight}px; margin: 0 auto; padding: 2rem; background: ${bg}; overflow: hidden; }
@@ -406,7 +456,7 @@ button { cursor: pointer; font-family: inherit; }
 input, textarea, select { font-family: inherit; }
 input:focus, textarea:focus { outline: 2px solid #6366f1; outline-offset: -1px; }
 hr { border: none; }
-@media (max-width: 640px) { .page { padding: 1rem; display: flex; flex-direction: column; gap: 1rem; } .page > [class^="el-"] { position: relative !important; left: auto !important; top: auto !important; max-width: 100%; } }
+${hasResponsive ? "" : '@media (max-width: 640px) { .page { padding: 1rem; display: flex; flex-direction: column; gap: 1rem; } .page > [class^="el-"] { position: relative !important; left: auto !important; top: auto !important; max-width: 100%; } }'}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 `;
 
@@ -421,7 +471,7 @@ hr { border: none; }
     <title>${escapeMarkup(page?.title || "Preview")}</title>
     <style>${css}</style>
   </head>
-  <body style="background:${bg};">${body}</body>
+  <body style="background:${bg};">${body}<script>${widgetRuntime}; setupWidgets(document);</script></body>
 </html>`;
 
     // Determine if we need the API client import
@@ -437,11 +487,14 @@ hr { border: none; }
 import React from "react";
 import "./styles.css";
 ${apiImport}
+${widgetRuntime}
 export default function App() {
   const [status, setStatus] = React.useState("");
+  const rootRef = React.useRef(null);
+  React.useEffect(() => setupWidgets(rootRef.current), []);
 ${animUseEffect}
   return (
-    <div className="page">
+    <div className="page" ref={rootRef}>
       ${jsxParts.join("\n      ")}
       <div role="status" aria-live="polite" style={{ position: "fixed", bottom: 16, right: 16, zIndex: 1000, background: "#fff", color: "#111" }}>{status}</div>
     </div>

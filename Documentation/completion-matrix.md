@@ -2,7 +2,7 @@
 
 Sources: `levoks.md` (the user-confirmed conversion of the original PDF), `production-readiness.md`, and the current code. This is an implementation ledger, not a launch declaration. Baseline audit: 2026-09-13.
 
-COMPLETE means UI → persisted state → validated IR → emitted implementation → execution → error handling has evidence where applicable. PARTIAL means some of that chain exists. MISSING means required behavior has no implementation. EXTERNAL DEPENDENCY is reserved for an otherwise implemented, independently verifiable integration awaiting external access; missing internal code never becomes an external blocker. No full product feature is marked COMPLETE at this audit baseline. Existing 22 tests include substantial mocks and cannot establish full execution coverage.
+COMPLETE means UI → persisted state → validated IR → emitted implementation → execution → error handling has evidence where applicable. PARTIAL means some of that chain exists. MISSING means required behavior has no implementation. EXTERNAL DEPENDENCY is reserved for an otherwise implemented, independently verifiable integration awaiting external access; missing internal code never becomes an external blocker. The original audit marked no full product feature COMPLETE. Later entries identify narrowly verified requirements; they do not imply that their containing product area is complete. The original baseline’s 22 tests included substantial mocks and cannot establish full execution coverage.
 
 Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`, `Renderer.tsx`, `PropertyInspector.tsx`; B = `src/types/backend.ts`, `src/components/backend`, `src/lib/codegen/express.ts`; R = `src/store/routingStore.ts`, `src/components/routing`, `src/lib/graphResolver.ts`; W = `src/components/WorkspaceHub.tsx`, `src/store/workspaceStore.ts`; C = `src/lib/project/schema.ts`, `compiler.ts`; T = `tests/`. All paths are relative to the repository.
 
@@ -10,42 +10,42 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 
 | ID | Specification requirement | Status | Evidence and remaining acceptance criteria |
 |---|---|---|---|
-| UX01 | Header logo/home navigation, Files menu | PARTIAL | `app/page.tsx`, W; workspace actions exist, specified expandable Files hierarchy not reproduced. Browser navigation/recovery evidence absent. |
+| UX01 | Header logo/home navigation, Files menu | PARTIAL | Files menu now exposes project creation/opening, rename, import, checkpoint, backup and ZIP through actual workspace actions. Home navigation and full documented hierarchy acceptance remain. |
 | UX02 | Header Connections workflow | PARTIAL | Dedicated GitHub Connections with durable credentials, discovery, review and queue; header layout parity and other provider lifecycles remain. |
-| UX03 | Small floating AI chat window | PARTIAL | W modal prompt/proposal; conversational floating window and transcript missing. |
-| UX04 | Fullscreen play preview | PARTIAL | `LivePreviewPanel`; design simulation, no isolated fullstack execution. |
-| UX05 | Expandable Deploy / ZIP / Commit actions | PARTIAL | W separate Ship/source tabs; requested header interaction and full deployment missing. |
+| UX03 | Small floating AI chat window | PARTIAL | Movable assistant, streaming/proposal review, project/page/selection focus, suggestions and bounded per-project IndexedDB conversation history implemented. Browser checks retain stale-proposal/cancellation safety; live inference and provider accounting still require acceptance. |
+| UX04 | Fullscreen play preview | PARTIAL | Design simulation plus isolated generated-HTML frontend preview. Real browser tests verify opacity of iframe origin, responsive CSS and executable widgets. Full-stack runtime/source overrides are not executed in this preview. |
+| UX05 | Expandable Deploy / ZIP / Commit actions | PARTIAL | Files and expandable Deploy menus now expose project/checkpoint/import/backup, complete ZIP and GitHub commit entry points. Complete provider deployment still depends on the infrastructure ledger. |
 | UX06 | Account/profile/settings | PARTIAL | `UserMenu`, `ProfileModal`, NextAuth; real profile management, account lifecycle and preference persistence incomplete. |
-| UX07 | HDE off-screen visibility toggle | MISSING | Element visibility exists; screen-boundary toggle does not. |
-| UX08 | Tray with Elements, Assets, Pages, Backend, Routing, Code, Secrets, Settings | PARTIAL | `Sidebar`; several tools route to generic panels or lack specified behavior. |
-| UX09 | Contextual searchable Sub-Tray; drag/drop and double-click insertion | PARTIAL | Sidebar and backend service drop handlers; browser tests and parity of drag/double-click configurations needed. |
-| UX10 | Pages, per-page layers, globals | PARTIAL | E, `PagesPanel`, `LayersPanel`; unit coverage, browser/export parity and history across pages incomplete. |
-| UX11 | Granular property inspector: style/layout/type/borders/fonts | PARTIAL | E; controls exist, property-to-export coverage and accessible editing not fully verified. |
-| UX12 | Floating Dock: screen device picker, default 1920×1080 | PARTIAL | Canvas resolution bar differs from documented Dock; device/model selection missing. |
-| UX13 | Pointer/hand/marquee tool cycling | PARTIAL | Canvas pan/marquee handlers; explicit tool cycle absent. |
-| UX14 | Zoom-to-cursor, pan, fit, snap | PARTIAL | Canvas matrices and guides; browser interaction evidence absent. |
-| UX15 | Dock lock freezes zoom and movement | MISSING | Per-element lock exists; viewport lock absent. |
-| UX16 | Pen, editable vector curves, closed reusable shapes | MISSING | Primitive shape rendering exists, no path authoring/curve handles/library. |
-| UX17 | Motion workspace with multiple-object timeline | MISSING | `AnimationPanel` configures individual animations only. |
+| UX07 | HDE off-screen visibility toggle | COMPLETE | Header Hide off-screen elements toggles artboard clipping without changing project content. Browser tests verify clipping and its session-only boundary; generated application visibility is unaffected. |
+| UX08 | Tray with Elements, Assets, Pages, Backend, Routing, Code, Secrets, Settings | PARTIAL | Labelled rail and contextual panels include Assets, Secrets, Settings and Library. Project raster/font libraries now persist and export; hosted assets and richer account/team settings remain. |
+| UX09 | Contextual searchable Sub-Tray; drag/drop and double-click insertion | PARTIAL | Searchable element/backend libraries have empty states, keyboard insertion and close controls. Backend insertion creates an initial service when needed. Full drag/drop catalog coverage remains unverified. |
+| UX10 | Pages, per-page layers, globals | PARTIAL | Page/global layer trees, positioned-sibling grouping, ordering and clipboard are implemented. Shared project history now restores pages, their nodes and routing links together across page navigation. Transformed/flow grouping and broad hierarchy acceptance remain. |
+| UX11 | Granular property inspector: style/layout/type/borders/fonts | PARTIAL | Tokenized inspector, named fields, collapsible sections, multi-selection alignment/distribution, text editing and context guards. Browser evidence covers numeric/text editing and multi-selection; full property-to-export coverage remains. |
+| UX12 | Floating Dock: screen device picker, default 1920×1080 | PARTIAL | Floating dock now includes screen presets for desktop/tablet/phone and custom dimensions in Canvas settings. New projects use the specified 1920x1080 default; existing sizes are retained. Brand-specific device catalog and multiple screens remain. |
+| UX13 | Pointer/hand/marquee tool cycling | COMPLETE | Single button cycles Select → Hand → Marquee; V/H/M direct selection and temporary Space-pan remain. Browser test verifies each cycle state and existing selection/pan/marquee workflows. |
+| UX14 | Zoom-to-cursor, pan, fit, snap | PARTIAL | Shared zoom-to-cursor, wheel/Space/middle-button pan, fit/reset/selection centering across all canvases. UI browser tests cover pan/fit/lock, group movement and undo; all touch, graph wiring and snapping edge cases are not yet accepted. |
+| UX15 | Dock lock freezes zoom and movement | PARTIAL | Shared viewport lock now blocks wheel, zoom/fit commands and hand panning, with disabled zoom controls. UI browser regression passes; explicit backend/routing lock and touch coverage remain before marking the whole requirement complete. |
+| UX16 | Pen, editable vector curves, closed reusable shapes | PARTIAL | Persisted open/closed Bézier paths support authoring, anchor/handle editing and reusable shapes. Browser draw/edit/save/reuse/reload and exported production SVG pass. Transformed handle and broader vector editing acceptance remain. |
+| UX17 | Motion workspace with multiple-object timeline | PARTIAL | Multiple tracks, scrub/play, timing/easing and keyframes persist and generate CSS. Browser multi-track editing/reload passes; exported production browser verifies final transform and reduced motion. Trigger/rotation composition and advanced timeline semantics remain. |
 | UX18 | Per-element animations and triggers | PARTIAL | `animationCodegen.ts`, `AnimationPanel`; full trigger, reduced-motion and exported runtime parity unverified. |
-| UX19 | Responsive overrides and breakpoint-specific editing | PARTIAL | Canvas width presets/basic export CSS; independent breakpoint state absent. |
-| UX20 | Design tokens and reusable component instances | MISSING | Static templates/globals are not linked token/component instances. |
-| UX21 | Advanced widgets: tabs, repeater, gallery | PARTIAL | E and frontend generator; warnings acknowledge incomplete executable behavior. |
-| UX22 | Asset library: images, icons, fonts | PARTIAL | `AssetUpload` supports small inline raster uploads; durable library, fonts, icons and asset lifecycle missing. |
-| UX23 | Full IDE: files, editing, diagnostics, export | PARTIAL | W textarea/file browser; IDE tooling, sandbox execution and reconciliation missing. |
-| UX24 | Undo/redo, keyboard, selection and errors | PARTIAL | Editor history and shortcuts; cross-canvas transactions/accessibility/browser coverage incomplete. |
+| UX19 | Responsive overrides and breakpoint-specific editing | PARTIAL | Independent desktop/tablet/mobile overrides persist and emit cascading media queries. Browser confirms desktop preservation, reload and generated mobile computed styles. Arbitrary custom breakpoints and transformed hierarchy coverage remain. |
+| UX20 | Design tokens and reusable component instances | PARTIAL | Project tokens and linked component definitions/instances now persist, publish, detach, preserve stable IDs/local overrides and support undo. Browser token binding/reuse/reload/generated CSS and unit publication tests pass; nested component/structural override semantics remain bounded. |
+| UX21 | Advanced widgets: tabs, repeater, gallery | PARTIAL | Tabs now switch distinct panels with keyboard controls, repeaters emit configured copies, galleries apply columns/gap, and icon paths emit SVG. Isolated browser execution and generated Next production build pass; live data binding and broad nested widget acceptance remain. |
+| UX22 | Asset library: images, icons, fonts | PARTIAL | Project image/font library, WOFF/WOFF2 upload/application, built-in icons, reuse and embedded export implemented. Browser raster upload/delete/reuse/reload/generated image passes. Hosted object storage/CDN and lifecycle permissions remain infrastructure work. |
+| UX23 | Full IDE: files, editing, diagnostics, export | PARTIAL | File search/tabs/line gutter, editable source/export, worker syntax/JSON analysis, clickable diagnostics, find/replace and line navigation implemented and browser verified. Full semantic analysis, reconciliation and server runtime remain. |
+| UX24 | Undo/redo, keyboard, selection and errors | PARTIAL | Shared bounded undo/redo spans UI, page settings, backend services/blocks and routing. Drag gestures are one entry; cancel restores the full document, project changes clear history, and all canvas modes expose keyboard/header undo. Browser deletion/restoration and generated-source equivalence pass. Saved source/native text history, persisted history beyond checkpoints and broad accessibility acceptance remain. |
 
 ## Backend configuration and execution
 
 | ID | Requirement | Status | Evidence and remaining acceptance criteria |
 |---|---|---|---|
-| BE01 | Logical services, editable containers and ordinary blocks | PARTIAL | B groups blocks but always emits separate services; within-service execution edges missing. |
-| BE02 | Endpoints: five methods and routes | PARTIAL | B generates routes; behavior inferred from method/first model rather than explicit workflows. |
+| BE01 | Logical services, editable containers and ordinary blocks | PARTIAL | Services now open real workflow graphs with saved positions, keyboard ports/movement, ordered execution edges, branch/loop/try-catch paths, cycle errors and deletion cleanup. Unit tests execute emitted branch outcomes; browser connects/drags/reloads. Multi-service topology/orchestration and complete block catalog remain. |
+| BE02 | Endpoints: five methods and routes | PARTIAL | Five endpoint methods and routes have inspector configuration; connected operation steps now drive generated runtime execution. Basic CRUD inference remains for endpoints without explicit steps. Comprehensive endpoint contracts and all method/browser combinations need acceptance. |
 | BE03 | Endpoint path/query/header/body/response contracts, statuses, errors | PARTIAL | Request/body schema fields exist; query/header/response/status execution incomplete. |
 | BE04 | Models: identity, types, required, uniqueness, defaults, indexes | PARTIAL | B models and basic fields; unique/index controls and emitted constraints incomplete. |
 | BE05 | Model timestamps and soft-delete behavior | PARTIAL | Timestamps emitted; soft delete blocked by C. |
 | BE06 | Relations, foreign keys, cardinality, update/delete behavior | PARTIAL | Relation type/state exists but no inspector/execution; C blocks export. |
-| BE07 | Query: model binding, CRUD, count, filter, sort, aggregation, outputs | PARTIAL | ProgramInspector, validated program IR and emitted runtime execute model-bound scoped CRUD/count/filter/sort; real Mongo tests pass. Aggregation remains missing. |
+| BE07 | Query: model binding, CRUD, count, filter, sort, aggregation, outputs | PARTIAL | Query inspector and validated runtime now support grouped count/sum/average/min/max aggregation as well as scoped CRUD/count/filter/sort. Owner/tenant match precedes grouping; typed filters, sessions, result/time limits and read-only pipelines are enforced. Real Mongo aggregation and transaction tests pass. Joins, arbitrary pipelines and richer result bindings remain unsupported. |
 | BE08 | Atomic transaction groups and rollback | PARTIAL | Ordered transaction steps emit session-aware runtime; real replica-set duplicate-write rollback passed. Broader browser/error acceptance remains. |
 | BE09 | JWT auth: secure refs, identity/model, expiry, endpoint attachment | PARTIAL | Real generated HTTP verifies login, hashed refresh rotation/replay, logout, password invalidation and cross-service introspection. Generated account UI, email verification/recovery and gateway pass real browser tests with MongoDB/local email transport. Administrative lifecycle, alternate strategies and live deployment acceptance remain. |
 | BE10 | OAuth auth: providers, callbacks, identity mapping | PARTIAL | Strategy selector exists, generation blocked. Editor OAuth is separate. |
@@ -54,7 +54,7 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | BE13 | Roles and granted capabilities | PARTIAL | Role inspector, schema and runtime grants are implemented; identity lifecycle and administrative role management remain. |
 | BE14 | Resource/action permissions | PARTIAL | Permission definitions and policy enforcement execute in generated programs; all application access paths remain to be covered. |
 | BE15 | Access policies: roles, actions, ownership, conditional rules | PARTIAL | Policy inspector, IR and generated query scopes; real owner/tenant enforcement passed. Arbitrary policy conditions remain. |
-| BE16 | Tenant isolation on reads, writes, aggregates and relationships | PARTIAL | Explicit workflow reads/creates/updates enforce tenant and owner; real Mongo and HTTP tests passed. Aggregates, relations and legacy CRUD remain incomplete. |
+| BE16 | Tenant isolation on reads, writes, aggregates and relationships | PARTIAL | Endpoint and query scopes are checked across reachable branches/functions/transactions. Conflicting owner/tenant scopes and missing model fields block generation and fail closed at runtime. Real Mongo negative tests and scoped CRUD/aggregation pass. Complete authorization coverage of legacy inferred/custom source and administrative lifecycle remain. |
 | BE17 | Password reset, verification, refresh rotation, revocation | MISSING | Identity generator lacks these lifecycle operations. |
 | BE18 | If/Else conditions and executable branches | PARTIAL | String config/inspector exists; C blocks export. |
 | BE19 | Collection/conditional loops and execution bounds | PARTIAL | String config/inspector exists; C blocks export. |
@@ -145,10 +145,10 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | DP08 | Versioned releases and rollback | MISSING | No deployment release/history/rollback implementation. |
 | DP09 | Monitoring, metrics, alerts | MISSING | No operational integration. |
 | DP10 | Database backups/restore and storage durability | MISSING | Local Compose volume only. |
-| SB01 | Isolated generated-app build/runtime preview | MISSING | No sandbox worker; browser design preview is simulated. |
+| SB01 | Isolated generated-app build/runtime preview | PARTIAL | Generated frontend HTML uses an opaque-origin sandbox and restrictive CSP, verified against parent-document access. Full-stack build/runtime worker and edited-source execution remain missing internal infrastructure. |
 | QA01 | Browser E2E and accessibility workflows | PARTIAL | Real Chromium suite verifies persistence, ZIP, inspector-to-source and unauthenticated Connections behavior; broad visual/accessibility coverage remains. |
 | QA02 | Real database/provider/runtime integration tests | PARTIAL | Actual Mongo replica set, generated Express HTTP, vault and durable queue tests. Live external provider tests remain gated. |
-| QA03 | Types/lint/unit/editor/frontend export build/audit | PARTIAL | Previously passed; 71 lint warnings; coverage incomplete. |
+| QA03 | Types/lint/unit/editor/frontend export build/audit | PARTIAL | Current root dependency audit succeeds with zero vulnerabilities. Types/lint/units and builds are rerun per stage; results appear in the latest verification ledger. Remaining lint warnings and broad generated feature acceptance prevent a product-wide completion claim. |
 | QA04 | Backend build/generated-project tests/Docker runtime/load | PARTIAL | Generated modules execute with actual Express and MongoDB; container runtime, load and broad generated feature acceptance remain. |
 
 ## External verification gates (do not change internal feature status)
@@ -210,3 +210,33 @@ Stage 5 observability expansion: Error Handler and Audit Log now have validated 
 Stage 5 transaction follow-through: the Audit Log inspector can enable atomic workflow-transaction events. A real replica-set test proves business/audit commit together, business rollback leaves no committed audit, and audit validation failure aborts business writes. HTTP completion metadata remains separate and can remain unknown after a crash; generic CRUD and custom-source auditing are not covered by this guarantee.
 
 Stage 6 incremental AI: [ai-operations.md](ai-operations.md) records implemented patch validation, field review, stale-proposal protection and per-request input/output limits. Browser testing exposed and fixed overwrite of later project renames. Live inference remains unverified; streaming, durable usage/cost accounting and source analysis are still internal gaps.
+
+## UI quality stage - 2026-09-20
+
+The active priority is the user-requested visual and interaction pass. See [surface audit, evidence and remaining UI work](ui-quality.md) and [design rules](../DESIGN.md). Backend/compiler functionality is preserved; a reviewed AI project rename now also survives save/reload. At the end of this earlier stage those advanced design/runtime areas remained open. The September 21 evidence and current rows supersede that status; full-stack sandbox runtime remains internal work.
+
+
+## Latest frontend verification — 21 September 2026
+
+- `frontend-stage-final-check.log`: TypeScript and lint pass (0 errors, 53 warnings); 55 unit tests pass, including emitted workflow execution, breakpoint grouping and global ordering.
+- `frontend-all-e2e.log`: all 17 editor Chromium workflows pass. After the final motion-toolbar/cancellation changes, both targeted motion and grouping workflows passed again (`frontend-motion-final.log`).
+- `design-export-final-build.log` and `design-export-runtime.log`: exported Next.js production build and actual browser runtime pass. Runtime assertions cover tabs, repeaters, tokens, gallery, primitive/vector SVG, mobile layout and reduced motion.
+- `frontend-integration-isolated.log`: all nine integration checks pass. The first run overlapped editor E2E and exceeded the workflow-service startup wait (8/9); that unchanged case and then the full suite passed without competing browser/build work. Tests were not weakened.
+- `frontend-account-final.log`: exported production account UI with real Express/MongoDB and email worker passes verification, cookie renewal, password recovery and revocation.
+- `frontend-root-final-build.log`: editor production build passes. `frontend-backend-build.log`: generated auth/workflow backends validate 13/11 modules.
+- Fresh dependency audit attempted in `frontend-audit-final.json`; registry advisory endpoint could not be reached. Earlier zero-advisory evidence is historical, not a current audit result.
+- Docker executable/runtime is absent. Live provider credentials were not exercised. Internal frontend gaps remain in the rows above; no product-wide completion claim is made.
+
+Logs and screenshots are under the ignored `.verification/` directory. New workflow and exported-runtime screenshots: `design-workflow.png`, `design-export-runtime.png`.
+
+
+## Production continuation — 22 September 2026
+
+The user restored the whole-product production scope. Completed internal stages in this continuation:
+
+- Shared project history captures UI/pages/settings, backend and routing together, including deletion cleanup. Page navigation does not discard history; graph drags commit once and cancel atomically. Undo restores the same generated artifacts (apart from capture timestamps). Selection, navigation, tokens and provider credentials are not captured as history controls; design-token values are document data and remain covered. History is bounded to 50 session entries and is cleared on project import/switch/reviewed replacement. Persistent checkpoints remain separate.
+- Routing supports click-to-connect as well as drag and keyboard interaction. Browser regression caught the previous immediate cancellation on releasing the first port.
+- Policy inheritance validates every reachable query model, including function/branch/transaction paths. Runtime scope merging rejects conflicting values and absent model fields rather than overwriting a restriction.
+- Structured aggregation supports a scalar group field and up to eight named count/sum/avg/min/max metrics, safe metric/model references, scoped typed filters, sorting, result limits, transaction sessions, a shared execution deadline and disabled disk spilling. The generated pipeline has no arbitrary operators, writes or JavaScript execution. Mongo tests verify owner and tenant isolation, ObjectId filtering and transaction execution. Arbitrary joins/pipelines remain unsupported.
+
+Evidence: `project-history-targeted.log` (3 checks), `project-history-browser.log` (2 workflows), `production-integration.log` (9 checks before adding aggregation), `aggregation-runtime.log` (real replica-set execution), and `production-audit.json` (zero advisories). Current full regression/build counts will be recorded after the final run. No live provider account or production system was changed.

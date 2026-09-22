@@ -49,6 +49,7 @@ exports.createWorkflow = (program, models, database, observability) => {
     if (!block || block.type !== 'access_policy') throw new WorkflowError(500, 'Invalid access policy');
     if (!principal || typeof principal.sub !== 'string' || !principal.sub) throw new WorkflowError(401, 'Authentication required');
     const config = block.config;
+    if (config.ownerField && config.ownerField === config.tenantField) throw new WorkflowError(500, 'Ownership and tenant fields must be distinct');
     const roleNames = Array.isArray(principal.roles) ? principal.roles : [principal.role || 'user'];
     const capabilities = new Set(program.blocks.filter(b => b.type === 'role' && roleNames.includes(b.config.name)).flatMap(b => b.config.permissions));
     if (config.roles.length && !config.roles.some(role => roleNames.includes(role))) throw new WorkflowError(403, 'Access denied');
@@ -90,19 +91,45 @@ exports.createWorkflow = (program, models, database, observability) => {
             const fields = new Set(modelBlock.config.fields.map(f => f.name).concat('_id'));
             const filter = mapValues(c.filter, context);
             const values = mapValues(c.values, context);
-            for (const field of [...Object.keys(filter), ...Object.keys(values), ...(c.sortField ? [c.sortField] : [])]) if (!fields.has(field)) throw new WorkflowError(422, 'Unknown model field: ' + field);
+            for (const field of [...Object.keys(filter), ...Object.keys(values), ...(c.sortField && c.operation !== 'aggregate' ? [c.sortField] : [])]) if (!fields.has(field)) throw new WorkflowError(422, 'Unknown model field: ' + field);
+            const enforcedScope = Object.create(null);
             for (const policyId of new Set([...(endpoint.config.policyIds || []), ...(c.policyId ? [c.policyId] : [])])) {
               const scope = policy(policyId, request.user);
-              Object.assign(filter, scope);
-              if (c.operation === 'create') Object.assign(values, scope);
-              else for (const key of Object.keys(scope)) delete values[key];
+              for (const [key, value] of Object.entries(scope)) {
+                if (!fields.has(key)) throw new WorkflowError(500, 'Policy field is not defined on the query model');
+                if (Object.prototype.hasOwnProperty.call(enforcedScope, key) && enforcedScope[key] !== value) throw new WorkflowError(403, 'Conflicting access policies');
+                enforcedScope[key] = value;
+              }
             }
+            Object.assign(filter, enforcedScope);
+            if (c.operation === 'create') Object.assign(values, enforcedScope);
+            else for (const key of Object.keys(enforcedScope)) delete values[key];
             if (modelBlock.config.softDelete) filter.deletedAt = null;
             const options = {session, maxTimeMS: Math.max(1, deadline - Date.now())};
             let value;
             if (c.operation === 'find') value = await model.find(filter, null, options).sort(c.sortField ? {[c.sortField]: c.sortDirection === 'desc' ? -1 : 1} : {_id: 1}).limit(c.limit).lean();
             else if (c.operation === 'findOne') value = await model.findOne(filter, null, options).lean();
             else if (c.operation === 'count') value = await model.countDocuments(filter).session(session || null).maxTimeMS(options.maxTimeMS);
+            else if (c.operation === 'aggregate') {
+              const aggregation = c.aggregation || {}, metrics = aggregation.metrics || [];
+              if (!metrics.length || metrics.length > 8) throw new WorkflowError(422, 'Configure one to eight aggregate metrics');
+              const scalar = (field, numeric = false) => {
+                const type = field === '_id' ? 'objectId' : modelBlock.config.fields.find(item => item.name === field)?.type;
+                if (!safeKey(field) || !type || /password|secret|token/i.test(field) || ['object', 'array'].includes(type) || (numeric && type !== 'number')) throw new WorkflowError(422, 'Invalid aggregate model field');
+                return '$' + field;
+              };
+              const group = { _id: aggregation.groupBy ? scalar(aggregation.groupBy) : null };
+              for (const metric of metrics) {
+                if (!safeKey(metric.name) || Object.prototype.hasOwnProperty.call(group, metric.name) || !['count', 'sum', 'avg', 'min', 'max'].includes(metric.operation)) throw new WorkflowError(422, 'Invalid aggregate metric');
+                group[metric.name] = metric.operation === 'count' ? {$sum: 1} : {['$' + metric.operation]: scalar(metric.field, ['sum', 'avg'].includes(metric.operation))};
+              }
+              const sort = c.sortField || '_id';
+              if (!Object.prototype.hasOwnProperty.call(group, sort)) throw new WorkflowError(422, 'Unknown aggregate sort field');
+              // Mongoose does not cast aggregation stages. Cast the scoped filter
+              // with the model before building the bounded, read-only pipeline.
+              const match = model.find(filter).cast(model);
+              value = await model.aggregate([{$match: match}, {$group: group}, {$sort: {[sort]: c.sortDirection === 'desc' ? -1 : 1}}, {$limit: c.limit}]).option({...options, allowDiskUse: false});
+            }
             else if (c.operation === 'create') value = (await model.create([values], options))[0];
             else {
               if (!Object.keys(c.filter).length) throw new WorkflowError(422, 'Update and delete require an explicit filter');

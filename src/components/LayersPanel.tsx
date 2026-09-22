@@ -1,5 +1,7 @@
 "use client";
 
+import { useEditorUIStore } from "@/store/editorUIStore";
+import { resolveElement } from "@/lib/design";
 import { useEditorStore } from "@/store/editorStore";
 import { CONTAINER_TYPES } from "@/types";
 import { useRef, useState, useCallback, useMemo } from "react";
@@ -37,7 +39,12 @@ const LayerItem: React.FC<{
     onDragStart: (elementId: string, parentId: string | null, index: number, scope: Scope) => void;
     dropIndicator: DropIndicator | null;
 }> = ({ elementId, depth, index, parentId, scope, onDragStart, dropIndicator }) => {
-    const element = useEditorStore(s => s.elementsById[elementId]);
+    const raw = useEditorStore(s => s.elementsById[elementId]);
+    const breakpoint = useEditorUIStore(s => s.breakpoint);
+    const element = raw ? resolveElement(raw, breakpoint) : undefined;
+    const [expanded, setExpanded] = useState(true);
+    const [renaming, setRenaming] = useState(false);
+    const [name, setName] = useState("");
     const isSelected = useEditorStore(s => s.selectedElementId === elementId || s.selectedElementIds.includes(elementId));
     const selectElement = useEditorStore(s => s.selectElement);
     const toggleSelectElement = useEditorStore(s => s.toggleSelectElement);
@@ -59,24 +66,43 @@ const LayerItem: React.FC<{
                 data-element-id={elementId}
                 data-parent-id={parentId || ""}
                 data-scope={scope}
+                role="treeitem" aria-label={element.label || element.type} aria-level={depth + 1} aria-selected={isSelected} aria-expanded={element.children.length ? expanded : undefined}
+                tabIndex={isSelected || (!parentId && index === 0) ? 0 : -1}
+                onKeyDown={event => {
+                    if (event.target !== event.currentTarget) return;
+                    const row = event.currentTarget;
+                    const rows = Array.from(row.closest('[role="tree"]')!.querySelectorAll<HTMLElement>('[role="treeitem"]'));
+                    const current = rows.indexOf(row);
+                    const focus = (target?: HTMLElement) => { if (target) { target.focus(); selectElement(target.dataset.elementId!); } };
+                    if (["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft", "Home", "End", "Enter", " ", "F2"].includes(event.key)) { event.preventDefault(); event.stopPropagation(); }
+                    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                        if (event.altKey && !element.layout.locked) { const state = useEditorStore.getState(), siblings = parentId ? state.elementsById[parentId].children : scope === "global" ? state.globalRootIds : state.rootIds; const next = index + (event.key === "ArrowDown" ? 1 : -1); if (next >= 0 && next < siblings.length) state.reorderElements(parentId, index, next, scope); }
+                        else focus(rows[current + (event.key === "ArrowDown" ? 1 : -1)]);
+                    } else if (event.key === "ArrowRight") { if (!expanded) setExpanded(true); else if (element.children.length) focus(rows[current + 1]); }
+                    else if (event.key === "ArrowLeft") { if (element.children.length && expanded) setExpanded(false); else focus(rows.find(item => item.dataset.elementId === parentId)); }
+                    else if (event.key === "Home") focus(rows[0]); else if (event.key === "End") focus(rows.at(-1));
+                    else if (event.key === " ") toggleSelectElement(elementId); else if (event.key === "Enter") selectElement(elementId);
+                    else if (event.key === "F2") { setName(element.label || element.type); setRenaming(true); }
+                }}
                 onClick={(e) => { if (e.shiftKey) toggleSelectElement(elementId); else selectElement(elementId); }}
             >
                 <div className="layer-grip" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onDragStart(elementId, parentId, index, scope); }} title="Drag to reorder">
                     <GripVertical size={12} />
                 </div>
+                {element.children.length > 0 && <button className="layer-action-btn" aria-label={`${expanded ? "Collapse" : "Expand"} ${element.label || element.type}`} onClick={event => { event.stopPropagation(); setExpanded(!expanded); }}><ChevronDown size={12} style={{ transform: expanded ? undefined : "rotate(-90deg)" }} /></button>}
                 <span className="layer-icon">{TYPE_ICON_MAP[element.type] || <Square size={14} />}</span>
-                <span className="layer-name">{element.label || element.type}</span>
+                {renaming ? <input autoFocus aria-label="Layer name" value={name} maxLength={200} onChange={event => setName(event.target.value)} onClick={event => event.stopPropagation()} onBlur={() => { if (name.trim()) useEditorStore.getState().updateElement(elementId, { label: name.trim() }); setRenaming(false); }} onKeyDown={event => { if (event.key === "Enter") event.currentTarget.blur(); if (event.key === "Escape") { event.preventDefault(); setRenaming(false); } }} /> : <span className="layer-name" onDoubleClick={() => { setName(element.label || element.type); setRenaming(true); }}>{element.label || element.type}</span>}
                 <div className="layer-actions">
-                    <button className={`layer-action-btn ${!element.layout.visible ? "toggled" : ""}`} onClick={(e) => { e.stopPropagation(); toggleVisibility(elementId); }} title={element.layout.visible ? "Hide" : "Show"}>
+                    <button className={`layer-action-btn ${!element.layout.visible ? "toggled" : ""}`} onClick={(e) => { e.stopPropagation(); toggleVisibility(elementId); }} aria-label={`${element.layout.visible ? "Hide" : "Show"} ${element.label || element.type}`} title={element.layout.visible ? "Hide" : "Show"}>
                         {element.layout.visible ? <Eye size={13} /> : <EyeOff size={13} />}
                     </button>
-                    <button className={`layer-action-btn ${element.layout.locked ? "toggled" : ""}`} onClick={(e) => { e.stopPropagation(); toggleLock(elementId); }} title={element.layout.locked ? "Unlock" : "Lock"}>
+                    <button className={`layer-action-btn ${element.layout.locked ? "toggled" : ""}`} onClick={(e) => { e.stopPropagation(); toggleLock(elementId); }} aria-label={`${element.layout.locked ? "Unlock" : "Lock"} ${element.label || element.type}`} title={element.layout.locked ? "Unlock" : "Lock"}>
                         {element.layout.locked ? <Lock size={13} /> : <Unlock size={13} />}
                     </button>
                 </div>
             </div>
             {showDropAfter && <div className="layer-drop-indicator" style={{ marginLeft: `${12 + depth * 16}px` }} />}
-            {element.children.map((childId, ci) => (
+            {expanded && element.children.map((childId, ci) => (
                 <LayerItem key={childId} elementId={childId} depth={depth + 1} index={ci} parentId={elementId} scope={scope} onDragStart={onDragStart} dropIndicator={dropIndicator} />
             ))}
         </>
@@ -104,7 +130,7 @@ const LayerTree: React.FC<{
                 </div>
                 <span className="layers-section-count">{total}</span>
             </div>
-            <div className="layers-tree" ref={setListRef(scope)}>
+            <div className="layers-tree" role="tree" aria-label={`${title} layers`} aria-multiselectable="true" ref={setListRef(scope)}>
                 {elementIds.length === 0 ? (
                     <div className="layers-empty"><span>No {title.toLowerCase()} elements</span><span>{scope === "global" ? "Add from Global panel" : "Drag elements from the sidebar"}</span></div>
                 ) : elementIds.map((id, i) => (
@@ -208,7 +234,7 @@ const LayersPanel: React.FC = () => {
                         const siblings = el.parentId ? state.elementsById[el.parentId]?.children || [] : (src.scope === "global" ? state.globalRootIds : state.rootIds);
                         const curIdx = siblings.indexOf(src.elementId);
                         const adj = drop.index > curIdx ? drop.index - 1 : drop.index;
-                        reorderElements(el.parentId, curIdx, adj);
+                        reorderElements(el.parentId, curIdx, adj, src.scope);
                     } else {
                         moveElement(src.elementId, drop.parentId, drop.index);
                     }

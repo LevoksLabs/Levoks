@@ -1,12 +1,20 @@
 "use client";
 
+import PrimitiveShape from "./design/PrimitiveShape";
 import React, { useState, useCallback, useEffect, useMemo } from "react";
+import TabsWidget from "./design/TabsWidget";
+import { widgetNumber } from "@/lib/widgets";
+import { ICON_PATHS } from "@/lib/icon-paths";
+import GeneratedPreview from "./design/GeneratedPreview";
+import VectorShape from "./design/VectorShape";
+import { assetElement } from "@/lib/design-assets";
+import { resolveElement, fontFamily } from "@/lib/design";
+import { useEditorUIStore } from "@/store/editorUIStore";
 import { useEditorStore } from "@/store/editorStore";
-import { useRoutingStore } from "@/store/routingStore";
 import { resolveAllRoutes, simulateServiceBlock, ResolvedRoute } from "@/lib/routingEngine";
 import { ElementNode, CONTAINER_TYPES } from "@/types";
 import {
-    X, ChevronLeft, ChevronRight, Globe, Activity,
+    ChevronLeft, Globe, Activity,
     CheckCircle2, XCircle, ArrowRight
 } from "lucide-react";
 
@@ -31,7 +39,10 @@ interface LiveElementProps {
 const LiveElement: React.FC<LiveElementProps> = ({
     elementId, isRoot, formData, setFormData, routeMap, onAction, pageId
 }) => {
-    const element = useEditorStore(s => s.elementsById[elementId]);
+    const raw = useEditorStore(s => s.elementsById[elementId]);
+    const assets = useEditorStore(s => s.assets);
+    const breakpoint = useEditorUIStore(s => s.breakpoint);
+    const element = raw ? assetElement(resolveElement(raw, breakpoint), assets) : undefined;
     if (!element) return null;
     if (!element.layout.visible) return null;
 
@@ -39,7 +50,7 @@ const LiveElement: React.FC<LiveElementProps> = ({
     const isTextLike = element.type === "text" || element.type === "title" || element.type === "paragraph";
     const widthPx = `${Math.max(40, element.layout.w)}px`;
     const heightPx = `${Math.max(20, element.layout.h)}px`;
-    const rawPosition = String(element.styles.position || "");
+    const rawPosition = String(element.styles.position || element.layout.position || "");
     const resolvedPosition = (rawPosition || (isContainer ? "relative" : "static")) as React.CSSProperties["position"];
     const isPositionedChild = resolvedPosition !== "static";
 
@@ -64,6 +75,9 @@ const LiveElement: React.FC<LiveElementProps> = ({
     const mergedStyles: React.CSSProperties = {
         ...element.styles as React.CSSProperties,
         ...positionStyles,
+        ...(element.type === "shape" && element.props.shapeType && element.props.shapeType !== "rectangle" ? { backgroundColor: "transparent" } : {}),
+        fontFamily: fontFamily(element.styles.fontFamily),
+        ...(element.type === "gallery" ? { display: "block" } : {}),
         cursor: (element.styles.cursor as React.CSSProperties["cursor"]) || "default",
         userSelect: "none",
         overflow: isContainer ? "visible" : (isTextLike ? "visible" : "hidden"),
@@ -73,8 +87,8 @@ const LiveElement: React.FC<LiveElementProps> = ({
 
     const hasRoute = routeMap.has(element.id);
 
-    const renderChildren = () =>
-        element.children.map((childId) => (
+    const renderChildren = (ids = element.children) =>
+        ids.map((childId) => (
             <LiveElement
                 key={childId}
                 elementId={childId}
@@ -105,7 +119,7 @@ const LiveElement: React.FC<LiveElementProps> = ({
                         margin: 0, fontSize: "inherit", fontWeight: "inherit",
                         color: "inherit", lineHeight: "inherit",
                         textAlign: (element.styles.textAlign as React.CSSProperties["textAlign"]) || "left",
-                        fontFamily: String(element.styles.fontFamily || "inherit"),
+                        fontFamily: fontFamily(element.styles.fontFamily),
                     }}>
                         {String(element.props.content || "Heading")}
                     </Tag>
@@ -118,7 +132,7 @@ const LiveElement: React.FC<LiveElementProps> = ({
                     <p style={{
                         margin: 0,
                         textAlign: (element.styles.textAlign as React.CSSProperties["textAlign"]) || "left",
-                        fontFamily: String(element.styles.fontFamily || "inherit"),
+                        fontFamily: fontFamily(element.styles.fontFamily),
                     }}>
                         {String(element.props.content || "Text")}
                     </p>
@@ -147,7 +161,7 @@ const LiveElement: React.FC<LiveElementProps> = ({
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            fontFamily: String(element.styles.fontFamily || "inherit"),
+                            fontFamily: fontFamily(element.styles.fontFamily),
                             padding: String(element.styles.padding || "0"),
                         }}
                     >
@@ -256,6 +270,13 @@ const LiveElement: React.FC<LiveElementProps> = ({
                 );
             }
 
+            case "tabs": return <TabsWidget element={element} render={renderChildren} />;
+            case "gallery": return <div className="gallery-content" style={{ display: "grid", gridTemplateColumns: `repeat(${widgetNumber(element.props.columns, 3, 1, 8)}, minmax(0, 1fr))`, gap: `${widgetNumber(element.props.gap, 8, 0, 100)}px` }}>{renderChildren()}</div>;
+            case "repeater": return <div style={{ display: "flex", flexDirection: element.props.direction === "row" ? "row" : "column", gap: String(element.styles.gap || "12px") }}>{Array.from({ length: widgetNumber(element.props.repeatCount, 3, 1, 20) }, (_, index) => <div className="repeater-item" key={index}>{renderChildren()}</div>)}</div>;
+            case "accordion": return <details open={Boolean(element.props.expanded)}><summary>{String(element.props.headerText || "Accordion")}</summary>{renderChildren()}</details>;
+            case "icon": return <svg viewBox="0 0 24 24" width={widgetNumber(element.props.iconSize, 32, 8, 256)} height={widgetNumber(element.props.iconSize, 32, 8, 256)} fill={String(element.props.iconColor || "#374151")} role="img" aria-label={element.label || "Icon"}><path d={ICON_PATHS[String(element.props.icon)] || ICON_PATHS.star} /></svg>;
+            case "shape": return element.vector ? <VectorShape element={element} editable={false} /> : <PrimitiveShape shapeType={String(element.props.shapeType || "rectangle")} color={String(element.styles.backgroundColor || "#6366f1")} />;
+
             case "spacer":
                 return <div style={{ width: "100%", height: `${Number(element.props.spacerHeight) || 40}px` }} />;
 
@@ -300,7 +321,10 @@ interface ToastMsg {
 // ─── Main Panel ───
 
 const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
-    const { pages, activePageId, rootIds, globalRootIds, canvasSettings, pageElementMap } = useEditorStore();
+    const { pages, activePageId, rootIds, globalRootIds, canvasSettings, pageElementMap, tokens } = useEditorStore();
+
+    const [generated, setGenerated] = useState(false);
+    const breakpoint = useEditorUIStore(s => s.breakpoint);
 
     // Current page being viewed
     const [currentPageId, setCurrentPageId] = useState(activePageId || pages[0]?.id || "");
@@ -315,7 +339,7 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
     const currentPage = pages.find((p) => p.id === currentPageId);
     const pageRootIds = currentPageId === activePageId ? rootIds : (pageElementMap?.[currentPageId] || []);
 
-    const canvasWidth = Math.max(320, Number(canvasSettings.width) || 1280);
+    const canvasWidth = breakpoint === "mobile" ? 390 : breakpoint === "tablet" ? 820 : Math.max(320, Number(canvasSettings.width) || 1280);
     const canvasHeight = Math.max(200, Number(canvasSettings.height) || 900);
     const canvasBackground = String(canvasSettings.backgroundColor || "#ffffff");
     const canvasHasGradient = /gradient\(/i.test(canvasBackground);
@@ -407,10 +431,12 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
                     <span className="site-preview-title">{currentPage?.title || "Preview"}</span>
                     <div className="live-preview-indicator">
                         <Activity size={10} />
-                        <span>Live</span>
+                        <span>Design preview</span>
                     </div>
                 </div>
 
+                <select aria-label="Preview mode" value={generated ? "generated" : "design"} onChange={event => setGenerated(event.target.value === "generated")}><option value="design">Design simulation</option><option value="generated">Generated frontend</option></select>
+                <select aria-label="Preview breakpoint" value={breakpoint} onChange={event => useEditorUIStore.setState({ breakpoint: event.target.value as "base" | "tablet" | "mobile" })}><option value="base">Desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select>
                 {/* Page tabs */}
                 <div className="live-preview-tabs">
                     {pages.map((page) => (
@@ -430,9 +456,10 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
             {/* Body */}
             <div className="site-preview-body">
                 <div className="site-preview-scroll">
-                    <div
+                    {generated ? <GeneratedPreview pageId={currentPageId} width={canvasWidth} /> : <div
                         className="site-preview-page"
                         style={{
+                            ...Object.fromEntries(Object.entries(tokens).map(([id, token]) => [`--lv-${id}`, token.value])),
                             width: `${canvasWidth}px`,
                             maxWidth: `${canvasWidth}px`,
                             minHeight: `${canvasHeight}px`,
@@ -466,7 +493,7 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
                                 pageId={currentPageId}
                             />
                         ))}
-                    </div>
+                    </div>}
                 </div>
             </div>
 

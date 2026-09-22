@@ -58,15 +58,6 @@ export function compileProject(value: ProjectDocument) {
       nodeId,
       message,
     });
-  for (const element of Object.values(editor.elementsById)) {
-    if (["gallery", "repeater", "tabs", "icon"].includes(element.type))
-      diagnostics.push({
-        severity: "warning",
-        code: "WIDGET_REVIEW",
-        nodeId: element.id,
-        message: `${element.label || element.type}: verify widget content and behavior in source before publishing.`,
-      });
-  }
   for (const service of backend.services) {
     diagnostics.push(...programDiagnostics(service));
     for (const type of ["error_handler", "audit_log"])
@@ -355,6 +346,8 @@ export function compileProject(value: ProjectDocument) {
       editor.pages,
       undefined,
       graph,
+      editor.tokens,
+      editor.assets,
     );
     const folder = page.route === "/" ? "" : page.route.slice(1) + "/";
     const app = output.files["src/App.jsx"]

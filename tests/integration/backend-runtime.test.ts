@@ -21,6 +21,10 @@ test(
     await mkdir(root, { recursive: true });
     const service = programFixture();
     service.blocks.push(
+      block("conflicting_scope", "access_policy", { ownerField: "", tenantField: "ownerId" }),
+      block("missing_scope", "access_policy", { ownerField: "missingOwner", tenantField: "" }),
+      block("conflict_endpoint", "rest_endpoint", { route: "/conflict", policyIds: ["conflicting_scope"] }, ["list"]),
+      block("missing_scope_endpoint", "rest_endpoint", { route: "/missing-scope", policyIds: ["missing_scope"] }, ["list"]),
       block("second", "query", {
         modelId: "model",
         operation: "create",
@@ -76,6 +80,8 @@ test(
       }>;
       const a = { sub: "alice", role: "user", tenantId: "tenant-a" };
       const b = { sub: "bob", role: "user", tenantId: "tenant-b" };
+      await assert.rejects(execute("conflict_endpoint", { user: a }), (error: unknown) => (error as { status: number }).status === 403);
+      await assert.rejects(execute("missing_scope_endpoint", { user: a }), (error: unknown) => (error as { status: number }).status === 500);
       const created = await execute("create_endpoint", {
         user: a,
         body: { title: "A", ownerId: "bob", tenantId: "tenant-b" },

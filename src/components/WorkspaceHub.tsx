@@ -14,6 +14,12 @@ import {
   Cloud,
   Plus,
   RefreshCw,
+  Link2,
+  Check,
+  ChevronDown,
+  Circle,
+  AlertCircle,
+  LoaderCircle,
 } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
@@ -49,12 +55,15 @@ import { compileProject } from "@/lib/project/compiler";
 import { exportAsZip } from "@/lib/codegen/exporter";
 import { validateFiles } from "@/lib/codegen/files";
 import "./workspace.css";
+import SourceTools from "./SourceTools";
 import SecretsPanel from "./SecretsPanel";
 import GitHubPanel from "./GitHubPanel";
+import { conversations, saveConversation, clearConversations, type ConversationEntry } from "@/lib/project/conversations";
 import { readProposalStream, type GenerationProgress } from "@/lib/ai-stream";
 
 type Panel = "projects" | "ai" | "source" | "ship" | "secrets" | "connections";
 type Proposal = {
+  conversationId?: string;
   usage?: {
     inputTokens: number | null;
     outputTokens: number | null;
@@ -113,6 +122,35 @@ export default function WorkspaceHub() {
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [chat, setChat] = useState<{ projectId: string; entries: ConversationEntry[] }>({ projectId: "", entries: [] });
+  const [rememberChat, setRememberChat] = useState(true);
+  const [includeChat, setIncludeChat] = useState(false);
+  const [contextScope, setContextScope] = useState("project");
+  const [chatError, setChatError] = useState("");
+  const chatEntries = chat.projectId === workspace.id ? chat.entries : [];
+  useEffect(() => {
+    if (!workspace.ready) return;
+    let active = true;
+    void conversations(workspace.id).then(entries => { if (active) setChat({ projectId: workspace.id, entries }); }).catch(() => { if (active) setChatError("Conversation history is unavailable. Generation still works."); });
+    return () => { active = false; };
+  }, [workspace.id, workspace.ready]);
+  async function recordConversation(entry: ConversationEntry) {
+    setChat(current => ({ projectId: entry.projectId, entries: [...(current.projectId === entry.projectId ? current.entries.filter(item => item.id !== entry.id) : []), entry].slice(-50) }));
+    if (rememberChat) try { await saveConversation(entry); } catch { setChatError("Could not save conversation history. Your project has not been changed."); }
+  }
+  async function markConversation(id: string | undefined, outcome: ConversationEntry["outcome"]) {
+    const entry = chatEntries.find(item => item.id === id); if (entry) await recordConversation({ ...entry, outcome });
+  }
+  const [providerSettingsOpen, setProviderSettingsOpen] = useState(true);
+  const [aiPosition, setAIPosition] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const aiDrag = useRef<{
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+  } | null>(null);
   const [mode, setMode] = useState("patch");
   const [maxOutputTokens, setMaxOutputTokens] = useState(4096);
   const [maxInputBytes, setMaxInputBytes] = useState(120000);
@@ -121,6 +159,8 @@ export default function WorkspaceHub() {
   const [generationStatus, setGenerationStatus] = useState("");
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [selectedFile, setSelectedFile] = useState("");
+  const [openFiles, setOpenFiles] = useState<string[]>([]);
+  const lineNumbers = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [vercelToken, setVercelToken] = useState("");
   const [origins, setOrigins] = useState<Record<string, string>>({});
@@ -133,6 +173,37 @@ export default function WorkspaceHub() {
   const importInput = useRef<HTMLInputElement>(null);
   const abort = useRef<AbortController | null>(null);
   const operation = useRef(false);
+
+  useEffect(() => {
+    const keepAssistantVisible = () => {
+      const bounds = dialog.current?.getBoundingClientRect();
+      if (!bounds) return;
+      setAIPosition((position) =>
+        position
+          ? {
+              x: Math.max(
+                8,
+                Math.min(
+                  position.x,
+                  window.innerWidth - Math.min(bounds.width, 440) - 8,
+                ),
+              ),
+              y: Math.max(
+                8,
+                Math.min(
+                  position.y,
+                  window.innerHeight -
+                    Math.min(bounds.height, window.innerHeight - 120) -
+                    8,
+                ),
+              ),
+            }
+          : null,
+      );
+    };
+    window.addEventListener("resize", keepAssistantVisible);
+    return () => window.removeEventListener("resize", keepAssistantVisible);
+  }, []);
 
   const compilation = useMemo(() => {
     if (!panel || !workspace.ready) return null;
@@ -158,6 +229,9 @@ export default function WorkspaceHub() {
     editor.pageElementMap,
     editor.activePageId,
     editor.canvasSettings,
+    editor.assets,
+    editor.tokens,
+    editor.components,
     backend.services,
     backend.connections,
     routing.nodes,
@@ -192,8 +266,11 @@ export default function WorkspaceHub() {
     };
   }, []);
   useEffect(() => {
-    if (panel) dialog.current?.showModal();
-    else dialog.current?.close();
+    const element = dialog.current;
+    if (!element) return;
+    if (element.open) element.close();
+    if (panel === "ai") element.show();
+    else if (panel) element.showModal();
   }, [panel]);
   useEffect(
     () =>
@@ -263,6 +340,12 @@ export default function WorkspaceHub() {
   async function generate() {
     const project = redactProject(currentProject());
     const basedOn = projectSignature();
+    const scope = contextScope === "selection" ? `Focus only on these selected element IDs: ${editor.selectedElementIds.join(", ")}.` : contextScope === "page" ? `Focus on page ${editor.activePageId} and its elements.` : "Consider the whole project.";
+    if (contextScope === "selection" && !editor.selectedElementIds.length) throw new Error("Select one or more elements, or choose a different focus.");
+    const recent = includeChat ? chatEntries.slice(-4).map(entry => ({ request: entry.prompt.slice(0, 1000), response: entry.summary.slice(0, 500), outcome: entry.outcome })) : [];
+    const requestPrompt = `${scope} Preserve unaffected parts.\n${recent.length ? "Previous conversation (context only): " + JSON.stringify(recent) + "\n" : ""}Current request: ${prompt}`;
+    if (requestPrompt.length > 12000) throw new Error("Request and conversation exceed 12,000 characters. Shorten the request or turn off recent conversation context.");
+    const requestText = prompt;
     abort.current = new AbortController();
     setProposal(null);
     setStreamText("");
@@ -275,7 +358,7 @@ export default function WorkspaceHub() {
           provider,
           apiKey,
           model,
-          prompt,
+          prompt: requestPrompt,
           mode,
           maxOutputTokens,
           maxInputBytes,
@@ -288,7 +371,10 @@ export default function WorkspaceHub() {
           else setStreamText((value) => (value + event.text).slice(-12000));
         },
       );
-      setProposal({ ...result, basedOn });
+      const conversationId = crypto.randomUUID();
+      const scrub = (text: string) => apiKey ? text.replaceAll(apiKey, "[provider key removed]") : text;
+      await recordConversation({ id: conversationId, projectId: project.id, createdAt: new Date().toISOString(), prompt: scrub(requestText), summary: scrub(result.summary || "Proposal ready"), outcome: "review", tokens: result.usage?.totalTokens ?? null });
+      setProposal({ ...result, basedOn, conversationId });
       setGenerationStatus("Proposal validated and ready for review.");
       setMessage("Proposal ready. Review it before applying.");
     } catch (error) {
@@ -308,24 +394,58 @@ export default function WorkspaceHub() {
   return (
     <>
       <div className="workspace-actions">
+        <details className="header-action-menu" onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}>
+          <summary>Files <ChevronDown size={12} /></summary>
+          <div onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}>
+            <button disabled={!workspace.ready || busy} onClick={() => void run(async () => { await flushWorkspace("Before new project"); await openWorkspace(emptyProject()); await refreshProjects(); })}>New project</button>
+            <button disabled={!workspace.ready} onClick={() => openPanel("projects")}>Open, rename or import…</button>
+            <button disabled={!workspace.ready || busy} onClick={() => void run(async () => { await flushWorkspace("Manual checkpoint"); setMessage("Checkpoint saved."); })}>Save checkpoint</button>
+            <button disabled={!workspace.ready || busy} onClick={() => void run(async () => { downloadProject(redactProject(currentProject())); })}>Download project backup</button>
+            <button disabled={!workspace.ready || busy} onClick={() => void run(async () => { await exportAsZip(buildFiles(), workspace.name); })}>Download application ZIP</button>
+          </div>
+        </details>
         <button
-          className="header-btn"
+          className="header-btn workspace-project-button"
           onClick={() => openPanel("projects")}
+          title="Files and projects"
           disabled={!workspace.ready}
         >
           <FolderOpen size={14} />{" "}
           <span className="workspace-name">{workspace.name}</span>
+          <ChevronDown size={12} />
         </button>
         <button
           className={`autosave-toggle ${workspace.autosave ? "on" : "off"}`}
           onClick={workspace.toggleAutosave}
           disabled={!workspace.ready}
           title={workspace.status}
+          aria-pressed={workspace.autosave}
         >
           Autosave {workspace.autosave ? "On" : "Off"}
         </button>
-        <span className="workspace-status" role="status">
-          {workspace.error ? "Save needs attention" : workspace.status}
+        <span
+          className="workspace-status"
+          role="status"
+          title={workspace.error || workspace.status}
+          aria-label={
+            workspace.error ? "Save needs attention" : workspace.status
+          }
+          data-state={
+            workspace.error ? "error" : workspace.dirty ? "pending" : "saved"
+          }
+        >
+          {workspace.error ? (
+            <AlertCircle size={14} />
+          ) : !workspace.ready || workspace.status === "Saving…" ? (
+            <LoaderCircle size={14} />
+          ) : workspace.dirty ? (
+            <Circle size={10} />
+          ) : (
+            <Check size={14} />
+          )}
+          <span className="workspace-status-text">
+            {workspace.error ? "Save needs attention" : workspace.status}
+          </span>
         </span>
         <button
           className="header-icon-btn"
@@ -342,8 +462,18 @@ export default function WorkspaceHub() {
           <Save size={15} />
         </button>
         <button
+          className="header-btn connections-action"
+          onClick={() => openPanel("connections")}
+          disabled={!workspace.ready}
+          title="Manage provider connections"
+        >
+          <Link2 size={14} />
+          <span>Connections</span>
+        </button>
+        <button
           className="header-btn"
           onClick={() => openPanel("ai")}
+          title="AI assistant (Shift+G)"
           disabled={!workspace.ready}
         >
           <Sparkles size={14} /> AI
@@ -351,6 +481,7 @@ export default function WorkspaceHub() {
         <button
           className="header-btn"
           onClick={() => openPanel("source")}
+          title="Code (Shift+C)"
           disabled={!workspace.ready}
         >
           <Code2 size={14} /> Code
@@ -358,10 +489,12 @@ export default function WorkspaceHub() {
         <button
           className="header-btn primary"
           onClick={() => openPanel("ship")}
+          title="Deploy and export (Shift+D)"
           disabled={!workspace.ready}
         >
-          <Rocket size={14} /> Ship
+          <Rocket size={14} /> Deploy
         </button>
+        <details className="header-action-menu deploy-action-menu" onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary aria-label="Deploy options"><ChevronDown size={12} /></summary><div onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}><button disabled={!workspace.ready} onClick={() => openPanel("ship")}>Configure deployment</button><button disabled={!workspace.ready || busy} onClick={() => void run(async () => { await exportAsZip(buildFiles(), workspace.name); })}>Download application ZIP</button><button disabled={!workspace.ready} onClick={() => openPanel("connections")}>Commit to GitHub…</button></div></details>
       </div>
       {workspace.error && !panel && (
         <button
@@ -374,22 +507,101 @@ export default function WorkspaceHub() {
       )}
       {!workspace.ready && (
         <div className="workspace-loading" role="status">
-          Opening your workspace…
+          <div className="workspace-loading-content">
+            <img src="/levoks_logo.svg" width="32" height="32" alt="" />
+            <strong>Opening your workspace</strong>
+            <span>Restoring your project and saved changes.</span>
+            <div className="loading-track" />
+          </div>
         </div>
       )}
       {panel && (
         <dialog
           ref={dialog}
           aria-label="Levoks project workspace"
-          className="workspace-dialog"
+          aria-modal={panel === "ai" ? "false" : "true"}
+          style={
+            panel === "ai" && aiPosition
+              ? {
+                  left: aiPosition.x,
+                  top: aiPosition.y,
+                  right: "auto",
+                  bottom: "auto",
+                }
+              : undefined
+          }
+          onKeyDown={(event) => {
+            if (panel === "ai" && event.key === "Escape" && !busy) {
+              event.preventDefault();
+              setPanel(null);
+            }
+          }}
+          className={`workspace-dialog workspace-${panel}`}
           onCancel={(event) => {
             if (busy) event.preventDefault();
             else setPanel(null);
           }}
         >
-          <div className="workspace-dialog-header">
+          <div
+            className="workspace-dialog-header"
+            onPointerDown={(event) => {
+              if (
+                panel !== "ai" ||
+                event.button !== 0 ||
+                (event.target as HTMLElement).closest("button")
+              )
+                return;
+              const bounds = dialog.current!.getBoundingClientRect();
+              aiDrag.current = {
+                x: event.clientX,
+                y: event.clientY,
+                left: bounds.left,
+                top: bounds.top,
+              };
+              event.currentTarget.setPointerCapture(event.pointerId);
+              event.preventDefault();
+            }}
+            onPointerMove={(event) => {
+              const drag = aiDrag.current;
+              if (!drag) return;
+              const bounds = dialog.current!.getBoundingClientRect();
+              setAIPosition({
+                x: Math.max(
+                  8,
+                  Math.min(
+                    window.innerWidth - bounds.width - 8,
+                    drag.left + event.clientX - drag.x,
+                  ),
+                ),
+                y: Math.max(
+                  8,
+                  Math.min(
+                    window.innerHeight - bounds.height - 8,
+                    drag.top + event.clientY - drag.y,
+                  ),
+                ),
+              });
+            }}
+            onPointerUp={() => {
+              aiDrag.current = null;
+            }}
+            onPointerCancel={() => {
+              aiDrag.current = null;
+            }}
+          >
             <div>
-              <strong>Levoks workspace</strong>
+              <strong>
+                {
+                  {
+                    projects: "Files & projects",
+                    ai: "AI assistant",
+                    source: "Code workspace",
+                    ship: "Deploy & export",
+                    secrets: "Environment & secrets",
+                    connections: "Connections",
+                  }[panel]
+                }
+              </strong>
               <small>{workspace.name}</small>
             </div>
             <button
@@ -678,42 +890,54 @@ export default function WorkspaceHub() {
             {panel === "ai" && (
               <div className="workspace-grid">
                 <section>
-                  <h2>Build with your own AI</h2>
-                  <p>
-                    Describe a design or code change. Levoks sends the project
-                    and its IR to your selected provider. Your key is held only
-                    in this tab&apos;s memory; provider usage is billed to your
-                    account.
-                  </p>
-                  <label>
-                    Provider
-                    <select
-                      value={provider}
-                      onChange={(e) => setProvider(e.target.value)}
-                    >
-                      <option value="huggingface">
-                        Hugging Face Inference Providers
-                      </option>
-                      <option value="openrouter">OpenRouter</option>
-                    </select>
-                  </label>
-                  <label>
-                    API key
-                    <input
-                      type="password"
-                      autoComplete="off"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Model ID
-                    <input
-                      value={model}
-                      onChange={(e) => setModel(e.target.value)}
-                      placeholder="Provider model ID, e.g. organization/model"
-                    />
-                  </label>
+                  <h2>What would you like to change?</h2>
+                  <details
+                    className="ai-provider-settings"
+                    open={providerSettingsOpen}
+                    onToggle={(event) =>
+                      setProviderSettingsOpen(event.currentTarget.open)
+                    }
+                  >
+                    <summary>
+                      Provider &amp; model{" "}
+                      {model ? `- ${model}` : "- setup required"}
+                    </summary>
+                    <p>
+                      Describe a design or code change. Levoks sends the project
+                      and its IR to your selected provider. Your key is held
+                      only in this tab&apos;s memory; provider usage is billed
+                      to your account.
+                    </p>
+                    <label>
+                      Provider
+                      <select
+                        value={provider}
+                        onChange={(e) => setProvider(e.target.value)}
+                      >
+                        <option value="huggingface">
+                          Hugging Face Inference Providers
+                        </option>
+                        <option value="openrouter">OpenRouter</option>
+                      </select>
+                    </label>
+                    <label>
+                      API key
+                      <input
+                        type="password"
+                        autoComplete="off"
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Model ID
+                      <input
+                        value={model}
+                        onChange={(e) => setModel(e.target.value)}
+                        placeholder="Provider model ID, e.g. organization/model"
+                      />
+                    </label>
+                  </details>
                   <label>
                     Change type
                     <select
@@ -734,54 +958,66 @@ export default function WorkspaceHub() {
                   <label>
                     Your request
                     <textarea
-                      rows={6}
+                      rows={4}
                       value={prompt}
                       maxLength={12000}
                       onChange={(e) => setPrompt(e.target.value)}
                       placeholder="Create a pricing page with three plans, a comparison section, and a clear call to action…"
                     />
                   </label>
-                  <label>
-                    Maximum output tokens
-                    <input
-                      type="number"
-                      min={256}
-                      max={16000}
-                      value={maxOutputTokens}
-                      onChange={(e) =>
-                        setMaxOutputTokens(Number(e.target.value))
-                      }
-                    />
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={streaming}
-                      onChange={(e) => setStreaming(e.target.checked)}
-                    />
-                    Show generation as it arrives
-                  </label>
-                  <label>
-                    Maximum input size (bytes)
-                    <input
-                      type="number"
-                      min={1000}
-                      max={1000000}
-                      value={maxInputBytes}
-                      onChange={(e) => setMaxInputBytes(Number(e.target.value))}
-                    />
-                  </label>
-                  <p>
-                    Input size is checked before contacting the provider. Token
-                    limits constrain each request; they are not a currency
-                    spending budget.
-                  </p>
+                  <label>Change focus<select aria-label="AI change focus" value={contextScope} onChange={event => setContextScope(event.target.value)}><option value="project">Whole project</option><option value="page">Current page</option><option value="selection">Selected elements ({editor.selectedElementIds.length})</option></select></label>
+                  <p>Focus guides the proposal. The provider still receives the redacted project for context; review every proposed change before applying.</p>
+                  <div className="ai-suggestions">{["Improve spacing and visual hierarchy on this page.", "Adapt the selected elements for mobile screens.", "Review accessibility and improve labels and contrast."].map(suggestion => <button key={suggestion} disabled={busy} onClick={() => setPrompt(suggestion)}>{suggestion}</button>)}</div>
+                  <details className="ai-conversation"><summary>Conversation · {chatEntries.length} requests</summary><label><input type="checkbox" checked={rememberChat} onChange={event => setRememberChat(event.target.checked)} />Keep requests and summaries on this device</label><label><input type="checkbox" checked={includeChat} onChange={event => setIncludeChat(event.target.checked)} />Include the last four requests in the next generation</label><p>Provider keys are never stored. The last 50 requests are retained per project. Turning off history affects new requests; clear history to remove saved messages.</p>{chatError && <p role="alert">{chatError}</p>}<ol>{chatEntries.map(entry => <li key={entry.id}><p>{entry.prompt}</p><p>{entry.summary}</p><small>{entry.outcome} · {new Date(entry.createdAt).toLocaleString()}{entry.tokens === null ? "" : ` · ${entry.tokens} tokens`}</small><button onClick={() => setPrompt(entry.prompt)}>Reuse request</button></li>)}</ol><button disabled={!chatEntries.length || busy} onClick={() => void run(async () => { await clearConversations(workspace.id); setChat({ projectId: workspace.id, entries: [] }); })}>Clear conversation history</button></details>
+                  <details className="ai-usage-settings">
+                    <summary>Usage limits &amp; streaming</summary>
+                    <label>
+                      Maximum output tokens
+                      <input
+                        type="number"
+                        min={256}
+                        max={16000}
+                        value={maxOutputTokens}
+                        onChange={(e) =>
+                          setMaxOutputTokens(Number(e.target.value))
+                        }
+                      />
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={streaming}
+                        onChange={(e) => setStreaming(e.target.checked)}
+                      />
+                      Show generation as it arrives
+                    </label>
+                    <label>
+                      Maximum input size (bytes)
+                      <input
+                        type="number"
+                        min={1000}
+                        max={1000000}
+                        value={maxInputBytes}
+                        onChange={(e) =>
+                          setMaxInputBytes(Number(e.target.value))
+                        }
+                      />
+                    </label>
+                    <p>
+                      Input size is checked before contacting the provider.
+                      Token limits constrain each request; they are not a
+                      currency spending budget.
+                    </p>
+                  </details>
                   <button
                     className="primary"
                     disabled={
                       busy || !apiKey || !model.trim() || !prompt.trim()
                     }
-                    onClick={() => void run(generate)}
+                    onClick={() => {
+                      setProviderSettingsOpen(false);
+                      void run(generate);
+                    }}
                   >
                     <Sparkles size={15} /> Generate proposal
                   </button>
@@ -867,6 +1103,7 @@ export default function WorkspaceHub() {
                               updateSource(validateFiles(proposal.files));
                               await flushWorkspace("AI source applied");
                             }
+                            await markConversation(proposal.conversationId, "applied");
                             setProposal(null);
                             setMessage("Proposal applied and saved.");
                           })
@@ -874,7 +1111,7 @@ export default function WorkspaceHub() {
                       >
                         Apply proposal
                       </button>
-                      <button onClick={() => setProposal(null)}>Discard</button>
+                      <button onClick={() => { void markConversation(proposal.conversationId, "discarded"); setProposal(null); }}>Discard</button>
                     </>
                   ) : (
                     <div className="workspace-empty">
@@ -966,25 +1203,91 @@ export default function WorkspaceHub() {
                         <button
                           key={file}
                           className={activeFile === file ? "active" : ""}
-                          onClick={() => setSelectedFile(file)}
+                          onClick={() => {
+                            setSelectedFile(file);
+                            setOpenFiles((current) =>
+                              current.includes(file)
+                                ? current
+                                : [...current.slice(-7), file],
+                            );
+                          }}
                         >
                           {file}
                         </button>
                       ))}
                   </aside>
-                  <div>
+                  <div className="source-editor-pane">
+                    <div
+                      className="source-tabs"
+                      role="tablist"
+                      aria-label="Open source files"
+                    >
+                      {Array.from(new Set([activeFile, ...openFiles]))
+                        .filter((file) => file in files)
+                        .map((file) => (
+                          <button
+                            role="tab"
+                            aria-selected={file === activeFile}
+                            key={file}
+                            onClick={() => setSelectedFile(file)}
+                            title={file}
+                          >
+                            <Code2 size={12} />
+                            {file.split("/").pop()}
+                          </button>
+                        ))}
+                    </div>
                     <div className="workspace-file-title">
                       {activeFile || "No source available"}
+                      <span>
+                        {activeFile.startsWith("levoks.")
+                          ? "Read only"
+                          : workspace.source
+                            ? "Edited source"
+                            : "Generated source"}
+                      </span>
                     </div>
-                    <textarea
-                      aria-label={`Source code for ${activeFile}`}
-                      spellCheck={false}
-                      value={files[activeFile] || ""}
-                      disabled={!activeFile || activeFile.startsWith("levoks.")}
-                      onChange={(e) =>
-                        updateSource({ ...files, [activeFile]: e.target.value })
-                      }
-                    />
+                    <SourceTools key={activeFile} file={activeFile} code={files[activeFile] || ""} readOnly={!activeFile || activeFile.startsWith("levoks.")} onChange={code => updateSource({ ...files, [activeFile]: code })} />
+                    <div className="source-text-area">
+                      <div
+                        className="source-line-numbers"
+                        ref={lineNumbers}
+                        aria-hidden="true"
+                      >
+                        {(files[activeFile] || "")
+                          .split("\n")
+                          .map((_, index) => (
+                            <div key={index}>{index + 1}</div>
+                          ))}
+                      </div>
+                      <textarea
+                        aria-label={`Source code for ${activeFile}`}
+                        spellCheck={false}
+                        wrap="off"
+                        onScroll={(event) => {
+                          if (lineNumbers.current)
+                            lineNumbers.current.scrollTop =
+                              event.currentTarget.scrollTop;
+                        }}
+                        value={files[activeFile] || ""}
+                        disabled={
+                          !activeFile || activeFile.startsWith("levoks.")
+                        }
+                        onChange={(e) =>
+                          updateSource({
+                            ...files,
+                            [activeFile]: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="source-status">
+                      <span>
+                        {(files[activeFile] || "").split("\n").length} lines ·
+                        UTF-8
+                      </span>
+                      <span>{workspace.status}</span>
+                    </div>
                   </div>
                 </div>
               </section>

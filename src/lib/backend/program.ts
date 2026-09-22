@@ -61,6 +61,7 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
               const p = programConfigs.access_policy.parse(policy.config);
               for (const field of [p.ownerField, p.tenantField].filter(Boolean))
                 if (
+                  field !== "_id" &&
                   !(model.config as DbModelConfig).fields.some(
                     (f) => f.name === field,
                   )
@@ -70,6 +71,46 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
                     `Policy field ${field} must exist on the selected model.`,
                   );
             }
+          }
+          if (model && c.operation === "aggregate") {
+            const fields = new Map(
+              (model.config as DbModelConfig).fields.map((field) => [
+                field.name,
+                field.type,
+              ]),
+            );
+            fields.set("_id", "objectId");
+            const checkField = (field: string, numeric = false) => {
+              const type = fields.get(field);
+              if (
+                !type ||
+                /password|secret|token/i.test(field) ||
+                ["object", "array"].includes(type) ||
+                (numeric && type !== "number")
+              )
+                fail(
+                  block,
+                  `Aggregation field ${field || "(empty)"} must be a ${numeric ? "numeric" : "scalar"}, non-sensitive field on the query model.`,
+                );
+            };
+            if (c.aggregation.groupBy) checkField(c.aggregation.groupBy);
+            for (const metric of c.aggregation.metrics)
+              if (metric.operation !== "count")
+                checkField(
+                  metric.field,
+                  ["sum", "avg"].includes(metric.operation),
+                );
+            if (
+              c.sortField &&
+              c.sortField !== "_id" &&
+              !c.aggregation.metrics.some(
+                (metric) => metric.name === c.sortField,
+              )
+            )
+              fail(
+                block,
+                "Sort aggregate results by _id or a configured metric name.",
+              );
           }
           if (
             ["update", "delete"].includes(c.operation) &&
@@ -116,6 +157,11 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
       }
       if (block.type === "access_policy") {
         const c = programConfigs.access_policy.parse(block.config);
+        if (c.ownerField && c.ownerField === c.tenantField)
+          fail(
+            block,
+            "Ownership and tenant isolation must use distinct model fields.",
+          );
         for (const role of c.roles)
           if (
             !service.blocks.some(
@@ -176,6 +222,58 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
     visited.add(id);
   };
   for (const id of byId.keys()) visit(id);
+  // Endpoint policies apply to every reachable query, including nested functions,
+  // branches and transactions. Validate their model bindings before delivery.
+  for (const endpoint of service.blocks.filter(
+    (block) => block.type === "rest_endpoint",
+  )) {
+    const policies = (endpoint.config as EndpointConfig).policyIds || [];
+    const pending = [...endpoint.connections],
+      checked = new Set<string>();
+    while (pending.length) {
+      const id = pending.pop()!;
+      if (checked.has(id)) continue;
+      checked.add(id);
+      pending.push(...(adjacency.get(id) || []));
+      const query = byId.get(id);
+      if (!query || query.type !== "query") continue;
+      const config = programConfigs.query.safeParse(query.config);
+      if (!config.success) continue;
+      const model = byId.get(config.data.modelId);
+      if (!model || model.type !== "db_model") continue;
+      const fields = new Set([
+        "_id",
+        ...(model.config as DbModelConfig).fields.map((field) => field.name),
+      ]);
+      const scopes = new Map<string, string>();
+      for (const policyId of new Set(
+        [...policies, config.data.policyId].filter(Boolean),
+      )) {
+        const target = byId.get(policyId);
+        const policy =
+          target?.type === "access_policy" &&
+          programConfigs.access_policy.safeParse(target.config);
+        if (!policy || !policy.success) continue;
+        for (const [kind, field] of [
+          ["owner", policy.data.ownerField],
+          ["tenant", policy.data.tenantField],
+        ]) {
+          if (!field) continue;
+          if (!fields.has(field))
+            fail(
+              query,
+              `Endpoint ${endpoint.label} applies policy field ${field}, which is absent from the selected model.`,
+            );
+          if (scopes.has(field) && scopes.get(field) !== kind)
+            fail(
+              query,
+              `Endpoint ${endpoint.label} applies conflicting ownership and tenant scopes to ${field}.`,
+            );
+          scopes.set(field, kind);
+        }
+      }
+    }
+  }
   return diagnostics;
 }
 
@@ -189,7 +287,15 @@ export function programFiles(
       {
         version: 1,
         blocks: service.blocks.filter(
-          (b) => !["env_var", "auth_block", "middleware", "health_check", "error_handler", "audit_log"].includes(b.type),
+          (b) =>
+            ![
+              "env_var",
+              "auth_block",
+              "middleware",
+              "health_check",
+              "error_handler",
+              "audit_log",
+            ].includes(b.type),
         ),
       },
       null,

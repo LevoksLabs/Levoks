@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { ElementNode, Page, ElementType, CONTAINER_TYPES } from "@/types";
+import { ElementNode, Page, ElementType, CONTAINER_TYPES, DesignToken, ComponentDefinition, DesignAsset } from "@/types";
 import { generateElementId, generatePageId, deepCloneSubtree, syncCounters } from "@/lib/idGenerator";
 import { DEFAULT_LAYOUT, DEFAULT_STYLES, DEFAULT_PROPS } from "@/lib/defaults";
 import type { TemplateElement } from "@/types/template";
@@ -8,16 +8,26 @@ import {
     findParentAndIndex, reorderSiblings, detachElement, attachElement,
 } from "./editorHelpers";
 
-const MAX_HISTORY = 50;
+import { useEditorUIStore } from "./editorUIStore";
+import { patchElement, patchLayout, resolveElement } from "@/lib/design";
+import { groupElements, ungroupElements } from "@/lib/grouping";
+import { componentDefinition, componentInstance } from "@/lib/design-components";
+import { projectHistory, withProjectHistory } from "./projectHistory";
 type NewElement = Omit<ElementNode, "id" | "parentId" | "children" | "layout"> & { layout?: Partial<ElementNode["layout"]>; children?: NewElement[] };
 
-interface HistorySnapshot {
-    elementsById: Record<string, ElementNode>;
-    rootIds: string[];
-    globalRootIds: string[];
-}
-
 interface EditorStore {
+    assets: Record<string, DesignAsset>;
+    tokens: Record<string, DesignToken>;
+    components: Record<string, ComponentDefinition>;
+    setAsset: (id: string, asset: DesignAsset | null) => void;
+    setToken: (id: string, token: DesignToken | null) => void;
+    saveComponent: (rootId: string, name: string) => void;
+    insertComponent: (id: string) => void;
+    detachComponent: (rootId: string) => void;
+    removeComponent: (id: string) => void;
+    groupSelection: () => void;
+    ungroupSelection: () => void;
+    resetBreakpoint: (id: string) => void;
     elementsById: Record<string, ElementNode>;
     rootIds: string[];
     globalRootIds: string[];
@@ -27,9 +37,9 @@ interface EditorStore {
     selectedElementId: string | null;
     selectedElementIds: string[];
     sidebarOpen: string | null;
-    clipboard: { element: ElementNode; subtree: Record<string, ElementNode> } | null;
-    past: HistorySnapshot[];
-    future: HistorySnapshot[];
+    clipboard: { element: ElementNode; roots: string[]; subtree: Record<string, ElementNode> } | null;
+    beginInteraction: () => void;
+    endInteraction: (cancel?: boolean) => void;
     canUndo: boolean;
     canRedo: boolean;
     canvasSettings: { backgroundColor: string; width: number; height: number };
@@ -52,7 +62,7 @@ interface EditorStore {
     selectElements: (ids: string[]) => void;
     toggleSelectElement: (id: string) => void;
     setSidebarOpen: (categoryId: string | null) => void;
-    reorderElements: (parentId: string | null, oldIndex: number, newIndex: number) => void;
+    reorderElements: (parentId: string | null, oldIndex: number, newIndex: number, scope?: "page" | "global") => void;
     undo: () => void;
     redo: () => void;
     bringForward: (id: string) => void;
@@ -60,6 +70,7 @@ interface EditorStore {
     bringToFront: (id: string) => void;
     sendToBack: (id: string) => void;
     copyElement: (id: string) => void;
+    copyElements: (ids: string[]) => void;
     cutElement: (id: string) => void;
     pasteElement: () => void;
     addPage: (title?: string) => string;
@@ -93,22 +104,8 @@ function makeLayout(type: ElementType, overrides?: Partial<ElementNode["layout"]
     };
 }
 
-function pushHistory(state: EditorStore): Partial<EditorStore> {
-    const snap: HistorySnapshot = {
-        elementsById: state.elementsById,
-        rootIds: state.rootIds,
-        globalRootIds: state.globalRootIds,
-    };
-    return {
-        past: [...state.past, snap].slice(-MAX_HISTORY),
-        future: [],
-        canUndo: true,
-        canRedo: false,
-    };
-}
-
 function updateLayout(el: ElementNode, patch: Partial<ElementNode["layout"]>): ElementNode {
-    return { ...el, layout: { ...el.layout, ...patch } };
+    return patchLayout(el, patch, useEditorUIStore.getState().breakpoint);
 }
 
 // Build nested elements from template data (old format with nested children objects)
@@ -153,7 +150,7 @@ function buildTemplateElements(
 
 const defaultPageId = generatePageId();
 
-export const useEditorStore = create<EditorStore>((set, get) => ({
+export const useEditorStore = create<EditorStore>(withProjectHistory("editor", ["assets", "tokens", "components", "elementsById", "rootIds", "globalRootIds", "pages", "activePageId", "pageElementMap", "canvasSettings"], (set, get) => ({
     elementsById: {},
     rootIds: [],
     globalRootIds: [],
@@ -162,13 +159,72 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     pageElementMap: { [defaultPageId]: [] },
     selectedElementId: null,
     selectedElementIds: [],
+    beginInteraction: () => projectHistory.begin("editor"),
+    endInteraction: (cancel = false) => projectHistory.end(cancel),
+    assets: {}, tokens: {}, components: {},
+    setAsset: (id, asset) => set(state => {
+        const assets = { ...state.assets };
+        if (asset) assets[id] = asset; else delete assets[id];
+        const detach = (nodes: Record<string, ElementNode>) => Object.fromEntries(Object.entries(nodes).map(([key, node]) => [key, !asset && node.props.assetId === id ? { ...node, props: { ...node.props, src: node.props.src || state.assets[id]?.source || "", assetId: "" } } : node]));
+        return {  assets, elementsById: detach(state.elementsById), components: Object.fromEntries(Object.entries(state.components).map(([key, definition]) => [key, { ...definition, nodes: detach(definition.nodes) }])) };
+    }),
+    setToken: (id, token) => set(state => {
+        const tokens = { ...state.tokens };
+        if (token) tokens[id] = token; else delete tokens[id];
+        let elementsById = state.elementsById;
+        let components = state.components;
+        if (!token && state.tokens[id]) {
+            const value = state.tokens[id].value;
+            const styles = (input: ElementNode["styles"] = {}) => Object.fromEntries(Object.entries(input).map(([key, entry]) => [key, typeof entry === "string" ? entry.replaceAll(`var(--lv-${id})`, value) : entry]));
+            const freeze = (nodes: Record<string, ElementNode>) => Object.fromEntries(Object.entries(nodes).map(([key, node]) => [key, { ...node, styles: styles(node.styles), ...(node.responsive ? { responsive: Object.fromEntries(Object.entries(node.responsive).map(([bp, override]) => [bp, { ...override, styles: styles(override.styles) }])) } : {}) }]));
+            elementsById = freeze(elementsById);
+            components = Object.fromEntries(Object.entries(components).map(([key, definition]) => [key, { ...definition, nodes: freeze(definition.nodes) }]));
+        }
+        return {  tokens, elementsById, components };
+    }),
+    resetBreakpoint: (id) => set(state => {
+        const element = state.elementsById[id], breakpoint = useEditorUIStore.getState().breakpoint;
+        if (!element || breakpoint === "base") return {};
+        const responsive = { ...element.responsive }; delete responsive[breakpoint];
+        return {  elementsById: { ...state.elementsById, [id]: { ...element, responsive } } };
+    }),
+    saveComponent: (rootId, name) => set(state => {
+        const selected = state.elementsById[rootId]; if (!selected) return {};
+        if (selected.component && selected.component.node !== state.components[selected.component.id]?.rootId) return {};
+        const id = selected.component?.id || generateElementId("component");
+        const definition = componentDefinition(rootId, state.elementsById, name, id);
+        const elementsById = { ...state.elementsById };
+        const roots = Object.values(elementsById).filter(node => node.component?.id === id && node.component.node === state.components[id]?.rootId).map(node => node.id);
+        if (!roots.includes(rootId)) roots.push(rootId);
+        for (const root of roots) {
+            const result = componentInstance(definition, id, elementsById, root, root === rootId);
+            result.removed.forEach(key => delete elementsById[key]); Object.assign(elementsById, result.nodes);
+        }
+        return {  components: { ...state.components, [id]: definition }, elementsById };
+    }),
+    insertComponent: (id) => set(state => {
+        const definition = state.components[id]; if (!definition) return {};
+        const result = componentInstance(definition, id, state.elementsById);
+        result.nodes[result.rootId].layout.x += 24; result.nodes[result.rootId].layout.y += 24;
+        return {  elementsById: { ...state.elementsById, ...result.nodes }, rootIds: [...state.rootIds, result.rootId], selectedElementId: result.rootId, selectedElementIds: [result.rootId] };
+    }),
+    detachComponent: (rootId) => set(state => {
+        const elementsById = { ...state.elementsById };
+        collectDescendantIds(elementsById, rootId).forEach(id => { const node = { ...elementsById[id] }; delete node.component; elementsById[id] = node; });
+        return {  elementsById };
+    }),
+    removeComponent: (id) => set(state => {
+        const components = { ...state.components }; delete components[id];
+        const elementsById = Object.fromEntries(Object.entries(state.elementsById).map(([key, node]) => { const copy = { ...node }; if (copy.component?.id === id) delete copy.component; return [key, copy]; }));
+        return {  elementsById, components };
+    }),
+    groupSelection: () => set(state => { const result = groupElements(state); return result ? {  ...result } : {}; }),
+    ungroupSelection: () => set(state => { const result = ungroupElements(state); return result ? {  ...result } : {}; }),
     sidebarOpen: "add",
     clipboard: null,
-    past: [],
-    future: [],
     canUndo: false,
     canRedo: false,
-    canvasSettings: { backgroundColor: "#ffffff", width: 1280, height: 900 },
+    canvasSettings: { backgroundColor: "#ffffff", width: 1920, height: 1080 },
     frontendGeneratedCode: null,
     frontendCodePreviewOpen: false,
 
@@ -190,6 +246,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             label: elementData.label,
             props: elementData.props || { ...(DEFAULT_PROPS[elementData.type] || {}) },
             styles: elementData.styles || { ...(DEFAULT_STYLES[elementData.type] || {}) },
+            responsive: elementData.responsive, vector: elementData.vector, motion: elementData.motion,
             animation: elementData.animation,
             actions: elementData.actions,
             id,
@@ -199,7 +256,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         };
         set(state => {
             const validParent = parentId && state.elementsById[parentId] ? parentId : undefined;
-            const hist = pushHistory(state);
             const next = { ...state.elementsById, ...nested.byId, [id]: { ...element, parentId: validParent || null } };
             let newRoots = state.rootIds;
             if (validParent && next[validParent]) {
@@ -207,7 +263,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             } else {
                 newRoots = [...state.rootIds, id];
             }
-            return { elementsById: next, rootIds: newRoots, selectedElementId: id, selectedElementIds: [id], ...hist };
+            return { elementsById: next, rootIds: newRoots, selectedElementId: id, selectedElementIds: [id] };
         });
         return id;
     },
@@ -215,19 +271,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     updateElement: (id, updates) => {
         set(state => {
             if (!state.elementsById[id]) return state;
-            const hist = pushHistory(state);
             const el = state.elementsById[id];
             const next = { ...state.elementsById };
-            next[id] = {
-                ...el,
-                ...updates,
-                layout: updates.layout ? { ...el.layout, ...updates.layout } : el.layout,
-                props: updates.props ? { ...el.props, ...updates.props } : el.props,
-                styles: updates.styles ? { ...el.styles, ...updates.styles } : el.styles,
-                children: updates.children ?? el.children,
-                id: el.id, parentId: el.parentId,
-            };
-            return { elementsById: next, ...hist };
+            next[id] = patchElement(el, updates, useEditorUIStore.getState().breakpoint);
+            return { elementsById: next };
         });
     },
 
@@ -248,16 +295,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     updateElementOpacity: (id, opacity) => {
         set(state => {
             if (!state.elementsById[id]) return state;
-            const hist = pushHistory(state);
-            return { elementsById: { ...state.elementsById, [id]: updateLayout(state.elementsById[id], { opacity }) }, ...hist };
+            return { elementsById: { ...state.elementsById, [id]: updateLayout(state.elementsById[id], { opacity }) } };
         });
     },
 
     updateElementRotation: (id, rotation) => {
         set(state => {
             if (!state.elementsById[id]) return state;
-            const hist = pushHistory(state);
-            return { elementsById: { ...state.elementsById, [id]: updateLayout(state.elementsById[id], { rotation }) }, ...hist };
+            return { elementsById: { ...state.elementsById, [id]: updateLayout(state.elementsById[id], { rotation }) } };
         });
     },
 
@@ -272,8 +317,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         set(state => {
             const el = state.elementsById[id];
             if (!el) return state;
-            const hist = pushHistory(state);
-            return { elementsById: { ...state.elementsById, [id]: updateLayout(el, { visible: !el.layout.visible }) }, ...hist };
+            return { elementsById: { ...state.elementsById, [id]: updateLayout(el, { visible: !el.layout.visible }) } };
         });
     },
 
@@ -281,8 +325,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         set(state => {
             const el = state.elementsById[id];
             if (!el) return state;
-            const hist = pushHistory(state);
-            return { elementsById: { ...state.elementsById, [id]: updateLayout(el, { locked: !el.layout.locked }) }, ...hist };
+            return { elementsById: { ...state.elementsById, [id]: updateLayout(el, { locked: !el.layout.locked }) } };
         });
     },
 
@@ -291,7 +334,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             if (!state.elementsById[id]) return state;
             const toDelete = collectDescendantIds(state.elementsById, id);
             const el = state.elementsById[id];
-            const hist = pushHistory(state);
             const next = { ...state.elementsById };
             if (el.parentId && next[el.parentId]) {
                 next[el.parentId] = { ...next[el.parentId], children: next[el.parentId].children.filter(c => !toDelete.has(c)) };
@@ -303,7 +345,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
                 globalRootIds: state.globalRootIds.filter(r => !toDelete.has(r)),
                 selectedElementId: toDelete.has(state.selectedElementId || "") ? null : state.selectedElementId,
                 selectedElementIds: state.selectedElementIds.filter(s => !toDelete.has(s)),
-                ...hist,
+                
             };
         });
     },
@@ -318,7 +360,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             y: allCloned[clonedRootId].layout.y + 20,
         });
         set(s => {
-            const hist = pushHistory(s);
             const next = { ...s.elementsById, ...allCloned };
             let newRoots = s.rootIds;
             let newGlobalRoots = s.globalRootIds;
@@ -329,7 +370,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             } else {
                 newRoots = [...s.rootIds, clonedRootId];
             }
-            return { elementsById: next, rootIds: newRoots, globalRootIds: newGlobalRoots, selectedElementId: clonedRootId, ...hist };
+            return { elementsById: next, rootIds: newRoots, globalRootIds: newGlobalRoots, selectedElementId: clonedRootId, selectedElementIds:[clonedRootId] };
         });
     },
 
@@ -339,10 +380,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             if (targetParentId && !state.elementsById[targetParentId]) return state;
             if (targetParentId && isAncestorOf(state.elementsById, id, targetParentId)) return state;
             if (targetParentId === id) return state;
-            const hist = pushHistory(state);
             const d = detachElement(state.elementsById, state.rootIds, id);
             const a = attachElement(d.byId, d.rootIds, id, targetParentId, index);
-            return { elementsById: a.byId, rootIds: a.rootIds, ...hist };
+            return { elementsById: a.byId, rootIds: a.rootIds };
         });
     },
 
@@ -361,64 +401,36 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         });
     },
 
-    setSidebarOpen: (categoryId) => set({ sidebarOpen: categoryId }),
+    setSidebarOpen: (categoryId) => {
+        if (categoryId && !["settings", "secrets", "code"].includes(categoryId)) useEditorUIStore.setState({ canvasMode: categoryId === "backend" ? "backend" : categoryId === "routes" ? "routes" : "ui" });
+        set({ sidebarOpen: categoryId });
+    },
 
-    reorderElements: (parentId, oldIndex, newIndex) => {
+    reorderElements: (parentId, oldIndex, newIndex, scope = "page") => {
         set(state => {
             if (oldIndex === newIndex) return state;
-            const hist = pushHistory(state);
             if (!parentId) {
-                const newRoots = reorderSiblings(state.rootIds, oldIndex, newIndex);
-                return newRoots === state.rootIds ? state : { rootIds: newRoots, ...hist };
+                const key = scope === "global" ? "globalRootIds" : "rootIds";
+                const newRoots = reorderSiblings(state[key], oldIndex, newIndex);
+                return newRoots === state[key] ? state : { [key]: newRoots };
             }
             const parent = state.elementsById[parentId];
             if (!parent) return state;
             const newChildren = reorderSiblings(parent.children, oldIndex, newIndex);
             return {
                 elementsById: { ...state.elementsById, [parentId]: { ...parent, children: newChildren } },
-                ...hist,
+                
             };
         });
     },
 
-    undo: () => {
-        set(state => {
-            if (state.past.length === 0) return state;
-            const newPast = [...state.past];
-            const prev = newPast.pop()!;
-            return {
-                past: newPast,
-                elementsById: prev.elementsById,
-                rootIds: prev.rootIds,
-                globalRootIds: prev.globalRootIds,
-                future: [{ elementsById: state.elementsById, rootIds: state.rootIds, globalRootIds: state.globalRootIds }, ...state.future],
-                canUndo: newPast.length > 0,
-                canRedo: true,
-            };
-        });
-    },
+    undo: () => projectHistory.undo(),
+    redo: () => projectHistory.redo(),
 
-    redo: () => {
-        set(state => {
-            if (state.future.length === 0) return state;
-            const newFuture = [...state.future];
-            const next = newFuture.shift()!;
-            return {
-                future: newFuture,
-                elementsById: next.elementsById,
-                rootIds: next.rootIds,
-                globalRootIds: next.globalRootIds,
-                past: [...state.past, { elementsById: state.elementsById, rootIds: state.rootIds, globalRootIds: state.globalRootIds }],
-                canUndo: true,
-                canRedo: newFuture.length > 0,
-            };
-        });
-    },
-
-    getElement: (id) => get().elementsById[id],
+    getElement: (id) => { const node = get().elementsById[id]; return node ? resolveElement(node, useEditorUIStore.getState().breakpoint) : undefined; },
     getSelectedElement: () => {
         const { selectedElementId, elementsById } = get();
-        return selectedElementId ? elementsById[selectedElementId] : undefined;
+        return selectedElementId ? get().getElement(selectedElementId) : undefined;
     },
     getBreadcrumbPath: (id) => getBreadcrumbPathHelper(get().elementsById, id),
 
@@ -438,66 +450,96 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     },
 
     bringForward: (id) => {
-        const info = findParentAndIndex(get().elementsById, get().rootIds, id);
+        const scope = get().globalRootIds.includes(id) ? "global" : "page";
+        const roots = scope === "global" ? get().globalRootIds : get().rootIds;
+        const info = findParentAndIndex(get().elementsById, roots, id);
         if (!info) return;
-        const siblings = info.parentId ? get().elementsById[info.parentId]?.children : get().rootIds;
+        const siblings = info.parentId ? get().elementsById[info.parentId]?.children : roots;
         if (info.index >= siblings.length - 1) return;
-        get().reorderElements(info.parentId, info.index, info.index + 1);
+        get().reorderElements(info.parentId, info.index, info.index + 1, scope);
     },
     sendBackward: (id) => {
-        const info = findParentAndIndex(get().elementsById, get().rootIds, id);
+        const scope = get().globalRootIds.includes(id) ? "global" : "page";
+        const roots = scope === "global" ? get().globalRootIds : get().rootIds;
+        const info = findParentAndIndex(get().elementsById, roots, id);
         if (!info || info.index <= 0) return;
-        get().reorderElements(info.parentId, info.index, info.index - 1);
+        get().reorderElements(info.parentId, info.index, info.index - 1, scope);
     },
     bringToFront: (id) => {
-        const info = findParentAndIndex(get().elementsById, get().rootIds, id);
+        const scope = get().globalRootIds.includes(id) ? "global" : "page";
+        const roots = scope === "global" ? get().globalRootIds : get().rootIds;
+        const info = findParentAndIndex(get().elementsById, roots, id);
         if (!info) return;
-        const siblings = info.parentId ? get().elementsById[info.parentId]?.children : get().rootIds;
+        const siblings = info.parentId ? get().elementsById[info.parentId]?.children : roots;
         if (info.index >= siblings.length - 1) return;
-        get().reorderElements(info.parentId, info.index, siblings.length - 1);
+        get().reorderElements(info.parentId, info.index, siblings.length - 1, scope);
     },
     sendToBack: (id) => {
-        const info = findParentAndIndex(get().elementsById, get().rootIds, id);
+        const scope = get().globalRootIds.includes(id) ? "global" : "page";
+        const roots = scope === "global" ? get().globalRootIds : get().rootIds;
+        const info = findParentAndIndex(get().elementsById, roots, id);
         if (!info || info.index <= 0) return;
-        get().reorderElements(info.parentId, info.index, 0);
+        get().reorderElements(info.parentId, info.index, 0, scope);
     },
 
-    copyElement: (id) => {
-        const s = get();
-        const el = s.elementsById[id];
-        if (!el) return;
+    copyElement: (id) => get().copyElements([id]),
+    copyElements: (ids) => {
+        const state = get();
+        const roots = [...new Set(ids)].filter(id => {
+            const element = state.elementsById[id];
+            if (!element) return false;
+            let parent = element.parentId;
+            while (parent) {
+                if (ids.includes(parent)) return false;
+                parent = state.elementsById[parent]?.parentId;
+            }
+            return true;
+        });
+        if (!roots.length) return;
         const subtree: Record<string, ElementNode> = {};
-        const stack = [id];
+        const stack = [...roots];
         while (stack.length) {
-            const cur = stack.pop()!;
-            const e = s.elementsById[cur];
-            if (e) { subtree[cur] = e; stack.push(...e.children); }
+            const id = stack.pop()!;
+            const element = state.elementsById[id];
+            if (element) { subtree[id] = element; stack.push(...element.children); }
         }
-        set({ clipboard: { element: el, subtree } });
+        roots.forEach(id => {
+            const element = subtree[id];
+            let x = element.layout.x, y = element.layout.y, parent = element.parentId;
+            while (parent && state.elementsById[parent]) {
+                const ancestor = state.elementsById[parent];
+                x += ancestor.layout.x; y += ancestor.layout.y; parent = ancestor.parentId;
+            }
+            subtree[id] = { ...updateLayout(element, { x, y }), parentId: null };
+        });
+        set({ clipboard: { element: subtree[roots[0]], roots, subtree } });
     },
-
     cutElement: (id) => {
+        if (get().elementsById[id]?.layout.locked) return;
         get().copyElement(id);
         get().deleteElement(id);
     },
-
     pasteElement: () => {
         const { clipboard } = get();
         if (!clipboard) return;
-        const { clonedRootId, allCloned } = deepCloneSubtree(clipboard.element, clipboard.subtree, null);
-        allCloned[clonedRootId] = updateLayout(allCloned[clonedRootId], {
-            x: allCloned[clonedRootId].layout.x + 20,
-            y: allCloned[clonedRootId].layout.y + 20,
+        const roots: string[] = [];
+        const elements: Record<string, ElementNode> = {};
+        clipboard.roots.forEach(id => {
+            const { clonedRootId, allCloned } = deepCloneSubtree(clipboard.subtree[id], clipboard.subtree, null);
+            allCloned[clonedRootId] = updateLayout(allCloned[clonedRootId], {
+                x: allCloned[clonedRootId].layout.x + 20,
+                y: allCloned[clonedRootId].layout.y + 20,
+            });
+            roots.push(clonedRootId);
+            Object.assign(elements, allCloned);
         });
-        set(s => {
-            const hist = pushHistory(s);
-            return {
-                elementsById: { ...s.elementsById, ...allCloned },
-                rootIds: [...s.rootIds, clonedRootId],
-                selectedElementId: clonedRootId,
-                ...hist,
-            };
-        });
+        set(s => ({
+            
+            elementsById: { ...s.elementsById, ...elements },
+            rootIds: [...s.rootIds, ...roots],
+            selectedElementId: roots[0],
+            selectedElementIds: roots,
+        }));
     },
 
     addPage: (title) => {
@@ -512,7 +554,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             rootIds: [],
             selectedElementId: null,
             selectedElementIds: [],
-            past: [], future: [], canUndo: false, canRedo: false,
         }));
         return id;
     },
@@ -539,7 +580,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             elementsById: next,
             pageElementMap: newMap,
             selectedElementId: null, selectedElementIds: [],
-            past: [], future: [], canUndo: false, canRedo: false,
         });
     },
 
@@ -558,13 +598,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         const state = get();
         if (id === state.activePageId) return;
         if (!state.pages.find(p => p.id === id)) return;
-        set({
+        projectHistory.without(() => set({
             pageElementMap: { ...state.pageElementMap, [state.activePageId]: state.rootIds },
             activePageId: id,
             rootIds: state.pageElementMap[id] || [],
             selectedElementId: null, selectedElementIds: [],
-            past: [], future: [], canUndo: false, canRedo: false,
-        });
+        }));
     },
 
     addGlobalElement: (elementData) => {
@@ -574,13 +613,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             type: elementData.type, label: elementData.label,
             props: elementData.props || { ...(DEFAULT_PROPS[elementData.type] || {}) },
             styles: elementData.styles || { ...(DEFAULT_STYLES[elementData.type] || {}) },
+            responsive: elementData.responsive, vector: elementData.vector, motion: elementData.motion,
             animation: elementData.animation, actions: elementData.actions,
             id, parentId: null,
             layout: makeLayout(elementData.type, elementData.layout),
             children: nested.rootIds,
         };
         set(s => ({
-            ...pushHistory(s),
+            
             elementsById: { ...s.elementsById, ...nested.byId, [id]: element },
             globalRootIds: [...s.globalRootIds, id],
             selectedElementId: id,
@@ -595,7 +635,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             const next = { ...state.elementsById };
             for (const did of toDelete) delete next[did];
             return {
-                ...pushHistory(state),
+                
                 elementsById: next,
                 globalRootIds: state.globalRootIds.filter(r => !toDelete.has(r)),
                 selectedElementId: toDelete.has(state.selectedElementId || "") ? null : state.selectedElementId,
@@ -606,11 +646,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     loadTemplate: (templateElements) => {
         set(state => {
-            const hist = pushHistory(state);
             const { byId, rootIds } = buildTemplateElements(templateElements, null);
             const retained = { ...state.elementsById };
             for (const root of state.rootIds) for (const id of collectDescendantIds(state.elementsById, root)) delete retained[id];
-            return { elementsById: { ...retained, ...byId }, rootIds, selectedElementId: null, selectedElementIds: [], ...hist };
+            return { elementsById: { ...retained, ...byId }, rootIds, selectedElementId: null, selectedElementIds: [] };
         });
     },
 
@@ -619,4 +658,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     },
     setFrontendGeneratedCode: (code) => set({ frontendGeneratedCode: code }),
     setFrontendCodePreviewOpen: (open) => set({ frontendCodePreviewOpen: open }),
-}));
+}), (state, snapshot) => ({
+    selectedElementIds: state.activePageId === snapshot.activePageId ? state.selectedElementIds.filter(id => snapshot.elementsById?.[id]) : [],
+    selectedElementId: state.activePageId === snapshot.activePageId && snapshot.elementsById?.[state.selectedElementId || ""] ? state.selectedElementId : null,
+    frontendGeneratedCode: null,
+})));
+projectHistory.subscribe(scope => {
+    useEditorStore.setState({ canUndo: projectHistory.canUndo, canRedo: projectHistory.canRedo });
+    if (scope) useEditorUIStore.setState({ canvasMode: scope === "backend" ? "backend" : scope === "routing" ? "routes" : "ui" });
+});

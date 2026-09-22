@@ -58,7 +58,7 @@ export default function UserMenu({ onOpenProfile }: UserMenuProps) {
         onClick={() => router.push("/auth/signin")}
       >
         <User size={14} />
-        Sign In
+        <span>Sign In</span>
       </button>
     );
   }
@@ -80,6 +80,7 @@ export default function UserMenu({ onOpenProfile }: UserMenuProps) {
         className={`user-menu-trigger ${open ? "active" : ""}`}
         onClick={() => setOpen(!open)}
         aria-label="User menu"
+        aria-expanded={open}
       >
         {user?.image ? (
           <img

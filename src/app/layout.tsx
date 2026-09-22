@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import AuthProvider from "@/components/AuthProvider";
 import "./globals.css";
+import "./editor.css";
 
 export const metadata: Metadata = {
   title: "Levoks - Database-Ready Website Builder",

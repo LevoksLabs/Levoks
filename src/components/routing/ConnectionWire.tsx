@@ -27,6 +27,10 @@ const ConnectionWire: React.FC<Props> = ({ connection, fromPos, toPos }) => {
     return (
         <g
             className={`routing-wire-group ${isSelected ? "routing-wire-selected" : ""}`}
+            tabIndex={0}
+            role="button"
+            aria-label={`Select connection ${connection.label || connection.id}`}
+            onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();selectConnection(connection.id);}}}
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
         >
@@ -43,12 +47,14 @@ const ConnectionWire: React.FC<Props> = ({ connection, fromPos, toPos }) => {
                 }}
             />
 
+            <defs><marker id={`arrow-${connection.id}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill={isSelected?'var(--accent)':'var(--text-3)'}/></marker></defs>
             {/* Visible wire */}
             <path
                 d={d}
                 fill="none"
                 stroke={isSelected ? "var(--accent)" : "var(--text-3)"}
                 strokeWidth={isSelected ? 2.5 : 2}
+                markerEnd={`url(#arrow-${connection.id})`}
                 strokeDasharray={connection.animated ? "none" : "6 3"}
                 opacity={hovered || isSelected ? 1 : 0.6}
                 className={connection.animated ? "routing-wire-animated" : ""}
@@ -56,7 +62,7 @@ const ConnectionWire: React.FC<Props> = ({ connection, fromPos, toPos }) => {
 
             {/* Flow dots for animated wires */}
             {connection.animated && (
-                <circle r="3" fill="var(--accent)" opacity="0.9">
+                <circle className="routing-flow-dot" r="3" fill="var(--accent)" opacity="0.9">
                     <animateMotion
                         dur="2s"
                         repeatCount="indefinite"

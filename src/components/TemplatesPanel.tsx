@@ -77,7 +77,7 @@ const PreviewModal: React.FC<{
                 src={template.previewUrl}
                 title={`Preview: ${template.name}`}
                 className="template-preview-iframe"
-                sandbox="allow-scripts allow-same-origin"
+                sandbox="allow-scripts" referrerPolicy="no-referrer"
             />
         </div>
     </div>

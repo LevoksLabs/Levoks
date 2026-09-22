@@ -6,13 +6,190 @@ import type {
   BlockConfig,
   ServiceContainer,
   EndpointConfig,
+  DbModelConfig,
 } from "@/types/backend";
 import {
   controlSchema,
   programConfigs,
   type ProgramBlockType,
+  type AggregationConfig,
 } from "@/lib/backend/program-schema";
 import { useBackendStore } from "@/store/backendStore";
+
+function AggregateFields({
+  value,
+  fields,
+  onChange,
+}: {
+  value: AggregationConfig;
+  fields: DbModelConfig["fields"];
+  onChange: (value: AggregationConfig) => void;
+}) {
+  const scalar = [{ name: "_id", type: "objectId" }, ...fields].filter(
+    (field) =>
+      !["array", "object"].includes(field.type) &&
+      !/password|secret|token/i.test(field.name),
+  );
+  return (
+    <fieldset className="bi-section">
+      <legend>Aggregation</legend>
+      <label>
+        Group by
+        <select
+          aria-label="Aggregate group field"
+          className="bi-select"
+          value={value.groupBy}
+          onChange={(event) =>
+            onChange({ ...value, groupBy: event.target.value })
+          }
+        >
+          <option value="">All matching records</option>
+          {scalar.map((field) => (
+            <option key={field.name} value={field.name}>
+              {field.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="bi-hint">
+        Policies and filters apply before grouping. Results expose the group as
+        _id and each named metric.
+      </p>
+      {value.metrics.map((metric, index) => (
+        <fieldset key={`${index}-${metric.name}`}>
+          <legend>Metric {index + 1}</legend>
+          <label>
+            Result name
+            <input
+              className="bi-input"
+              aria-label={`Metric ${index + 1} name`}
+              defaultValue={metric.name}
+              required
+              pattern="[A-Za-z_][A-Za-z0-9_]*"
+              maxLength={100}
+              onBlur={(event) => {
+                const name = event.target.value;
+                event.target.setCustomValidity(
+                  ["_id", "__proto__", "prototype", "constructor"].includes(
+                    name,
+                  ) ||
+                    value.metrics.some(
+                      (item, position) =>
+                        position !== index && item.name === name,
+                    )
+                    ? "Choose a unique, non-reserved result name."
+                    : "",
+                );
+                if (event.target.reportValidity())
+                  onChange({
+                    ...value,
+                    metrics: value.metrics.map((item, position) =>
+                      position === index ? { ...item, name } : item,
+                    ),
+                  });
+              }}
+            />
+          </label>
+          <label>
+            Calculation
+            <select
+              className="bi-select"
+              aria-label={`Metric ${index + 1} calculation`}
+              value={metric.operation}
+              onChange={(event) =>
+                onChange({
+                  ...value,
+                  metrics: value.metrics.map((item, position) =>
+                    position === index
+                      ? {
+                          ...item,
+                          operation: event.target
+                            .value as typeof metric.operation,
+                        }
+                      : item,
+                  ),
+                })
+              }
+            >
+              {["count", "sum", "avg", "min", "max"].map((operation) => (
+                <option key={operation} value={operation}>
+                  {operation}
+                </option>
+              ))}
+            </select>
+          </label>
+          {metric.operation !== "count" && (
+            <label>
+              Model field
+              <select
+                className="bi-select"
+                aria-label={`Metric ${index + 1} field`}
+                value={metric.field}
+                onChange={(event) =>
+                  onChange({
+                    ...value,
+                    metrics: value.metrics.map((item, position) =>
+                      position === index
+                        ? { ...item, field: event.target.value }
+                        : item,
+                    ),
+                  })
+                }
+              >
+                <option value="">Choose a field</option>
+                {scalar
+                  .filter(
+                    (field) =>
+                      !["sum", "avg"].includes(metric.operation) ||
+                      field.type === "number",
+                  )
+                  .map((field) => (
+                    <option key={field.name} value={field.name}>
+                      {field.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
+          <button
+            className="bi-btn"
+            disabled={value.metrics.length === 1}
+            onClick={() =>
+              onChange({
+                ...value,
+                metrics: value.metrics.filter(
+                  (_, position) => position !== index,
+                ),
+              })
+            }
+          >
+            Remove metric {index + 1}
+          </button>
+        </fieldset>
+      ))}
+      <button
+        className="bi-btn"
+        disabled={value.metrics.length >= 8}
+        onClick={() => {
+          let suffix = 1;
+          while (
+            value.metrics.some((metric) => metric.name === `count${suffix}`)
+          )
+            suffix++;
+          onChange({
+            ...value,
+            metrics: [
+              ...value.metrics,
+              { name: `count${suffix}`, operation: "count", field: "" },
+            ],
+          });
+        }}
+      >
+        Add aggregate metric
+      </button>
+    </fieldset>
+  );
+}
 
 type Value = string | number | boolean | null;
 const configuration = new Set([
@@ -307,9 +484,15 @@ export default function ProgramInspector({
             {select(
               "Operation",
               c.operation,
-              ["find", "findOne", "create", "update", "delete", "count"].map(
-                (id) => ({ id, label: id }),
-              ),
+              [
+                "find",
+                "findOne",
+                "create",
+                "update",
+                "delete",
+                "count",
+                "aggregate",
+              ].map((id) => ({ id, label: id })),
               (operation) =>
                 update({ operation: operation as typeof c.operation }),
             )}
@@ -320,6 +503,20 @@ export default function ProgramInspector({
                 .filter((b) => b.type === "access_policy")
                 .map((b) => ({ id: b.id, label: b.label })),
               (policyId) => update({ policyId }),
+            )}
+            {c.operation === "aggregate" && (
+              <AggregateFields
+                value={c.aggregation}
+                fields={
+                  (
+                    service.blocks.find(
+                      (block) =>
+                        block.id === c.modelId && block.type === "db_model",
+                    )?.config as DbModelConfig | undefined
+                  )?.fields || []
+                }
+                onChange={(aggregation) => update({ aggregation })}
+              />
             )}
             <Mapping
               label="Filter"

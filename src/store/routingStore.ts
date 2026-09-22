@@ -1,3 +1,4 @@
+import { withProjectHistory } from "./projectHistory";
 // ═══════════════════════════════════════════════════
 // Routing Canvas — Zustand Store
 // ═══════════════════════════════════════════════════
@@ -103,7 +104,7 @@ function getElementDisplayLabel(el: ElementNode): string {
 
 // ─── Store Implementation ───
 
-export const useRoutingStore = create<RoutingStore>((set, get) => ({
+export const useRoutingStore = create<RoutingStore>(withProjectHistory("routing", ["nodes", "connections"], (set, get) => ({
     nodes: [],
     connections: [],
     zoom: 1,
@@ -396,4 +397,4 @@ export const useRoutingStore = create<RoutingStore>((set, get) => ({
 
         set({ nodes: updatedNodes });
     },
-}));
+}), (state, document) => ({ selectedNodeId: document.nodes?.some(node => node.id === state.selectedNodeId) ? state.selectedNodeId : null, selectedConnectionId: document.connections?.some(connection => connection.id === state.selectedConnectionId) ? state.selectedConnectionId : null, connectingFrom: null })));

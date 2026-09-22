@@ -1,3 +1,5 @@
+import { withProjectHistory } from "./projectHistory";
+import { withoutWorkflowTarget } from "@/lib/backend/workflow-editor";
 import { create } from "zustand";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -83,7 +85,7 @@ function serviceIdentity(services: ServiceContainer[], base: string) {
     return { name, port };
 }
 
-export const useBackendStore = create<BackendStore>((set, get) => ({
+export const useBackendStore = create<BackendStore>(withProjectHistory("backend", ["services", "connections"], (set, get) => ({
     services: [],
     connections: [],
     selectedServiceId: null,
@@ -161,7 +163,7 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
             type: blockType,
             label: label || blockType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
             config: config as BlockConfig,
-            position: { x: 0, y: 0 },
+            position: { x: (service.blocks.length % 3) * 310, y: Math.floor(service.blocks.length / 3) * 230, placed: true },
             connections: [],
         };
 
@@ -180,7 +182,7 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
         set({
             services: get().services.map((s) =>
                 s.id === serviceId
-                    ? { ...s, blocks: s.blocks.filter((b) => b.id !== blockId).map(b => ({ ...b, connections: b.connections.filter(id => id !== blockId) })) }
+                    ? { ...s, blocks: s.blocks.filter((b) => b.id !== blockId).map(b => withoutWorkflowTarget(b, blockId)) }
                     : s
             ),
             selectedBlockId: get().selectedBlockId === blockId ? null : get().selectedBlockId,
@@ -227,7 +229,7 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
                         ...s,
                         blocks: s.blocks.map((b) =>
                             b.id === blockId
-                                ? { ...b, position: { x, y } }
+                                ? { ...b, position: { x, y, placed: true } }
                                 : b
                         ),
                     }
@@ -642,4 +644,4 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
         };
         set({ services: [...get().services, service] });
     },
-}));
+}), (state, document) => ({ selectedServiceId: document.services?.some(service => service.id === state.selectedServiceId) ? state.selectedServiceId : null, selectedBlockId: document.services?.some(service => service.blocks.some(block => block.id === state.selectedBlockId)) ? state.selectedBlockId : null, generatedCode: null })));

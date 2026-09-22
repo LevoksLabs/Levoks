@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { projectHistory } from "@/store/projectHistory";
 import { useRoutingStore } from "@/store/routingStore";
 import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
@@ -59,6 +60,8 @@ const RoutingNodeComponent: React.FC<Props> = ({ node }) => {
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, y: 0, nodeX: 0, nodeY: 0 });
 
+    const stopDrag = useRef<(() => void) | null>(null);
+    useEffect(() => () => stopDrag.current?.(), [node.id]);
     const isSelected = selectedNodeId === node.id;
     const ports = getPortsForNode(node.id);
     const inputPorts = ports.filter((p) => p.portType === "input");
@@ -87,9 +90,10 @@ const RoutingNodeComponent: React.FC<Props> = ({ node }) => {
     // ─── Drag to move ───
     const handleMouseDown = useCallback(
         (e: React.MouseEvent) => {
-            if ((e.target as HTMLElement).closest(".routing-port")) return;
+            if (e.button !== 0 || (e.target as HTMLElement).closest(".routing-port")) return;
             if ((e.target as HTMLElement).closest(".routing-node-remove")) return;
             e.stopPropagation();
+            projectHistory.begin("routing");
             setIsDragging(true);
             const zoom = useRoutingStore.getState().zoom;
             dragStart.current = {
@@ -108,13 +112,19 @@ const RoutingNodeComponent: React.FC<Props> = ({ node }) => {
                     dragStart.current.nodeY + dy
                 );
             };
-            const onMouseUp = () => {
-                setIsDragging(false);
+            const finish = (cancel: boolean) => {
+                stopDrag.current = null;
                 window.removeEventListener("mousemove", onMouseMove);
                 window.removeEventListener("mouseup", onMouseUp);
+                window.removeEventListener("blur", onCancel);
+                setIsDragging(false);
+                projectHistory.end(cancel);
             };
+            const onMouseUp = () => finish(false), onCancel = () => finish(true);
+            stopDrag.current = onCancel;
             window.addEventListener("mousemove", onMouseMove);
             window.addEventListener("mouseup", onMouseUp);
+            window.addEventListener("blur", onCancel);
         },
         [node.id, node.position, moveNode]
     );
@@ -128,13 +138,21 @@ const RoutingNodeComponent: React.FC<Props> = ({ node }) => {
     const handlePortMouseDown = (e: React.MouseEvent, port: NodePort) => {
         e.stopPropagation();
         e.preventDefault();
-        startConnecting(port);
+        if (!useRoutingStore.getState().connectingFrom) startConnecting(port);
     };
 
     const handlePortMouseUp = (e: React.MouseEvent, port: NodePort) => {
         e.stopPropagation();
-        if (connectingFrom) {
-            endConnecting(port);
+        const from = useRoutingStore.getState().connectingFrom;
+        if (from && from.id !== port.id) endConnecting(port);
+    };
+
+    const keyboardPort = (event: React.KeyboardEvent, port: NodePort) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault(); event.stopPropagation();
+        if (connectingFrom) endConnecting(port); else {
+            startConnecting(port);
+            useRoutingStore.getState().updateMousePos(node.position.x + (port.portType === "output" ? node.width : 0), node.position.y + (port.relativeY || 60));
         }
     };
 
@@ -153,6 +171,8 @@ const RoutingNodeComponent: React.FC<Props> = ({ node }) => {
             }}
             onMouseDown={handleMouseDown}
             onClick={handleClick}
+            tabIndex={0} role="group" aria-label={`${title} routing node`}
+            onFocus={event => { if (event.target === event.currentTarget) selectNode(node.id); }}
         >
             {/* Header */}
             <div
@@ -171,6 +191,7 @@ const RoutingNodeComponent: React.FC<Props> = ({ node }) => {
                 </div>
                 <button
                     className="routing-node-remove"
+                    aria-label={`Remove ${title} from routing canvas`}
                     onClick={(e) => {
                         e.stopPropagation();
                         removeNode(node.id);
@@ -187,6 +208,8 @@ const RoutingNodeComponent: React.FC<Props> = ({ node }) => {
                     {inputPorts.map((port) => (
                         <div
                             key={port.id}
+                            role="button" tabIndex={0} aria-label={`${title}: ${port.label} ${port.portType} port`} aria-pressed={connectingFrom?.id === port.id}
+                            onKeyDown={event => keyboardPort(event, port)}
                             className={`routing-port routing-port-input ${hoveredPortId === port.id ? "routing-port-hovered" : ""} ${connectingFrom && connectingFrom.portType === "output" ? "routing-port-connectable" : ""}`}
                             onMouseDown={(e) => handlePortMouseDown(e, port)}
                             onMouseUp={(e) => handlePortMouseUp(e, port)}
@@ -207,6 +230,8 @@ const RoutingNodeComponent: React.FC<Props> = ({ node }) => {
                     {outputPorts.map((port) => (
                         <div
                             key={port.id}
+                            role="button" tabIndex={0} aria-label={`${title}: ${port.label} ${port.portType} port`} aria-pressed={connectingFrom?.id === port.id}
+                            onKeyDown={event => keyboardPort(event, port)}
                             className={`routing-port routing-port-output ${hoveredPortId === port.id ? "routing-port-hovered" : ""} ${connectingFrom && connectingFrom.portType === "input" ? "routing-port-connectable" : ""}`}
                             onMouseDown={(e) => handlePortMouseDown(e, port)}
                             onMouseUp={(e) => handlePortMouseUp(e, port)}

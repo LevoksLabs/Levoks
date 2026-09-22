@@ -23,7 +23,7 @@ export default defineConfig({
       "node node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port 3200",
     url: "http://127.0.0.1:3200",
     timeout: 120000,
-    reuseExistingServer: false,
+    reuseExistingServer: process.env.LEVOKS_REUSE_TEST_SERVER === "1",
     env: { LEVOKS_E2E: "1", NEXT_TELEMETRY_DISABLED: "1" },
   },
 });

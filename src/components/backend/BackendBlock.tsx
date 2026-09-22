@@ -62,6 +62,11 @@ const BackendBlockComponent: React.FC<Props> = ({ block, serviceId }) => {
     return (
         <div
             className={`backend-block ${isSelected ? "backend-block-selected" : ""}`}
+            tabIndex={0}
+            role="button"
+            aria-label={`Configure ${block.label}`}
+            aria-pressed={isSelected}
+            onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();selectBlock(block.id);}}}
             onClick={(e) => {
                 e.stopPropagation();
                 selectBlock(block.id);

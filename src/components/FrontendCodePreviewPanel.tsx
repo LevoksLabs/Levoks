@@ -121,6 +121,8 @@ const FrontendCodePreviewPanel: React.FC = () => {
         rootIds,
         globalRootIds,
         elementsById,
+        tokens,
+        assets,
     } = useEditorStore();
 
     const { services, connections: backendConnections } = useBackendStore();
@@ -135,11 +137,11 @@ const FrontendCodePreviewPanel: React.FC = () => {
 
     // Reconstruct element arrays from stable IDs — only recomputes when IDs or map changes
     const elements = useMemo(
-        () => rootIds.map(id => elementsById[id]).filter(Boolean),
+        () => Object.values(elementsById).filter(el => { let root = el; while (root.parentId && elementsById[root.parentId]) root = elementsById[root.parentId]; return rootIds.includes(root.id); }),
         [rootIds, elementsById]
     );
     const globalElements = useMemo(
-        () => globalRootIds.map(id => elementsById[id]).filter(Boolean),
+        () => Object.values(elementsById).filter(el => { let root = el; while (root.parentId && elementsById[root.parentId]) root = elementsById[root.parentId]; return globalRootIds.includes(root.id); }),
         [globalRootIds, elementsById]
     );
 
@@ -158,8 +160,8 @@ const FrontendCodePreviewPanel: React.FC = () => {
 
     // Generate frontend code (include all pages' elements + IR flow graph)
     const { files: frontendFiles, previewHtml } = useMemo(() => {
-        return generateFrontendProject(elements, globalElements, canvasSettings, activePage, pages, undefined, flowGraph);
-    }, [elements, globalElements, canvasSettings, activePage, pages, flowGraph]);
+        return generateFrontendProject(elements, globalElements, canvasSettings, activePage, pages, undefined, flowGraph, tokens, assets);
+    }, [elements, globalElements, canvasSettings, activePage, pages, flowGraph, tokens, assets]);
 
     // Generate backend code
     const backendFiles = useMemo(() => {
@@ -309,7 +311,7 @@ const FrontendCodePreviewPanel: React.FC = () => {
                             <iframe
                                 className="code-preview-iframe"
                                 title="Frontend Preview"
-                                sandbox="allow-scripts allow-same-origin"
+                                sandbox="allow-scripts" referrerPolicy="no-referrer"
                                 srcDoc={previewHtml}
                             />
                         ) : (

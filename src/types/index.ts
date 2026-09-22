@@ -135,7 +135,14 @@ export interface ElementNode {
     animation?: AnimationData;
     actions?: ActionData;
     children: string[]; // child element IDs
+    responsive?: Partial<Record<"tablet" | "mobile", { layout?: Partial<ElementLayout>; styles?: Record<string, string | number> }>>;
+    vector?: { points: { x: number; y: number; inX?: number; inY?: number; outX?: number; outY?: number }[]; closed: boolean; stroke: string; strokeWidth: number; fill: string };
+    motion?: { duration: number; delay: number; iterations: number; easing: "linear" | "ease-in" | "ease-out" | "ease-in-out"; frames: { time: number; x: number; y: number; scale: number; rotation: number; opacity: number }[] };
+    component?: { id: string; node: string; overrides: string[] };
 }
+
+export interface DesignToken { name: string; value: string; kind: "color" | "dimension" | "font"; }
+export interface ComponentDefinition { name: string; rootId: string; nodes: Record<string, ElementNode>; }
 
 export interface Page {
     id: string;
@@ -155,3 +162,5 @@ export interface SidebarCategory {
     icon: string;
     items: { type: ElementType; label: string; icon: string }[];
 }
+
+export interface DesignAsset { name: string; mime: "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "font/woff" | "font/woff2"; source: string; width?: number; height?: number; }

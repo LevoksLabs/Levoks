@@ -12,6 +12,7 @@
     "test": "tsx --test tests/*.test.ts",
     "test:integration": "tsx scripts/prepare-integration.ts && npm install --prefix .verification/runtime-test --omit=dev --ignore-scripts && tsx --test tests/integration/*.test.ts",
     "test:e2e": "playwright test",
+    "test:design-export": "tsx scripts/prepare-design-verification.ts && npm run build --prefix .verification/design-app/frontend && tsx --test tests/generated/design-runtime.test.ts",
     "test:generated-e2e": "tsx scripts/prepare-account-e2e.ts && npm install --prefix .verification/account-e2e/frontend --ignore-scripts && npm install --prefix .verification/account-e2e/backend/auth-service --omit=dev --ignore-scripts && playwright test --config playwright.generated.config.ts",
     "check": "npm run typecheck && npm run lint && npm test"
   },

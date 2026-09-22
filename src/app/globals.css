@@ -5,41 +5,44 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap');
 
 :root {
-  /* Surfaces */
-  --bg-root: #1b1b1f;
-  --bg-panel: #232329;
-  --bg-elevated: #2a2a32;
-  --bg-hover: #35353f;
-  --bg-input: #1e1e24;
-
-  /* Accent */
-  --accent: #116dff;
-  --accent-hover: #3385ff;
-  --accent-soft: rgba(17, 109, 255, .12);
-
-  /* Text */
-  --text-1: #f0f0f2;
-  --text-2: #b0b0bc;
-  --text-3: #72728a;
-
-  /* Borders */
-  --border: #3a3a46;
-  --border-hover: #56566a;
-
-  /* Status */
-  --green: #22c55e;
-  --red: #ef4444;
-  --yellow: #facc15;
-
-  /* Sizing */
-  --header-h: 48px;
-  --rail-w: 52px;
-  --flyout-w: 260px;
-  --inspector-w: 280px;
-  --footer-h: 36px;
-
+  color-scheme: dark;
+  --bg-root: #141518;
+  --bg-panel: #1c1d21;
+  --bg-elevated: #25262c;
+  --bg-hover: #303138;
+  --bg-input: #17181c;
+  --accent: #ad91ff;
+  --accent-hover: #c2acff;
+  --accent-soft: #ad91ff18;
+  --accent-ink: #1c1236;
+  --text-1: #ececf0;
+  --text-2: #b7b8c2;
+  --text-3: #9697a5;
+  --border: #34353e;
+  --border-hover: #575966;
+  --green: #76d6ac;
+  --red: #ff919a;
+  --yellow: #e6bf74;
+  --header-h: 54px;
+  --rail-w: 68px;
+  --flyout-w: 252px;
+  --inspector-w: 284px;
+  --footer-h: 32px;
   --radius: 6px;
-  --transition: 150ms ease;
+  --radius-panel: 10px;
+  --control-h: 32px;
+  --icon-size: 16px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --shadow-popover: 0 12px 36px #0005;
+  --canvas-bg: #121316;
+  --canvas-dot: #3a3b45;
+  --node-page: #ad91ff;
+  --node-service: #86bdc3;
+  --transition: 140ms ease-out;
 }
 
 *,
