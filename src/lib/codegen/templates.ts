@@ -74,6 +74,7 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/${port ===
 mongoose.connect(MONGO_URI)
   .then(async () => {
     await observability.initialize();
+    await require('./middleware/rate-limits').initialize();
     console.log('✅ Connected to MongoDB');
     const server = app.listen(PORT, () => {
       console.log(\`🚀 Server running on port \${PORT}\`);

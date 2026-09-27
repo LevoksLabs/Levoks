@@ -120,7 +120,7 @@ exports.createWorkflow = (program, models, database, observability) => {
               };
               const group = { _id: aggregation.groupBy ? scalar(aggregation.groupBy) : null };
               for (const metric of metrics) {
-                if (!safeKey(metric.name) || Object.prototype.hasOwnProperty.call(group, metric.name) || !['count', 'sum', 'avg', 'min', 'max'].includes(metric.operation)) throw new WorkflowError(422, 'Invalid aggregate metric');
+                if (!safeKey(metric.name) || /password|secret|token/i.test(metric.name) || Object.prototype.hasOwnProperty.call(group, metric.name) || !['count', 'sum', 'avg', 'min', 'max'].includes(metric.operation)) throw new WorkflowError(422, 'Invalid aggregate metric');
                 group[metric.name] = metric.operation === 'count' ? {$sum: 1} : {['$' + metric.operation]: scalar(metric.field, ['sum', 'avg'].includes(metric.operation))};
               }
               const sort = c.sortField || '_id';

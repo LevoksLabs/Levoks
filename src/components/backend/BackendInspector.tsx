@@ -243,9 +243,32 @@ const BackendInspector: React.FC = () => {
               }
             />
           )}
-          {block.type === "health_check" && <HealthInspector config={block.config as HealthConfig} serviceId={serviceId} onChange={updates => updateBlockConfig(serviceId, block.id, updates)}/>}
-          {block.type === "error_handler" && <ErrorInspector config={block.config as ErrorHandlerConfig} onChange={updates => updateBlockConfig(serviceId, block.id, updates)}/>}
-          {block.type === "audit_log" && <AuditInspector config={block.config as AuditLogConfig} service={services.find(s => s.id === serviceId)!} onChange={updates => updateBlockConfig(serviceId, block.id, updates)}/>}
+          {block.type === "health_check" && (
+            <HealthInspector
+              config={block.config as HealthConfig}
+              serviceId={serviceId}
+              onChange={(updates) =>
+                updateBlockConfig(serviceId, block.id, updates)
+              }
+            />
+          )}
+          {block.type === "error_handler" && (
+            <ErrorInspector
+              config={block.config as ErrorHandlerConfig}
+              onChange={(updates) =>
+                updateBlockConfig(serviceId, block.id, updates)
+              }
+            />
+          )}
+          {block.type === "audit_log" && (
+            <AuditInspector
+              config={block.config as AuditLogConfig}
+              service={services.find((s) => s.id === serviceId)!}
+              onChange={(updates) =>
+                updateBlockConfig(serviceId, block.id, updates)
+              }
+            />
+          )}
           {block.type === "env_var" && (
             <EnvVarEditor
               config={block.config as EnvVarConfig}
@@ -497,6 +520,7 @@ const MiddlewareEditor: React.FC<{
           onChange({
             middlewareType: e.target
               .value as MiddlewareConfig["middlewareType"],
+            scope: e.target.value === "rateLimit" ? config.scope : "service",
           })
         }
       >
@@ -519,21 +543,89 @@ const MiddlewareEditor: React.FC<{
     )}
     {config.middlewareType === "rateLimit" && (
       <>
+        <FieldRow label="Scope">
+          <select
+            className="bi-select"
+            aria-label="Rate limit scope"
+            value={config.scope || "service"}
+            onChange={(event) =>
+              onChange({
+                scope: event.target.value as MiddlewareConfig["scope"],
+              })
+            }
+          >
+            <option value="service">This service</option>
+            <option value="endpoints">Selected endpoints</option>
+            <option value="backend">Every backend service</option>
+          </select>
+        </FieldRow>
+        <p className="bi-hint">
+          Requests are counted per client IP. Selected endpoints share one
+          quota; attach this block in each endpoint’s inspector. Backend scope
+          installs an independent quota in every service. The built-in service
+          limit of 120 requests per minute also applies.
+        </p>
+        <FieldRow label="Counter storage">
+          <select
+            className="bi-select"
+            aria-label="Rate limit counter storage"
+            value={config.rateLimitStore || "memory"}
+            onChange={(event) =>
+              onChange({
+                rateLimitStore: event.target
+                  .value as MiddlewareConfig["rateLimitStore"],
+              })
+            }
+          >
+            <option value="memory">Memory — single server</option>
+            <option value="mongodb">Database — shared across replicas</option>
+          </select>
+        </FieldRow>
+        <p className="bi-hint">
+          Database counters survive restarts and share quotas across replicas
+          using the same service database. Requests fail closed when the counter
+          store is unavailable. Memory counters reset on restart.
+        </p>
         <FieldRow label="Max Requests">
           <input
             className="bi-input"
+            aria-label="Rate limit maximum requests"
             type="number"
+            min={1}
+            max={100000}
+            step={1}
             value={config.rateLimit || 100}
-            onChange={(e) => onChange({ rateLimit: parseInt(e.target.value) })}
+            onChange={(e) => {
+              if (e.target.validity.valid && e.target.value)
+                onChange({ rateLimit: Number(e.target.value) });
+            }}
           />
         </FieldRow>
         <FieldRow label="Window (min)">
           <input
             className="bi-input"
+            aria-label="Rate limit window minutes"
             type="number"
+            min={1 / 60}
+            max={1440}
+            step="any"
             value={config.rateLimitWindow || 15}
             onChange={(e) =>
-              onChange({ rateLimitWindow: parseInt(e.target.value) })
+              e.target.validity.valid &&
+              e.target.value &&
+              onChange({ rateLimitWindow: Number(e.target.value) })
+            }
+          />
+        </FieldRow>
+        <FieldRow label="Limit message">
+          <input
+            className="bi-input"
+            aria-label="Rate limit response message"
+            maxLength={160}
+            value={config.rateLimitMessage || ""}
+            placeholder="Too many requests. Please try again later."
+            onChange={(event) =>
+              onChange({ rateLimitMessage: event.target.value || undefined })
             }
           />
         </FieldRow>

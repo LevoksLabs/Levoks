@@ -71,11 +71,14 @@ export interface RelationConfig {
 }
 
 export interface MiddlewareConfig {
+  scope?: "service" | "endpoints" | "backend";
   middlewareType:
     "cors" | "rateLimit" | "logger" | "bodyParser" | "helmet" | "custom";
   corsOrigins?: string;
-  rateLimit?: number; // requests per minute
+  rateLimit?: number; // requests per configured window, per client IP
   rateLimitWindow?: number; // window in minutes
+  rateLimitMessage?: string;
+  rateLimitStore?: "memory" | "mongodb";
   customCode?: string;
 }
 

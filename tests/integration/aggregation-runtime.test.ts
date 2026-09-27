@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import type mongooseTypes from "mongoose";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
@@ -142,6 +144,56 @@ test(
         execute("endpoint", {}),
         (error: unknown) => (error as { status: number }).status === 401,
       );
+      const express = require("express");
+      const app = express();
+      app.use(express.json());
+      app.use(require("./aggregate-service/routes"));
+      app.use(require("./aggregate-service/observability").error);
+      const server = createServer(app);
+      const previousSecret = process.env.JWT_SECRET;
+      const secret = randomBytes(32).toString("hex");
+      process.env.JWT_SECRET = secret;
+      try {
+        await new Promise<void>((resolve) =>
+          server.listen(0, "127.0.0.1", resolve),
+        );
+        const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+        const jwt = require("jsonwebtoken");
+        const headers = {
+          Authorization: `Bearer ${jwt.sign(user, secret, { algorithm: "HS256", expiresIn: "5m" })}`,
+        };
+        const response = await fetch(origin + "/summary", { headers });
+        assert.equal(response.status, 200);
+        assert.deepEqual(
+          await response.json(),
+          (await execute("endpoint", { user })).body,
+        );
+        const foreign = await fetch(
+          origin + "/summary/" + rows[3]._id.toString(),
+          { headers },
+        );
+        assert.equal(foreign.status, 200);
+        assert.deepEqual(await foreign.json(), []);
+        const unauthorized = await fetch(origin + "/summary");
+        assert.equal(unauthorized.status, 401);
+        await unauthorized.body?.cancel();
+        const missingTenant = await fetch(origin + "/summary", {
+          headers: {
+            Authorization: `Bearer ${jwt.sign({ sub: "alice" }, secret, { algorithm: "HS256", expiresIn: "5m" })}`,
+          },
+        });
+        assert.equal(missingTenant.status, 403);
+        await missingTenant.body?.cancel();
+        const invalid = await fetch(origin + "/summary/not-an-id", { headers });
+        assert.equal(invalid.status, 400);
+        assert.deepEqual(await invalid.json(), {
+          error: "Invalid resource ID",
+        });
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+        if (previousSecret === undefined) delete process.env.JWT_SECRET;
+        else process.env.JWT_SECRET = previousSecret;
+      }
       assert.equal(await Sale.countDocuments(), 5);
     } finally {
       await mongoose.disconnect();

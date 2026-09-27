@@ -9,6 +9,8 @@ export function withoutWorkflowTarget(
   targetId: string,
 ): BackendBlock {
   const config = { ...block.config } as Record<string, unknown>;
+  if (Array.isArray(config.middlewareIds))
+    config.middlewareIds = config.middlewareIds.filter((id) => id !== targetId);
   if (Array.isArray(config.steps))
     config.steps = config.steps.filter((id) => id !== targetId);
   if (config.program && typeof config.program === "object") {

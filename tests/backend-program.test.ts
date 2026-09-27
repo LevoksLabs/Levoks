@@ -7,7 +7,7 @@ import { compileProject } from "../src/lib/project/compiler";
 import { emptyProject } from "../src/lib/project/workspace";
 import { parseProject } from "../src/lib/project/schema";
 import { block, programFixture } from "./helpers/program-fixture";
-import type { BackendBlock } from "../src/types/backend";
+import type { BackendBlock, DbModelConfig } from "../src/types/backend";
 
 export function executeProgram(blocks: BackendBlock[]) {
   const generatedModule = {
@@ -65,25 +65,136 @@ test("workflow compiler rejects missing model bindings, cycles and unsafe output
 test("endpoint policies validate fields and conflicting scopes across nested operations", () => {
   const service = programFixture();
   service.blocks.push(
-    block("inherited", "access_policy", { ownerField: "missingOwner", tenantField: "" }),
+    block("inherited", "access_policy", {
+      ownerField: "missingOwner",
+      tenantField: "",
+    }),
     block("nested", "function", { steps: ["list"] }),
-    block("inherited_endpoint", "rest_endpoint", { policyIds: ["inherited"] }, ["nested"]),
-    block("conflicting", "access_policy", { ownerField: "", tenantField: "ownerId" }),
-    block("conflicting_endpoint", "rest_endpoint", { policyIds: ["conflicting"] }, ["nested"]),
+    block("inherited_endpoint", "rest_endpoint", { policyIds: ["inherited"] }, [
+      "nested",
+    ]),
+    block("conflicting", "access_policy", {
+      ownerField: "",
+      tenantField: "ownerId",
+    }),
+    block(
+      "conflicting_endpoint",
+      "rest_endpoint",
+      { policyIds: ["conflicting"] },
+      ["nested"],
+    ),
   );
   const issues = programDiagnostics(service);
-  assert.ok(issues.some(issue => issue.nodeId === "list" && /missingOwner.*absent/.test(issue.message)));
-  assert.ok(issues.some(issue => issue.nodeId === "list" && /conflicting ownership/.test(issue.message)));
+  assert.ok(
+    issues.some(
+      (issue) =>
+        issue.nodeId === "list" && /missingOwner.*absent/.test(issue.message),
+    ),
+  );
+  assert.ok(
+    issues.some(
+      (issue) =>
+        issue.nodeId === "list" && /conflicting ownership/.test(issue.message),
+    ),
+  );
 });
 test("aggregation rejects sensitive fields, nonnumeric sums and invalid result sorting", () => {
   const service = programFixture();
-  service.blocks.push(block("aggregate", "query", { modelId: "model", operation: "aggregate", sortField: "title", aggregation: { groupBy: "missing", metrics: [{ name: "total", operation: "sum", field: "title" }] } }));
+  service.blocks.push(
+    block("aggregate", "query", {
+      modelId: "model",
+      operation: "aggregate",
+      sortField: "title",
+      aggregation: {
+        groupBy: "missing",
+        metrics: [{ name: "total", operation: "sum", field: "title" }],
+      },
+    }),
+  );
   const issues = programDiagnostics(service);
-  assert.ok(issues.some(issue => /Aggregation field missing/.test(issue.message)));
-  assert.ok(issues.some(issue => /Aggregation field title.*numeric/.test(issue.message)));
-  assert.ok(issues.some(issue => /Sort aggregate results/.test(issue.message)));
+  assert.ok(
+    issues.some((issue) => /Aggregation field missing/.test(issue.message)),
+  );
+  assert.ok(
+    issues.some((issue) =>
+      /Aggregation field title.*numeric/.test(issue.message),
+    ),
+  );
+  assert.ok(
+    issues.some((issue) => /Sort aggregate results/.test(issue.message)),
+  );
+  const model = service.blocks.find((b) => b.type === "db_model")!;
+  (model.config as DbModelConfig).fields.push({
+    name: "secretTotal",
+    type: "number",
+    required: false,
+  });
+  service.blocks.push(
+    block("sensitive", "query", {
+      modelId: "model",
+      operation: "aggregate",
+      aggregation: {
+        groupBy: "secretTotal",
+        metrics: [{ name: "total", operation: "sum", field: "secretTotal" }],
+      },
+    }),
+  );
+  assert.ok(
+    programDiagnostics(service).some((issue) =>
+      /secretTotal.*non-sensitive/.test(issue.message),
+    ),
+  );
   const base = emptyProject();
-  assert.throws(() => parseProject({ ...base, backend: { ...base.backend, services: [{ ...service, blocks: [...service.blocks, block("unsafe", "query", { modelId: "model", operation: "aggregate", aggregation: { groupBy: "", metrics: [{ name: "__proto__", operation: "count", field: "" }] } })] }] } }));
+  for (const name of ["passwordCount", "secretSum", "tokenAverage"])
+    assert.throws(() =>
+      parseProject({
+        ...base,
+        backend: {
+          ...base.backend,
+          services: [
+            {
+              ...service,
+              blocks: [
+                block("alias", "query", {
+                  modelId: "model",
+                  operation: "aggregate",
+                  aggregation: {
+                    groupBy: "",
+                    metrics: [{ name, operation: "count", field: "" }],
+                  },
+                }),
+              ],
+            },
+          ],
+        },
+      }),
+    );
+  assert.throws(() =>
+    parseProject({
+      ...base,
+      backend: {
+        ...base.backend,
+        services: [
+          {
+            ...service,
+            blocks: [
+              ...service.blocks,
+              block("unsafe", "query", {
+                modelId: "model",
+                operation: "aggregate",
+                aggregation: {
+                  groupBy: "",
+                  metrics: [
+                    { name: "__proto__", operation: "count", field: "" },
+                  ],
+                },
+              }),
+            ],
+          },
+        ],
+      },
+    }),
+  );
 });
 test("bounded branching, functions and transforms run without evaluating code", async () => {
   const blocks = [

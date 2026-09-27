@@ -52,6 +52,7 @@ const configs = {
     softDelete: z.boolean(),
   }),
   middleware: z.object({
+    scope: z.enum(["service", "endpoints", "backend"]).optional(),
     middlewareType: z.enum([
       "cors",
       "rateLimit",
@@ -61,8 +62,10 @@ const configs = {
       "custom",
     ]),
     corsOrigins: text.optional(),
-    rateLimit: finite.positive().optional(),
-    rateLimitWindow: finite.positive().optional(),
+    rateLimit: finite.int().min(1).max(100000).optional(),
+    rateLimitWindow: finite.min(1 / 60).max(1440).optional(),
+    rateLimitMessage: z.string().trim().min(1).max(160).optional(),
+    rateLimitStore: z.enum(["memory", "mongodb"]).optional(),
     customCode: text.optional(),
   }),
   auth_block: z.object({

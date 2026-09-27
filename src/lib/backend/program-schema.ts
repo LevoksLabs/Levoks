@@ -21,7 +21,8 @@ export const aggregationSchema = z.object({
       z.object({
         name: name.refine(
           (value) =>
-            !["_id", "__proto__", "constructor", "prototype"].includes(value),
+            !["_id", "__proto__", "constructor", "prototype"].includes(value) &&
+            !/password|secret|token/i.test(value),
         ),
         operation: z.enum(["count", "sum", "avg", "min", "max"]),
         field: z.string().max(100).default(""),

@@ -42,8 +42,8 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | BE01 | Logical services, editable containers and ordinary blocks | PARTIAL | Services now open real workflow graphs with saved positions, keyboard ports/movement, ordered execution edges, branch/loop/try-catch paths, cycle errors and deletion cleanup. Unit tests execute emitted branch outcomes; browser connects/drags/reloads. Multi-service topology/orchestration and complete block catalog remain. |
 | BE02 | Endpoints: five methods and routes | PARTIAL | Five endpoint methods and routes have inspector configuration; connected operation steps now drive generated runtime execution. Basic CRUD inference remains for endpoints without explicit steps. Comprehensive endpoint contracts and all method/browser combinations need acceptance. |
 | BE03 | Endpoint path/query/header/body/response contracts, statuses, errors | PARTIAL | Request/body schema fields exist; query/header/response/status execution incomplete. |
-| BE04 | Models: identity, types, required, uniqueness, defaults, indexes | PARTIAL | B models and basic fields; unique/index controls and emitted constraints incomplete. |
-| BE05 | Model timestamps and soft-delete behavior | PARTIAL | Timestamps emitted; soft delete blocked by C. |
+| BE04 | Models: identity, types, required, uniqueness, defaults, indexes | PARTIAL | Model types, required/unique/index flags and timestamps flow through inspector/schema to emitted Mongoose models; real duplicate-write rollback is tested. Default-value editing/coercion and full schema migration semantics remain. |
+| BE05 | Model timestamps and soft-delete behavior | PARTIAL | Timestamps and explicit-query soft deletion are emitted; queries exclude deleted records and delete sets deletedAt. Automatic CRUD with soft-delete models is blocked. Restore/purge controls and full lifecycle acceptance remain. |
 | BE06 | Relations, foreign keys, cardinality, update/delete behavior | PARTIAL | Relation type/state exists but no inspector/execution; C blocks export. |
 | BE07 | Query: model binding, CRUD, count, filter, sort, aggregation, outputs | PARTIAL | Query inspector and validated runtime now support grouped count/sum/average/min/max aggregation as well as scoped CRUD/count/filter/sort. Owner/tenant match precedes grouping; typed filters, sessions, result/time limits and read-only pipelines are enforced. Real Mongo aggregation and transaction tests pass. Joins, arbitrary pipelines and richer result bindings remain unsupported. |
 | BE08 | Atomic transaction groups and rollback | PARTIAL | Ordered transaction steps emit session-aware runtime; real replica-set duplicate-write rollback passed. Broader browser/error acceptance remains. |
@@ -55,10 +55,10 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | BE14 | Resource/action permissions | PARTIAL | Permission definitions and policy enforcement execute in generated programs; all application access paths remain to be covered. |
 | BE15 | Access policies: roles, actions, ownership, conditional rules | PARTIAL | Policy inspector, IR and generated query scopes; real owner/tenant enforcement passed. Arbitrary policy conditions remain. |
 | BE16 | Tenant isolation on reads, writes, aggregates and relationships | PARTIAL | Endpoint and query scopes are checked across reachable branches/functions/transactions. Conflicting owner/tenant scopes and missing model fields block generation and fail closed at runtime. Real Mongo negative tests and scoped CRUD/aggregation pass. Complete authorization coverage of legacy inferred/custom source and administrative lifecycle remain. |
-| BE17 | Password reset, verification, refresh rotation, revocation | MISSING | Identity generator lacks these lifecycle operations. |
-| BE18 | If/Else conditions and executable branches | PARTIAL | String config/inspector exists; C blocks export. |
-| BE19 | Collection/conditional loops and execution bounds | PARTIAL | String config/inspector exists; C blocks export. |
-| BE20 | Try/Catch/Finally, retry and error branches | PARTIAL | String config/inspector exists; C blocks export. |
+| BE17 | Password reset, verification, refresh rotation, revocation | PARTIAL | Generated identity/account UI implements reset, verification, rotating refresh tokens, replay revocation, logout and session controls. Real Express/Mongo/Chromium lifecycle tests use a local email receiver. Live email delivery, deployment acceptance and administrative lifecycle remain. |
+| BE18 | If/Else conditions and executable branches | PARTIAL | Structured comparisons and true/false step lists execute in the bounded interpreter; workflow edges and generated branch outcomes are tested. Rich nested conditions and comprehensive inspector/runtime combinations remain. |
+| BE19 | Collection/conditional loops and execution bounds | PARTIAL | Collection loops have executable body steps and enforced iteration/deadline bounds. Arbitrary conditional/while semantics are not implemented. |
+| BE20 | Try/Catch/Finally, retry and error branches | PARTIAL | Structured try/catch/finally step lists compile and execute, with workflow wiring and bounded error paths. Retry policies and broader nested transaction/error acceptance remain. |
 | BE21 | Validation: types, required, range, format, pattern, custom conditions | PARTIAL | Subset emitted globally to mutations; rule scope, editable bounds and custom conditions incomplete. |
 | BE22 | Transform: data mapping, output filtering, sensitive-field removal | PARTIAL | Inspector mappings emit bounded interpreted transforms with sensitive output stripping; broader mapping semantics remain. |
 | BE23 | Functions: inputs, workflow, outputs, reusable service/app scope | PARTIAL | Service functions accept inputs and execute ordered steps/outputs; cross-service/app scope remains. |
@@ -83,9 +83,9 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | BE42 | Storage deletion and access checks | MISSING | No delete block. |
 | BE43 | Cache: provider, scoped key, TTL, strategy | MISSING | No cache block/runtime. |
 | BE44 | Invalidation: exact/pattern keys, event triggers | MISSING | No invalidation block/runtime. |
-| BE45 | Middleware: global/service/endpoint scopes | PARTIAL | B applies service middleware; endpoint middlewareIds not respected. |
+| BE45 | Middleware: global/service/endpoint scopes | PARTIAL | Rate-limit middleware supports service, selected-endpoint and backend scopes. References are validated, unsupported scoped middleware blocks export, and endpoint attachment survives save/undo. Other middleware scope parity remains. |
 | BE46 | CORS origins/methods/headers/credentials | PARTIAL | Origin/credentials subset emitted; complete controls and runtime coverage absent. |
-| BE47 | Rate limits: key strategy/window/limit/error | PARTIAL | Express process-local limit; distributed limit/scope configuration missing. |
+| BE47 | Rate limits: key strategy/window/limit/error | PARTIAL | Configured IP quotas, windows, JSON errors and retry headers execute at selected scopes. Optional Mongo counters share quotas across replicas, survive restarts, reset atomically using database time and fail closed on storage outage. Real HTTP/concurrency/restart tests pass. Principal/API-key strategies, proxy topology configuration and production load acceptance remain. |
 | BE48 | Request/error/metadata logging with redaction | PARTIAL | Logger emits selected request metadata without bodies/headers/query strings; Error Handler logs classifications and Audit Log adds durable retention. Hosted aggregation and all response paths remain. |
 | BE49 | Custom middleware extension | PARTIAL | Raw string setting, export blocked; trusted extension contract absent. |
 | BE50 | Environment development/production configuration | PARTIAL | Env blocks/examples; per-environment model and management missing. |
@@ -102,20 +102,20 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 
 | ID | Requirement | Status | Evidence and remaining acceptance criteria |
 |---|---|---|---|
-| IR01 | Complete UI/backend/routing validated IR | PARTIAL | C structural schema, R frontend flows; backend execution/data flow absent. |
+| IR01 | Complete UI/backend/routing validated IR | PARTIAL | Validated UI/backend/routing IR includes explicit service workflows, model queries, control flow, policies and selected middleware scopes. Unsupported block families and richer data bindings remain. |
 | IR02 | Every configuration changes generated behavior | PARTIAL | Unsupported configurations blocked, several controls ignored; compile coverage required. |
 | IR03 | Live generation at reasonable latency | PARTIAL | W compiles when panel is open; no incremental dependency-aware compiler/background scheduling. |
 | IR04 | Source edits/canvas changes follow regeneration model | PARTIAL | Fingerprint blocks stale exports; granular reconciliation absent. |
-| IR05 | All-page Next.js generation, navigation and globals | PARTIAL | C and T build fixture; browser behavior/parity unverified. |
-| IR06 | Full Express/container ZIP and project restore | PARTIAL | C and T; generated backend execution/Docker unverified. |
+| IR05 | All-page Next.js generation, navigation and globals | PARTIAL | All-page Next.js generation, globals, navigation and exported design/account browser runtimes have execution evidence. Broad property/widget parity and dynamic data binding remain. |
+| IR06 | Full Express/container ZIP and project restore | PARTIAL | Full ZIP/restore, generated Next builds and actual Express/Mongo execution pass for tested fixtures. Docker image/runtime acceptance and unsupported backend block families remain. |
 | RT01 | Page/service trays, draggable freely placed nodes | PARTIAL | R canvas exists; browser interaction verification pending. |
 | RT02 | Page→page, page→service, service→service flow | PARTIAL | R resolves navigation/API calls; typed data/output bindings missing. |
 | RT03 | Wire selection and context-specific inspector/disabled options | PARTIAL | R basic wire state; complete context-sensitive mapping absent. |
 | AI01 | BYOK model selection/Hugging Face inference | PARTIAL | `/api/ai`; live responses/model capability discovery unverified. |
 | AI02 | Specialized/fine-tuned IR agents | MISSING | Generic completion prompting is not trained specialized agents. Model selection/training artifacts required; internal orchestration missing. |
 | AI03 | Robust complete IR-to-code generation | PARTIAL | Validated JSON/proposals; backend IR and source semantic analysis incomplete. |
-| AI04 | Incremental proposals, streaming, cancellation | PARTIAL | Bounded incremental IR patches, preconditions, field review and cancellation are implemented. Streaming and contextual selection remain missing; live model output is unverified. |
-| AI05 | Generated source syntax/security/dependency analysis | PARTIAL | File-path/size validation only; arbitrary proposals not built/analyzed. |
+| AI04 | Incremental proposals, streaming, cancellation | PARTIAL | Bounded IR patches, field review, stale checks, streaming/cancellation and project/page/selection context are implemented; fragmented HTTP stream and browser tests pass. Live model acceptance and durable usage controls remain. |
+| AI05 | Generated source syntax/security/dependency analysis | PARTIAL | File-path/size constraints and worker JS/TS/JSX syntax/JSON analysis are implemented. Full semantic/security/dependency analysis and arbitrary source build isolation remain. |
 | AI06 | Review, diff, checkpoint, stale-proposal protection | PARTIAL | Incremental field before/after review, checkpoints and stale identity/name/design/source checks pass browser review/save tests with controlled model output. Rich source diffs and live-model acceptance remain. |
 | AI07 | Usage/cost budgets and inference controls | PARTIAL | Configurable input-size preflight and provider output token caps; reported token usage shown in proposals. Durable spend/usage ledger and monetary budgets remain missing. |
 | AI08 | Paid plans/profile billing/metering | MISSING | Informational profile only; provider credential needed after internal implementation. |
@@ -124,9 +124,9 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 
 | ID | Requirement | Status | Evidence and remaining acceptance criteria |
 |---|---|---|---|
-| PS01 | Local autosave/history/recovery/conflict handling | PARTIAL | W, IndexedDB, T; browser tests and eviction/recovery acceptance missing. |
+| PS01 | Local autosave/history/recovery/conflict handling | PARTIAL | IndexedDB saves/revision conflicts/checkpoints and browser save/reload/import/history workflows pass. Shared history is bounded and session-only; eviction/disaster recovery and multi-device reconciliation remain. |
 | PS02 | Authenticated cloud storage and ownership | PARTIAL | Mongo API uses owner/revision; actual database and concurrency execution unverified. |
-| PS03 | Durable assets with lifecycle/access/quotas | MISSING | Inline images only. |
+| PS03 | Durable assets with lifecycle/access/quotas | PARTIAL | Bounded project image/font assets persist locally, can be reused/deleted and embed in exports. Hosted durable object storage, lifecycle permissions, quotas and CDN operations remain. |
 | PS04 | Background/offline synchronization and conflict resolution | MISSING | Debounced foreground save is not durable background sync. |
 | PS05 | Teams, collaboration, permissions, conflict reconciliation | MISSING | Account-owned single-user snapshots only. |
 | GH01 | Repository authorization / Connections / token expiry | PARTIAL | Encrypted PAT connection records, authenticated APIs, expiry/error states and replacement; GitHub App/OAuth and automatic token refresh missing; live authorization unverified. |
@@ -156,7 +156,7 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | Gate | Current evidence | Required external action | Verification after access |
 |---|---|---|---|
 | Docker runtime | `Get-Command docker` returned no executable | Install/start Docker Desktop or provide a reachable isolated Docker host; OS installation requires user authorization | Build exported/frontend/backend images, start dependency stack, readiness/rollback/isolation tests |
-| MongoDB | `Get-Command mongod` returned no executable | Local test binary may be provisioned within workspace; Atlas verification needs a test URI via local environment, never chat | Real CRUD, isolation, transactions/rollback, concurrency, backups |
+| MongoDB hosting | Real workspace-managed replica-set tests pass | Provide a disposable Atlas/test-deployment URI through local environment for hosted acceptance; do not send credentials in chat | Hosted connectivity, failover, isolation, backups and restore |
 | GitHub | No live repository access exercised | Connect a disposable test repo with scoped credentials through Connections after implementation | Repository discovery/setup, actual diffs/history, race/conflict, closed-tab worker, token expiry |
 | Hosting | Vercel adapter mocked only | Provide provider test project/credentials in environment or connection UI after adapters exist | Fullstack rollout, logs, health, domains/TLS and supported rollback |
 | AI | No live inference verified | Enter BYOK through AI UI; chosen model must support requested output/capacity | Stream/patch generation, budgets, malformed output, source checks |
@@ -234,9 +234,18 @@ Logs and screenshots are under the ignored `.verification/` directory. New workf
 
 The user restored the whole-product production scope. Completed internal stages in this continuation:
 
-- Shared project history captures UI/pages/settings, backend and routing together, including deletion cleanup. Page navigation does not discard history; graph drags commit once and cancel atomically. Undo restores the same generated artifacts (apart from capture timestamps). Selection, navigation, tokens and provider credentials are not captured as history controls; design-token values are document data and remain covered. History is bounded to 50 session entries and is cleared on project import/switch/reviewed replacement. Persistent checkpoints remain separate.
+- Shared project history captures UI/pages/settings, backend and routing together, including deletion cleanup. Page navigation does not discard history; graph drags commit once and cancel atomically. Undo restores the same generated artifacts (apart from capture timestamps). Selection, navigation and provider credentials are not captured as history controls; design-token values are document data and remain covered. History is bounded to 50 session entries and is cleared on project import/switch/reviewed replacement. Persistent checkpoints remain separate.
 - Routing supports click-to-connect as well as drag and keyboard interaction. Browser regression caught the previous immediate cancellation on releasing the first port.
 - Policy inheritance validates every reachable query model, including function/branch/transaction paths. Runtime scope merging rejects conflicting values and absent model fields rather than overwriting a restriction.
 - Structured aggregation supports a scalar group field and up to eight named count/sum/avg/min/max metrics, safe metric/model references, scoped typed filters, sorting, result limits, transaction sessions, a shared execution deadline and disabled disk spilling. The generated pipeline has no arbitrary operators, writes or JavaScript execution. Mongo tests verify owner and tenant isolation, ObjectId filtering and transaction execution. Arbitrary joins/pipelines remain unsupported.
 
 Evidence: `project-history-targeted.log` (3 checks), `project-history-browser.log` (2 workflows), `production-integration.log` (9 checks before adding aggregation), `aggregation-runtime.log` (real replica-set execution), and `production-audit.json` (zero advisories). Current full regression/build counts will be recorded after the final run. No live provider account or production system was changed.
+
+## Backend middleware continuation — 27 September 2026
+
+- Fixed exact accessible labels for program selects; aggregation now passes the inspector → undo/redo → save/reload → generated-source browser workflow. Sensitive aggregate aliases are rejected consistently by schema, inspector and runtime. Actual generated Express routes now have JWT/tenant/invalid-ID aggregation HTTP coverage, in addition to real replica-set execution.
+- Rate-limit scope, quota/window, response message and counter storage flow through inspector, validated IR and generated routes. Selected endpoint references were previously ignored; now they apply, missing/unsupported references block export, deletion removes bindings and undo restores them.
+- MongoDB counters use atomic database-clock windows, unique hashed keys, a TTL cleanup index, majority writes and bounded fail-closed operations. Concurrent requests across separate generated server processes cannot exceed a shared quota; restart and database outage tests run against real MongoDB. Memory mode remains explicitly available for single-server use. Backend scope installs independent policies per service, with Mongo counters shared only among replicas of the same service/database.
+- The current rows above correct stale baseline descriptions for previously implemented identity, control flow, AI, assets and generated-runtime coverage. PARTIAL still denotes unresolved acceptance criteria; no product-wide completion claim is made.
+
+Verification results for this stage are recorded below after the full run. Operational configuration and limits: [backend-rate-limits.md](backend-rate-limits.md).

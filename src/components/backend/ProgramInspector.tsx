@@ -7,6 +7,7 @@ import type {
   ServiceContainer,
   EndpointConfig,
   DbModelConfig,
+  MiddlewareConfig,
 } from "@/types/backend";
 import {
   controlSchema,
@@ -73,6 +74,7 @@ function AggregateFields({
                   ["_id", "__proto__", "prototype", "constructor"].includes(
                     name,
                   ) ||
+                    /password|secret|token/i.test(name) ||
                     value.metrics.some(
                       (item, position) =>
                         position !== index && item.name === name,
@@ -421,6 +423,7 @@ export default function ProgramInspector({
     <label className="bi-field">
       {label}
       <select
+        aria-label={label}
         className="bi-select"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -455,6 +458,37 @@ export default function ProgramInspector({
             .map((b) => ({ id: b.id, label: b.label })),
           (id) => update({ policyIds: id ? [id] : [] }),
         )}
+        <fieldset className="bi-section">
+          <legend>Endpoint rate limits</legend>
+          <p className="bi-hint">
+            Select rate-limit blocks configured for selected endpoints. Service
+            and backend limits apply automatically.
+          </p>
+          {service.blocks
+            .filter(
+              (b) =>
+                b.type === "middleware" &&
+                (b.config as MiddlewareConfig).middlewareType === "rateLimit" &&
+                (b.config as MiddlewareConfig).scope === "endpoints",
+            )
+            .map((middleware) => (
+              <label key={middleware.id} className="bi-field">
+                <input
+                  type="checkbox"
+                  aria-label={`Apply ${middleware.label}`}
+                  checked={c.middlewareIds.includes(middleware.id)}
+                  onChange={(event) =>
+                    update({
+                      middlewareIds: event.target.checked
+                        ? [...c.middlewareIds, middleware.id]
+                        : c.middlewareIds.filter((id) => id !== middleware.id),
+                    })
+                  }
+                />
+                {middleware.label}
+              </label>
+            ))}
+        </fieldset>
         <p>
           Ordered operations below replace automatic CRUD. Each query chooses
           its own model. Endpoint policies also scope every query in its

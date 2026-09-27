@@ -3,6 +3,7 @@ import type {
   ServiceContainer,
   EndpointConfig,
   DbModelConfig,
+  MiddlewareConfig,
 } from "@/types/backend";
 import type { IRDiagnostic } from "@/types/ir";
 import { controlSchema, programConfigs } from "./program-schema";
@@ -147,12 +148,50 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
       if (block.type === "rest_endpoint") {
         const c = block.config as EndpointConfig;
         if (c.modelId) checkRef(block, c.modelId, "db_model");
+        if (new Set(c.middlewareIds).size !== c.middlewareIds.length)
+          fail(block, "Attach each middleware block only once.");
+        for (const id of c.middlewareIds) {
+          const middleware = checkRef(block, id, "middleware");
+          if (
+            middleware?.type === "middleware" &&
+            (middleware.config as MiddlewareConfig).middlewareType !==
+              "rateLimit"
+          )
+            fail(
+              block,
+              "Endpoint middleware currently supports rate limits. Configure other middleware at service scope.",
+            );
+        }
         for (const id of c.policyIds || [])
           checkRef(block, id, "access_policy");
         if (c.policyIds?.length && !block.connections.length)
           fail(
             block,
             "Attach an explicit query workflow so resource policies can scope database operations.",
+          );
+      }
+      if (block.type === "middleware") {
+        const c = block.config as MiddlewareConfig;
+        if (
+          c.scope &&
+          c.scope !== "service" &&
+          c.middlewareType !== "rateLimit"
+        )
+          fail(
+            block,
+            "Endpoint and backend scopes currently support rate limits only.",
+          );
+        if (
+          c.scope === "endpoints" &&
+          !service.blocks.some(
+            (b) =>
+              b.type === "rest_endpoint" &&
+              (b.config as EndpointConfig).middlewareIds.includes(block.id),
+          )
+        )
+          fail(
+            block,
+            "Attach this rate limit to at least one endpoint in its inspector.",
           );
       }
       if (block.type === "access_policy") {
