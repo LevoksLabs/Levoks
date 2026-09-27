@@ -4129,6 +4129,15 @@ body {
   padding: 4px 14px 12px;
 }
 
+.bi-hint, .bi-help {
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 8px 0 12px;
+}
+.bi-help summary { cursor: pointer; }
+.bi-help p { margin: 8px 0; }
+
 /* Fields */
 .bi-field {
   display: flex;

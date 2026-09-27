@@ -12,6 +12,20 @@ import { PROGRAM_RUNTIME } from "@/lib/codegen/program-runtime";
 export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
   const diagnostics: IRDiagnostic[] = [];
   const byId = new Map(service.blocks.map((block) => [block.id, block]));
+  const identityService =
+    service.blocks.some(
+      (block) =>
+        block.type === "auth_block" &&
+        "strategy" in block.config &&
+        block.config.strategy === "jwt",
+    ) &&
+    service.blocks.some(
+      (block) =>
+        block.type === "db_model" &&
+        (block.config as DbModelConfig).fields.some(
+          (field) => field.name === "password",
+        ),
+    );
   const adjacency = new Map<string, string[]>();
   const fail = (block: BackendBlock, message: string) =>
     diagnostics.push({
@@ -154,6 +168,26 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
           const middleware = checkRef(block, id, "middleware");
           if (
             middleware?.type === "middleware" &&
+            (middleware.config as MiddlewareConfig).rateLimitKey === "identity"
+          ) {
+            if (!c.authRequired)
+              fail(
+                block,
+                "Enable Auth Required before attaching a signed-in-user rate limit.",
+              );
+            if (
+              identityService &&
+              /\/(register|login|refresh|forgot-password|request-verification|reset-password|verify-email)$/.test(
+                c.route,
+              )
+            )
+              fail(
+                block,
+                "Public identity lifecycle endpoints require IP limits, not signed-in-user limits.",
+              );
+          }
+          if (
+            middleware?.type === "middleware" &&
             (middleware.config as MiddlewareConfig).middlewareType !==
               "rateLimit"
           )
@@ -172,6 +206,15 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
       }
       if (block.type === "middleware") {
         const c = block.config as MiddlewareConfig;
+        if (
+          c.middlewareType === "rateLimit" &&
+          c.rateLimitKey === "identity" &&
+          c.scope !== "endpoints"
+        )
+          fail(
+            block,
+            "Signed-in-user quotas require selected-endpoint scope so authentication runs first.",
+          );
         if (
           c.scope &&
           c.scope !== "service" &&

@@ -85,7 +85,7 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | BE44 | Invalidation: exact/pattern keys, event triggers | MISSING | No invalidation block/runtime. |
 | BE45 | Middleware: global/service/endpoint scopes | PARTIAL | Rate-limit middleware supports service, selected-endpoint and backend scopes. References are validated, unsupported scoped middleware blocks export, and endpoint attachment survives save/undo. Other middleware scope parity remains. |
 | BE46 | CORS origins/methods/headers/credentials | PARTIAL | Origin/credentials subset emitted; complete controls and runtime coverage absent. |
-| BE47 | Rate limits: key strategy/window/limit/error | PARTIAL | Configured IP quotas, windows, JSON errors and retry headers execute at selected scopes. Optional Mongo counters share quotas across replicas, survive restarts, reset atomically using database time and fail closed on storage outage. Real HTTP/concurrency/restart tests pass. Principal/API-key strategies, proxy topology configuration and production load acceptance remain. |
+| BE47 | Rate limits: key strategy/window/limit/error | PARTIAL | Configured IP and verified-user/tenant quotas, windows, JSON errors and retry headers execute at supported scopes. Optional Mongo counters share quotas across replicas, survive restarts, reset atomically using database time and fail closed on storage outage. Real HTTP/concurrency/restart tests pass. Signed-in-user quotas require authenticated selected endpoints; compiler and HTTP tests reject public lifecycle attachment and forged identity headers. API-key strategies, proxy topology configuration and production load acceptance remain. |
 | BE48 | Request/error/metadata logging with redaction | PARTIAL | Logger emits selected request metadata without bodies/headers/query strings; Error Handler logs classifications and Audit Log adds durable retention. Hosted aggregation and all response paths remain. |
 | BE49 | Custom middleware extension | PARTIAL | Raw string setting, export blocked; trusted extension contract absent. |
 | BE50 | Environment development/production configuration | PARTIAL | Env blocks/examples; per-environment model and management missing. |
@@ -249,3 +249,30 @@ Evidence: `project-history-targeted.log` (3 checks), `project-history-browser.lo
 - The current rows above correct stale baseline descriptions for previously implemented identity, control flow, AI, assets and generated-runtime coverage. PARTIAL still denotes unresolved acceptance criteria; no product-wide completion claim is made.
 
 Verification results for this stage are recorded below after the full run. Operational configuration and limits: [backend-rate-limits.md](backend-rate-limits.md).
+
+## Verified-user quotas and inspector follow-through — 27 September 2026
+
+The rate-limit inspector now selects IP or signed-in user/tenant identity. User quotas require authenticated selected endpoints; IP enforcement runs before authentication and user quotas afterward. The generated runtime derives keys from verified identity claims, never request-supplied identity headers, and separates tenants with identical subject IDs. Single-tenant identities remain supported. Compiler errors prevent accidentally applying user quotas to anonymous login/recovery flows. Real HTTP tests exercise valid/malformed tokens, identity claims, separate users behind one gateway, tenant separation and forged-header attempts.
+
+Inspector help is compact and expandable. Configuration-only blocks no longer show an unrelated execution-binding panel. Existing counter, scope, undo, deletion and persistence semantics are retained. No dependencies were added.
+
+The previous scoped-counter stage passed 62 units, all 20 editor browser workflows, all 11 integrations, editor/exported frontend builds, generated backend module checks, and exported design/account browser runtimes. Root and generated dependency audits returned zero advisories. The verified-user extension is undergoing a fresh relevant regression pass; final results follow below. Docker remains unavailable; live providers were not exercised.
+
+### Final verification — 27 September 2026
+
+| Check | Evidence | Result |
+|---|---|---|
+| TypeScript, lint, units | `.verification/identity-final-check.log` | TypeScript passed; 0 lint errors / 53 existing warnings; all 63 unit tests passed. |
+| Integration | `.verification/identity-final-integration.log` | All 11 passed, including generated Express/Mongo workflows, identity, distributed and user-aware quotas, vault and worker recovery. |
+| Editor browser | `.verification/identity-final-browser.log` | All 20 Chromium workflows passed. Quota configuration includes user strategy, persistence, undo/redo, deletion recovery and generated source. |
+| Editor production build | `.verification/identity-final-root-build.log` | Passed. |
+| Exported design build/runtime | `.verification/current-design-export.log` | Next.js production build and real-browser widget/responsive/motion runtime passed in the preceding scoped-counter stage; this extension does not change generated design code. |
+| Exported full-stack account workflow | `.verification/identity-final-account.log` | Production frontend build plus Chromium account lifecycle passed with real generated Express/MongoDB and a separate email worker using a local transport receiver. |
+| Generated backend build | `.verification/identity-backend-build.log` | Auth service validates 14 modules; user-quota service validates 9 modules. Generated backend execution is covered by integration tests. |
+| Dependency audits | `.verification/identity-final-audit.json`, `identity-final-backend-audit.json`, `current-export-audit.json`, `current-design-audit.json` | Zero advisories in the editor and tested generated backend/frontend dependency trees. No dependencies were added. |
+| Docker build/runtime | Docker executable remains unavailable | EXTERNAL DEPENDENCY for this check only: install/start Docker Desktop or provide an authorized isolated Docker host, then build images and verify Compose startup/readiness/runtime. |
+| Live providers | Not exercised | Existing live-provider gates still apply; missing adapters remain internal work. |
+
+An initial cold quota-test run exceeded its existing service startup wait. It passed unchanged on retry, then the complete integration suite passed. No test assertion or timeout was weakened. Stale generated Next development type files were moved into the ignored verification directory and regenerated; source checks remain enabled.
+
+The ledger currently tracks **125 requirements: 2 COMPLETE, 91 PARTIAL and 32 MISSING**. External verification gates are recorded separately; they do not reclassify unfinished internal features. Relations, the remaining backend block families, provider authorization, full-stack orchestration, hosted persistence and the other open rows still require implementation or acceptance. Passing this stage does not establish production readiness for the complete product.

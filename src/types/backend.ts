@@ -75,10 +75,11 @@ export interface MiddlewareConfig {
   middlewareType:
     "cors" | "rateLimit" | "logger" | "bodyParser" | "helmet" | "custom";
   corsOrigins?: string;
-  rateLimit?: number; // requests per configured window, per client IP
+  rateLimit?: number; // requests per configured window, per client identity
   rateLimitWindow?: number; // window in minutes
   rateLimitMessage?: string;
   rateLimitStore?: "memory" | "mongodb";
+  rateLimitKey?: "ip" | "identity";
   customCode?: string;
 }
 

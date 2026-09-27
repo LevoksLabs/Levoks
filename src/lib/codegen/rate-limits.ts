@@ -30,6 +30,7 @@ export function rateLimitRuntime(
       windowMs: Math.round((c.rateLimitWindow ?? 15) * 60000),
       limit: c.rateLimit ?? 100,
       storage: c.rateLimitStore || "memory",
+      strategy: c.rateLimitKey || "ip",
       message: {
         error:
           c.rateLimitMessage || "Too many requests. Please try again later.",
@@ -44,8 +45,8 @@ const serviceId = ${JSON.stringify(service.id)};
 const unavailable = () => Object.assign(new Error('Rate limit storage unavailable'), {status: 503});
 const collection = () => { if (mongoose.connection.readyState !== 1) throw unavailable(); return mongoose.connection.db.collection('levoks_rate_limits'); };
 // The database clock determines expiry. TTL cleanup is not used to reset quotas.
-function mongoStore(id, windowMs) {
-  const prefix = JSON.stringify([serviceId, id, windowMs]);
+function mongoStore(id, windowMs, strategy) {
+  const prefix = JSON.stringify(strategy === 'identity' ? [serviceId, id, windowMs, strategy] : [serviceId, id, windowMs]);
   const keyFor = key => createHash('sha256').update(prefix + ':' + key).digest('hex');
   const options = {maxTimeMS: 1000, writeConcern: {w: 'majority', wtimeoutMS: 1000}};
   const bounded = async action => {
@@ -77,10 +78,15 @@ function mongoStore(id, windowMs) {
   };
 }
 exports.initialize = async () => { if (configuration.some(c => c.storage === 'mongodb')) await collection().createIndex({resetTime: 1}, {expireAfterSeconds: 0}); };
-// Each block has one IP quota shared by its selected routes. Backend scope
+// Each block has one quota per configured identity, shared by its selected routes. Backend scope
 // installs independent service quotas; Mongo counters are shared by replicas.
-const limits = new Map(configuration.map(({id, blockId, local, scope, storage, ...options}) => [id, rateLimit({...options, ...(storage === 'mongodb' ? {store: mongoStore(id, options.windowMs)} : {}), standardHeaders: 'draft-7', legacyHeaders: false})]));
+function principalKey(req) {
+  const user = req.user;
+  if (typeof user?.sub !== 'string' || !user.sub || user.sub.length > 200 || (user.tenantId !== undefined && (typeof user.tenantId !== 'string' || !user.tenantId || user.tenantId.length > 200))) throw Object.assign(new Error('Verified identity required'), {status: 401});
+  return JSON.stringify([user.tenantId || null, user.sub]);
+}
+const limits = new Map(configuration.map(({id, blockId, local, scope, storage, strategy, ...options}) => [id, rateLimit({...options, ...(strategy === 'identity' ? {keyGenerator: principalKey} : {}), ...(storage === 'mongodb' ? {store: mongoStore(id, options.windowMs, strategy)} : {}), standardHeaders: 'draft-7', legacyHeaders: false})]));
 exports.service = configuration.filter(c => c.scope !== 'endpoints').map(c => limits.get(c.id));
-exports.endpoint = ids => ids.map(id => {const config = configuration.find(c => c.local && c.blockId === id); if (!config) throw new Error('Unknown endpoint rate limit'); return config;}).filter(c => c.scope === 'endpoints').map(c => limits.get(c.id));
+exports.endpoint = (ids, strategy = 'ip') => ids.map(id => {const config = configuration.find(c => c.local && c.blockId === id); if (!config) throw new Error('Unknown endpoint rate limit'); return config;}).filter(c => c.scope === 'endpoints' && c.strategy === strategy).map(c => limits.get(c.id));
 `;
 }

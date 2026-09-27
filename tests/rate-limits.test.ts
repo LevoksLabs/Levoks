@@ -7,6 +7,48 @@ import { emptyProject } from "../src/lib/project/workspace";
 import { parseProject } from "../src/lib/project/schema";
 import type { EndpointConfig } from "../src/types/backend";
 
+test("user quotas require endpoint scope and explicit authentication; public login remains IP limited", () => {
+  const service = programFixture();
+  service.blocks.push(
+    block("identity-limit", "middleware", {
+      middlewareType: "rateLimit",
+      rateLimitKey: "identity",
+      scope: "service",
+    }),
+    block("unprotected", "rest_endpoint", {
+      route: "/public",
+      middlewareIds: ["identity-limit"],
+    }),
+  );
+  const issues = programDiagnostics(service);
+  assert.ok(
+    issues.some((issue) => /selected-endpoint scope/.test(issue.message)),
+  );
+  assert.ok(issues.some((issue) => /Enable Auth Required/.test(issue.message)));
+  service.blocks = [
+    block("identity-limit", "middleware", {
+      middlewareType: "rateLimit",
+      rateLimitKey: "identity",
+      scope: "endpoints",
+    }),
+    block("identity", "auth_block", { strategy: "jwt" }),
+    block("model", "db_model", {
+      fields: [{ name: "password", type: "string", required: true }],
+    }),
+    block("login", "rest_endpoint", {
+      route: "/auth/login",
+      method: "POST",
+      authRequired: true,
+      middlewareIds: ["identity-limit"],
+    }),
+  ];
+  assert.ok(
+    programDiagnostics(service).some((issue) =>
+      /Public identity lifecycle/.test(issue.message),
+    ),
+  );
+});
+
 test("middleware references and scopes fail closed and deletion clears endpoint bindings", () => {
   const service = programFixture();
   service.blocks.push(

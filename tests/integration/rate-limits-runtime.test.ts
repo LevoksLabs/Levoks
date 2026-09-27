@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
+import { createRequire } from "node:module";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { MongoClient } from "mongodb";
@@ -16,6 +18,8 @@ test(
   { timeout: 120000 },
   async () => {
     const root = path.resolve(".verification/runtime-test/rate-limit-test");
+    const secret = randomBytes(32).toString("hex");
+    const jwt = createRequire(path.join(root, "entry.cjs"))("jsonwebtoken");
     const base = programFixture();
     const services = [
       {
@@ -97,6 +101,28 @@ test(
         }),
       ],
     });
+    services.push({
+      ...base,
+      id: "identities",
+      name: "Identity Quota API",
+      port: 3005,
+      blocks: [
+        block("user-limit", "middleware", {
+          middlewareType: "rateLimit",
+          scope: "endpoints",
+          rateLimitKey: "identity",
+          rateLimit: 1,
+          rateLimitWindow: 1,
+          rateLimitStore: "mongodb",
+          rateLimitMessage: "User quota exceeded",
+        }),
+        block("user-route", "rest_endpoint", {
+          route: "/report",
+          authRequired: true,
+          middlewareIds: ["user-limit"],
+        }),
+      ],
+    });
     const project = emptyProject();
     const output = compileProject(
       parseProject({ ...project, backend: { ...project.backend, services } }),
@@ -135,6 +161,7 @@ test(
               ...process.env,
               PORT: String(port),
               MONGO_URI: mongo.getUri(service.id),
+              JWT_SECRET: secret,
               NODE_ENV: "production",
             },
             windowsHide: true,
@@ -208,6 +235,52 @@ test(
         (await request(origins[0], "/health")).status,
         200,
         "health probes are not throttled",
+      );
+      const byUser = async (
+        claims?: object,
+        headers: Record<string, string> = {},
+        key = secret,
+      ) => {
+        const response = await fetch(origins[4] + "/report", {
+          headers: {
+            ...(claims
+              ? {
+                  Authorization: `Bearer ${jwt.sign(claims, key, { algorithm: "HS256", expiresIn: "5m" })}`,
+                }
+              : {}),
+            ...headers,
+          },
+        });
+        return { status: response.status, body: await response.json() };
+      };
+      assert.equal((await byUser()).status, 401);
+      assert.equal(
+        (await byUser({ sub: "alice", tenantId: "A" }, {}, "wrong-signing-key"))
+          .status,
+        401,
+      );
+      assert.equal((await byUser({ sub: 123, tenantId: "A" })).status, 401);
+      assert.equal((await byUser({ sub: "alice", tenantId: "A" })).status, 200);
+      assert.equal(
+        (await byUser({ sub: "bob", tenantId: "A" })).status,
+        200,
+        "users sharing a gateway IP have independent quotas",
+      );
+      assert.equal(
+        (await byUser({ sub: "alice", tenantId: "B" })).status,
+        200,
+        "identical subject IDs in separate tenants have independent quotas",
+      );
+      const quota = await byUser(
+        { sub: "alice", tenantId: "A" },
+        { "X-User-Id": "mallory", "X-Tenant-Id": "B" },
+      );
+      assert.equal(quota.status, 429);
+      assert.deepEqual(quota.body, { error: "User quota exceeded" });
+      assert.equal(
+        (await byUser({ sub: "alice" })).status,
+        200,
+        "single-tenant identities remain supported",
       );
       const replica = await start(services[3]);
       const concurrent = await Promise.all(

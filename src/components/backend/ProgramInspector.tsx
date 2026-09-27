@@ -833,6 +833,7 @@ export default function ProgramInspector({
       </>
     );
   }
+  if (!content && configuration.has(block.type)) return null;
   return (
     <section className="bi-section bi-program">
       <h4>Execution & data flow</h4>

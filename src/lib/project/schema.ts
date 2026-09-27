@@ -66,6 +66,7 @@ const configs = {
     rateLimitWindow: finite.min(1 / 60).max(1440).optional(),
     rateLimitMessage: z.string().trim().min(1).max(160).optional(),
     rateLimitStore: z.enum(["memory", "mongodb"]).optional(),
+    rateLimitKey: z.enum(["ip", "identity"]).optional(),
     customCode: text.optional(),
   }),
   auth_block: z.object({

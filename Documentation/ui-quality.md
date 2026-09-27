@@ -131,3 +131,10 @@ The confirmation review showed the floating toolbar covering a moving selection 
 Undo/redo is now available in the Header and from the keyboard on all canvases. It restores the project document across page navigation, service/page/element deletion and linked routing cleanup. Graph drags are a single history entry, with cancellation and unmount cleanup. History resets when opening/replacing a project; persisted checkpoints still provide restart recovery. Routing ports support click-to-connect in addition to keyboard and dragging.
 
 The Query Inspector adds aggregation grouping and named count/sum/avg/min/max metric controls. Calculations select model fields, numeric operations offer numeric fields, duplicate/reserved metric names are rejected, and at least one metric is retained. Configuration propagates through saved IR and generated execution; the compiler reports incomplete/invalid field bindings. Arbitrary aggregation pipelines are not exposed.
+
+
+## Backend quota inspector — 27 September 2026
+
+The rate-limit inspector now configures scope, client identity (IP or verified user/tenant), durable or memory counter storage, request/window bounds and the public response. Brief hints and a native expandable explanation keep the primary controls visible. Configuration-only blocks no longer show unrelated execution-binding guidance. Existing design tokens, native controls and keyboard behavior are reused; no animation/video package was added.
+
+The browser workflow exercises configuration, endpoint attachment, undo/redo, save/reload, deletion/undo and emitted-source preservation. Updated screenshot: `.verification/rate-limit-inspector.png`. Runtime enforcement, proxy boundaries and production acceptance are documented in [backend-rate-limits.md](backend-rate-limits.md).

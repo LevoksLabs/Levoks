@@ -144,3 +144,10 @@ Rate limits now have real selected-endpoint, service and backend scope; endpoint
 Aggregation browser coverage now includes history and persistence; HTTP coverage exercises the generated JWT-protected routes, ownership/tenant filtering and invalid-ID errors. Sensitive result aliases are rejected instead of silently disappearing during response redaction.
 
 See [backend-rate-limits.md](backend-rate-limits.md) for deployment conditions, guarantees and remaining limits. The full verification ledger follows in the completion matrix; live providers and Docker remain separate external gates.
+
+### Verified-user quota follow-through
+
+The client-identification strategy now supports verified user plus tenant, with mandatory endpoint authentication and compiler rejection of public identity lifecycle attachment. IP controls remain available for anonymous routes. Different users behind the generated frontend gateway receive independent configured user quotas; the separate service-wide IP ceiling still applies. Invalid claims do not fall back to a shared IP key. Real generated HTTP tests cover same-IP users, tenant separation and forged headers. API-key strategies, trusted proxy configuration and load/failover acceptance remain internal work. Inspector guidance is collapsed behind a native disclosure to keep the controls usable.
+
+
+Verification of the user-quota extension: TypeScript, lint (0 errors / 53 existing warnings), 63 unit tests, all 11 integration tests and all 20 editor Chromium workflows pass. Editor production build, exported account production build/runtime and generated auth/quota backend checks pass. The prior exported design build/runtime remains passing evidence for unchanged generated design code. Editor and tested generated dependency audits report zero advisories. The final evidence table and all 125 requirement statuses are in [completion-matrix.md](completion-matrix.md). Docker execution and live provider acceptance remain unverified; internal product gaps remain open.

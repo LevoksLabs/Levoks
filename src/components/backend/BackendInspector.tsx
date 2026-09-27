@@ -554,17 +554,45 @@ const MiddlewareEditor: React.FC<{
               })
             }
           >
-            <option value="service">This service</option>
+            <option
+              value="service"
+              disabled={config.rateLimitKey === "identity"}
+            >
+              This service
+            </option>
             <option value="endpoints">Selected endpoints</option>
-            <option value="backend">Every backend service</option>
+            <option
+              value="backend"
+              disabled={config.rateLimitKey === "identity"}
+            >
+              Every backend service
+            </option>
           </select>
         </FieldRow>
-        <p className="bi-hint">
-          Requests are counted per client IP. Selected endpoints share one
-          quota; attach this block in each endpoint’s inspector. Backend scope
-          installs an independent quota in every service. The built-in service
-          limit of 120 requests per minute also applies.
-        </p>
+        <FieldRow label="Count requests by">
+          <select
+            className="bi-select"
+            aria-label="Rate limit client identity"
+            value={config.rateLimitKey || "ip"}
+            onChange={(event) =>
+              onChange({
+                rateLimitKey: event.target
+                  .value as MiddlewareConfig["rateLimitKey"],
+              })
+            }
+          >
+            <option value="ip">Client IP address</option>
+            <option value="identity" disabled={config.scope !== "endpoints"}>
+              Signed-in user and tenant
+            </option>
+          </select>
+        </FieldRow>
+        {config.scope === "endpoints" && (
+          <p className="bi-hint">
+            Attach this block in each endpoint’s inspector. User quotas also
+            require Auth Required on those endpoints.
+          </p>
+        )}
         <FieldRow label="Counter storage">
           <select
             className="bi-select"
@@ -582,9 +610,9 @@ const MiddlewareEditor: React.FC<{
           </select>
         </FieldRow>
         <p className="bi-hint">
-          Database counters survive restarts and share quotas across replicas
-          using the same service database. Requests fail closed when the counter
-          store is unavailable. Memory counters reset on restart.
+          {config.rateLimitStore === "mongodb"
+            ? "Survives restarts and shares quotas across replicas using the same database."
+            : "Resets on restart. Choose Database for multiple server replicas."}
         </p>
         <FieldRow label="Max Requests">
           <input
@@ -629,6 +657,24 @@ const MiddlewareEditor: React.FC<{
             }
           />
         </FieldRow>
+        <details className="bi-help">
+          <summary>How quotas apply</summary>
+          <p>
+            Selected endpoints share one quota per client. Backend scope
+            installs an independent quota in each service. Database outages
+            block requests instead of resetting quotas.
+          </p>
+          <p>
+            User quotas use the verified identity and tenant, never
+            client-supplied identity headers. IP quotas see the frontend
+            server’s address when requests use its gateway.
+          </p>
+          <p>
+            The built-in service ceiling of 120 requests per minute also
+            applies. User quotas require selected endpoints with authentication
+            enabled.
+          </p>
+        </details>
       </>
     )}
     {config.middlewareType === "custom" && (

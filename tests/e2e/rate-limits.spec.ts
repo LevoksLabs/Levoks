@@ -20,7 +20,10 @@ test("rate limit scope and endpoint attachment survive history, save and generat
     ...programFixture(),
     blocks: [
       block("limit", "middleware", { middlewareType: "rateLimit" }),
-      block("endpoint", "rest_endpoint", { route: "/report" }),
+      block("endpoint", "rest_endpoint", {
+        route: "/report",
+        authRequired: true,
+      }),
     ],
   };
   await workspace.locator('input[type="file"]').setInputFiles({
@@ -44,6 +47,9 @@ test("rate limit scope and endpoint attachment survive history, save and generat
   await page
     .getByLabel("Rate limit scope", { exact: true })
     .selectOption("endpoints");
+  await page
+    .getByLabel("Rate limit client identity", { exact: true })
+    .selectOption("identity");
   await page
     .getByLabel("Rate limit counter storage", { exact: true })
     .selectOption("mongodb");
@@ -96,4 +102,5 @@ test("rate limit scope and endpoint attachment survive history, save and generat
   expect(source).toContain('"scope":"endpoints","windowMs":120000,"limit":7');
   expect(source).toContain("Report quota exceeded");
   expect(source).toContain('"storage":"mongodb"');
+  expect(source).toContain('"strategy":"identity"');
 });

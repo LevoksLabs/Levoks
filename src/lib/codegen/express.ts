@@ -71,24 +71,24 @@ function generateModel(block: BackendBlock, identityModel = false): string {
 function generateEndpointHandler(block: BackendBlock, models: string[], fields: SchemaField[], identityModel: boolean): string {
     const config = block.config as EndpointConfig;
     const method = config.method.toLowerCase();
-    const scopedMiddleware = `...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}), `;
-    if (block.connections.length) return `router.${method}(${JSON.stringify(config.route)}, ${scopedMiddleware}${config.authRequired || config.policyIds?.length ? "auth, " : ""}validateBody(${JSON.stringify(config.requestBody)}), async (req, res, next) => { try { const output = await workflow(${JSON.stringify(block.id)}, req); if (output.status === 204) return res.status(204).end(); res.status(output.status).json(output.body ?? null); } catch (error) { next(error); } });`;
+    const middleware = (authenticate = false) => `...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'ip'), ${authenticate ? "auth, " : ""}...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'identity'), `;
+    if (block.connections.length) return `router.${method}(${JSON.stringify(config.route)}, ${middleware(Boolean(config.authRequired || config.policyIds?.length))}validateBody(${JSON.stringify(config.requestBody)}), async (req, res, next) => { try { const output = await workflow(${JSON.stringify(block.id)}, req); if (output.status === 204) return res.status(204).end(); res.status(output.status).json(output.body ?? null); } catch (error) { next(error); } });`;
     const modelName = models.length > 0 ? models[0] : null;
     if (identityModel) {
         const action = config.route.split("/").pop();
-        if (action === "register" || action === "login") return `router.post(${JSON.stringify(config.route)}, ${scopedMiddleware}identity.limit, validateBody(${JSON.stringify(config.requestBody)}), validateRules, identity.${action});`;
-        if (action === "profile") return `router.get(${JSON.stringify(config.route)}, ${scopedMiddleware}auth, identity.profile);`;
-        if (action === "logout") return `router.post(${JSON.stringify(config.route)}, ${scopedMiddleware}auth, identity.logout);`;
-        if (action === "refresh") return `router.post(${JSON.stringify(config.route)}, ${scopedMiddleware}identity.limit, identity.refresh);`;
-        if (action === "sessions") return `router.get(${JSON.stringify(config.route)}, ${scopedMiddleware}auth, identity.sessions);`;
-        if (action === "introspect") return `router.post(${JSON.stringify(config.route)}, ${scopedMiddleware}auth, (req, res) => {res.set('Cache-Control', 'no-store'); res.json(req.user);});`;
+        if (action === "register" || action === "login") return `router.post(${JSON.stringify(config.route)}, ${middleware()}identity.limit, validateBody(${JSON.stringify(config.requestBody)}), validateRules, identity.${action});`;
+        if (action === "profile") return `router.get(${JSON.stringify(config.route)}, ${middleware(true)}identity.profile);`;
+        if (action === "logout") return `router.post(${JSON.stringify(config.route)}, ${middleware(true)}identity.logout);`;
+        if (action === "refresh") return `router.post(${JSON.stringify(config.route)}, ${middleware()}identity.limit, identity.refresh);`;
+        if (action === "sessions") return `router.get(${JSON.stringify(config.route)}, ${middleware(true)}identity.sessions);`;
+        if (action === "introspect") return `router.post(${JSON.stringify(config.route)}, ${middleware(true)}(req, res) => {res.set('Cache-Control', 'no-store'); res.json(req.user);});`;
         if (["forgot-password", "request-verification", "reset-password", "verify-email"].includes(action || "")) {
             const fields = action === "forgot-password" || action === "request-verification" ? [{name: "email", type: "string", required: true}] : [{name: "token", type: "string", required: true}, ...(action === "reset-password" ? [{name: "newPassword", type: "string", required: true}] : [])];
-            return `router.post(${JSON.stringify(config.route)}, ${scopedMiddleware}identity.limit, validateBody(${JSON.stringify(fields)}), identity[${JSON.stringify(action)}]);`;
+            return `router.post(${JSON.stringify(config.route)}, ${middleware()}identity.limit, validateBody(${JSON.stringify(fields)}), identity[${JSON.stringify(action)}]);`;
         }
         if (["logout-all", "revoke-session", "change-password"].includes(action || "")) {
             const input = action === "revoke-session" ? [{name: "sessionId", type: "string", required: true}] : action === "change-password" ? [{name: "currentPassword", type: "string", required: true}, {name: "newPassword", type: "string", required: true}] : [];
-            return `router.post(${JSON.stringify(config.route)}, ${scopedMiddleware}auth, identity.limit, validateBody(${JSON.stringify(input)}), identity[${JSON.stringify(action)}]);`;
+            return `router.post(${JSON.stringify(config.route)}, ${middleware(true)}identity.limit, validateBody(${JSON.stringify(input)}), identity[${JSON.stringify(action)}]);`;
         }
     }
 
@@ -160,9 +160,8 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
   }`;
     }
 
-    const authMiddleware = config.authRequired ? "auth, " : "";
     const inputFields = config.requestBody.length ? config.requestBody : fields.filter(f => !/password|token|secret|role/i.test(f.name));
-    return `router.${method}(${JSON.stringify(config.route)}, ${scopedMiddleware}${authMiddleware}validateBody(${JSON.stringify(inputFields)}), validateRules, async (req, res, next) => {\n${handlerBody.replaceAll(/res.status\((400|500)\).json\(\{ error: error.message \}\)/g, 'next(error)')}\n});`;
+    return `router.${method}(${JSON.stringify(config.route)}, ${middleware(config.authRequired)}validateBody(${JSON.stringify(inputFields)}), validateRules, async (req, res, next) => {\n${handlerBody.replaceAll(/res.status\((400|500)\).json\(\{ error: error.message \}\)/g, 'next(error)')}\n});`;
 }
 
 // ─── Generate middleware setup ───
