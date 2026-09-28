@@ -309,7 +309,21 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
   for (const endpoint of service.blocks.filter(
     (block) => block.type === "rest_endpoint",
   )) {
-    const policies = (endpoint.config as EndpointConfig).policyIds || [];
+    const endpointConfig = endpoint.config as EndpointConfig;
+    const policies = endpointConfig.policyIds || [];
+    const requestFields = new Set(
+      endpointConfig.requestBody.map((field) => field.name),
+    );
+    const missingFields = new Set<string>();
+    const checkBodyBinding = (value: unknown) => {
+      if (typeof value === "string") {
+        const field = /^\$request\.body\.([A-Za-z_][A-Za-z0-9_]*)/.exec(
+          value,
+        )?.[1];
+        if (field && !requestFields.has(field)) missingFields.add(field);
+      } else if (value && typeof value === "object")
+        Object.values(value).forEach(checkBodyBinding);
+    };
     const pending = [...endpoint.connections],
       checked = new Set<string>();
     while (pending.length) {
@@ -318,6 +332,23 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
       checked.add(id);
       pending.push(...(adjacency.get(id) || []));
       const query = byId.get(id);
+      // Generated request validation preserves only declared body fields. Catch
+      // discarded workflow inputs before delivery, including nested control paths.
+      if (query && !["GET", "DELETE"].includes(endpointConfig.method)) {
+        const c = query.config as unknown as Record<string, unknown>;
+        const control = c.program as
+          { left?: unknown; right?: unknown; source?: unknown } | undefined;
+        const inputs: Record<string, unknown> = {
+          query: [c.filter, c.values],
+          transform: c.fields,
+          function: [c.inputs, c.result],
+          response: c.value,
+          logic_if: [control?.left, control?.right],
+          logic_loop: control?.source,
+          validation: `$request.body.${c.fieldName}`,
+        };
+        checkBodyBinding(inputs[query.type]);
+      }
       if (!query || query.type !== "query") continue;
       const config = programConfigs.query.safeParse(query.config);
       if (!config.success) continue;
@@ -355,6 +386,11 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
         }
       }
     }
+    if (missingFields.size)
+      fail(
+        endpoint,
+        `Declare ${[...missingFields].sort().join(", ")} in this endpoint's Request Body schema; its workflow reads these fields but validation would remove them.`,
+      );
   }
   return diagnostics;
 }

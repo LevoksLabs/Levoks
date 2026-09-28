@@ -302,7 +302,7 @@ test("responsive overrides, token bindings and component instances survive save 
   );
   await expect(
     page.locator('iframe[title="Generated frontend preview"]'),
-  ).toHaveAttribute("sandbox", "allow-scripts");
+  ).toHaveAttribute("sandbox", "allow-scripts allow-forms");
   const isolated = await frame.locator("body").evaluate(() => {
     try {
       void parent.document.body;

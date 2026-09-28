@@ -323,7 +323,7 @@ interface ToastMsg {
 const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
     const { pages, activePageId, rootIds, globalRootIds, canvasSettings, pageElementMap, tokens } = useEditorStore();
 
-    const [generated, setGenerated] = useState(false);
+    const [generated, setGenerated] = useState(true);
     const breakpoint = useEditorUIStore(s => s.breakpoint);
 
     // Current page being viewed
@@ -431,7 +431,7 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
                     <span className="site-preview-title">{currentPage?.title || "Preview"}</span>
                     <div className="live-preview-indicator">
                         <Activity size={10} />
-                        <span>Design preview</span>
+                        <span>{generated ? "Generated frontend" : "Design simulation"}</span>
                     </div>
                 </div>
 
@@ -456,7 +456,7 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
             {/* Body */}
             <div className="site-preview-body">
                 <div className="site-preview-scroll">
-                    {generated ? <GeneratedPreview pageId={currentPageId} width={canvasWidth} /> : <div
+                    {generated ? <GeneratedPreview pageId={currentPageId} width={canvasWidth} onNavigate={navigateToPage} /> : <div
                         className="site-preview-page"
                         style={{
                             ...Object.fromEntries(Object.entries(tokens).map(([id, token]) => [`--lv-${id}`, token.value])),

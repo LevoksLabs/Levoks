@@ -55,7 +55,11 @@ test("graph connections and branches compile to executable saved workflow steps"
   let service = {
     ...programFixture(),
     blocks: [
-      block("entry", "rest_endpoint", { route: "/hello", method: "POST" }),
+      block("entry", "rest_endpoint", {
+        route: "/hello",
+        method: "POST",
+        requestBody: [{ name: "large", type: "boolean", required: true }],
+      }),
       block("choose", "logic_if", {
         program: { left: "$request.body.large", operator: "eq", right: true },
       }),

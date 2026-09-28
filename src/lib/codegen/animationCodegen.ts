@@ -114,69 +114,47 @@ export function generateAnimationCSS(
     return { keyframeCss, classCss, needsJsSetup };
 }
 
-// ─── Generate useEffect code for React component (inlined, not separate file) ───
+// Share lifecycle-aware animation setup between HTML preview and React exports.
+export function generateAnimationSetup(elements: { className: string; anim: AnimationData }[]): string {
+    const config = JSON.stringify(elements);
+    return `function setupAnimations(root) {
+  const cleanups = [];
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+  for (const {className, anim} of ${config}) {
+    root.querySelectorAll("." + className).forEach(el => {
+      if (reduced.matches) { el.style.opacity = "1"; return; }
+      if (anim.trigger === "onScroll") {
+        const observer = new IntersectionObserver(entries => {
+          if (entries.some(entry => entry.isIntersecting)) { el.classList.add("animated"); observer.disconnect(); }
+        }, {threshold: 0.2});
+        observer.observe(el);
+        cleanups.push(() => observer.disconnect());
+      }
+      if (anim.trigger === "onClick") {
+        const click = () => { el.classList.remove("animated"); void el.offsetHeight; el.classList.add("animated"); };
+        el.addEventListener("click", click);
+        cleanups.push(() => el.removeEventListener("click", click));
+      }
+      if (anim.type === "typewriter") {
+        const text = el.textContent || "";
+        el.textContent = "";
+        let i = 0;
+        const timer = setInterval(() => {
+          el.textContent = text.slice(0, ++i);
+          if (i >= text.length) clearInterval(timer);
+        }, Math.max(1, Math.round(1000 / (anim.textSpeed || 50))));
+        cleanups.push(() => { clearInterval(timer); el.textContent = text; });
+      }
+    });
+  }
+  return () => cleanups.forEach(cleanup => cleanup());
+}`;
+}
 
-export function generateAnimationUseEffect(
-    elements: { className: string; anim: AnimationData }[]
-): string {
-    const scrollEls = elements.filter(e => e.anim.trigger === "onScroll");
-    const clickEls = elements.filter(e => e.anim.trigger === "onClick");
-    const typewriterEls = elements.filter(e => e.anim.type === "typewriter");
-
-    if (scrollEls.length === 0 && clickEls.length === 0 && typewriterEls.length === 0) return "";
-
-    const lines: string[] = [];
-    lines.push(`  // Animation setup`);
-    lines.push(`  React.useEffect(() => {`);
-
-    if (scrollEls.length > 0) {
-        lines.push(`    // Scroll-triggered animations via IntersectionObserver`);
-        lines.push(`    const observer = new IntersectionObserver((entries) => {`);
-        lines.push(`      entries.forEach(entry => {`);
-        lines.push(`        if (entry.isIntersecting) {`);
-        lines.push(`          entry.target.classList.add("animated");`);
-        lines.push(`          observer.unobserve(entry.target);`);
-        lines.push(`        }`);
-        lines.push(`      });`);
-        lines.push(`    }, { threshold: 0.2 });`);
-        for (const e of scrollEls) {
-            lines.push(`    document.querySelectorAll(".${e.className}").forEach(el => observer.observe(el));`);
-        }
-    }
-
-    if (clickEls.length > 0) {
-        lines.push(`    // Click-triggered animations`);
-        for (const e of clickEls) {
-            lines.push(`    document.querySelectorAll(".${e.className}").forEach(el => {`);
-            lines.push(`      el.addEventListener("click", () => {`);
-            lines.push(`        el.classList.remove("animated");`);
-            lines.push(`        void el.offsetHeight;`);
-            lines.push(`        el.classList.add("animated");`);
-            lines.push(`      });`);
-            lines.push(`    });`);
-        }
-    }
-
-    if (typewriterEls.length > 0) {
-        lines.push(`    // Typewriter effect`);
-        for (const e of typewriterEls) {
-            const speed = e.anim.textSpeed ?? 50;
-            lines.push(`    document.querySelectorAll(".${e.className}").forEach(el => {`);
-            lines.push(`      const text = el.textContent || "";`);
-            lines.push(`      el.textContent = "";`);
-            lines.push(`      let i = 0;`);
-            lines.push(`      const timer = setInterval(() => {`);
-            lines.push(`        if (i < text.length) { el.textContent += text[i]; i++; }`);
-            lines.push(`        else clearInterval(timer);`);
-            lines.push(`      }, ${Math.round(1000 / speed)});`);
-            lines.push(`    });`);
-        }
-    }
-
-    lines.push(`    return () => {`);
-    if (scrollEls.length > 0) lines.push(`      observer.disconnect();`);
-    lines.push(`    };`);
-    lines.push(`  }, []);`);
-
-    return lines.join("\n");
+export function generateAnimationUseEffect(elements: { className: string; anim: AnimationData }[]): string {
+    if (!elements.length) return "";
+    return `  React.useEffect(() => {
+${generateAnimationSetup(elements)}
+    return setupAnimations(rootRef.current);
+  }, []);`;
 }

@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import path from "node:path";
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= path.resolve(".verification/browsers");
 
@@ -11,7 +10,6 @@ test(
   { timeout: 60000 },
   async () => {
     const { chromium, expect } = await import("@playwright/test");
-    const require = createRequire(import.meta.url);
     const fixture = JSON.parse(
       await readFile(".verification/design-fixture.json", "utf8"),
     );
@@ -19,7 +17,7 @@ test(
     const server = spawn(
       process.execPath,
       [
-        require.resolve("next/dist/bin/next"),
+        path.resolve(".verification/design-app/frontend/node_modules/next/dist/bin/next"),
         "start",
         "--hostname",
         "127.0.0.1",

@@ -138,3 +138,10 @@ The Query Inspector adds aggregation grouping and named count/sum/avg/min/max me
 The rate-limit inspector now configures scope, client identity (IP or verified user/tenant), durable or memory counter storage, request/window bounds and the public response. Brief hints and a native expandable explanation keep the primary controls visible. Configuration-only blocks no longer show unrelated execution-binding guidance. Existing design tokens, native controls and keyboard behavior are reused; no animation/video package was added.
 
 The browser workflow exercises configuration, endpoint attachment, undo/redo, save/reload, deletion/undo and emitted-source preservation. Updated screenshot: `.verification/rate-limit-inspector.png`. Runtime enforcement, proxy boundaries and production acceptance are documented in [backend-rate-limits.md](backend-rate-limits.md).
+
+
+## Generated preview and export parity — 28 September 2026
+
+Play now defaults to generated frontend rather than design simulation. Local page links work through a restricted iframe message channel; routing/API configuration participates in preview regeneration. Backend requests show an explicit unavailable message without claiming a save, and compiler/source override errors are visible. Menu/social routing is keyboard-operable in generated pages. Scroll/click/typewriter animation setup is shared with the React export and removes listeners/timers on cleanup.
+
+Normal-flow child dimensions now survive generation. The new browser fixture checks canvas/preview input dimensions and separation of form controls, then downloads the real application ZIP for independent build/runtime verification. Screenshot: `.verification/canvas-preview.png`. Backend/source runtime preview, external assets and broader visual/property acceptance remain open in the completion matrix.

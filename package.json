@@ -12,9 +12,10 @@
     "test": "tsx --test tests/*.test.ts",
     "test:integration": "tsx scripts/prepare-integration.ts && npm install --prefix .verification/runtime-test --omit=dev --ignore-scripts && tsx --test tests/integration/*.test.ts",
     "test:e2e": "playwright test",
-    "test:design-export": "tsx scripts/prepare-design-verification.ts && npm run build --prefix .verification/design-app/frontend && tsx --test tests/generated/design-runtime.test.ts",
+    "test:design-export": "tsx scripts/prepare-design-verification.ts && npm install --prefix .verification/design-app/frontend --ignore-scripts && npm run build --prefix .verification/design-app/frontend && tsx --test tests/generated/design-runtime.test.ts",
     "test:generated-e2e": "tsx scripts/prepare-account-e2e.ts && npm install --prefix .verification/account-e2e/frontend --ignore-scripts && npm install --prefix .verification/account-e2e/backend/auth-service --omit=dev --ignore-scripts && playwright test --config playwright.generated.config.ts",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test",
+    "test:canvas-export": "playwright test tests/e2e/canvas-export.spec.ts && tsx scripts/prepare-canvas-verification.ts && npm install --prefix .verification/canvas-app/frontend --ignore-scripts && npm install --prefix .verification/canvas-app/backend/entries --omit=dev --ignore-scripts && npm run build --prefix .verification/canvas-app/frontend && npm run build --prefix .verification/canvas-app/backend/entries && tsx --test tests/generated/canvas-runtime.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.2",

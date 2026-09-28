@@ -1,7 +1,7 @@
 import { ElementNode, Page, DesignToken, DesignAsset } from "@/types";
 import { FlowGraph, Flow, ApiCallStep, NavigateStep } from "@/types/ir";
 import { ElementWiring, EndpointTarget, PageTarget } from "./connectionResolver";
-import { generateAnimationCSS, generateAnimationUseEffect } from "./animationCodegen";
+import { generateAnimationCSS, generateAnimationSetup, generateAnimationUseEffect } from "./animationCodegen";
 
 import { assetElement, assetFonts } from "@/lib/design-assets";
 import { SHAPE_PATHS } from "@/lib/shape-paths";
@@ -59,13 +59,13 @@ const classNameFor = (el: ElementNode) => `el-${el.id.replace(/[^a-zA-Z0-9_-]/g,
  * Generate a multi-step event handler attribute from a Flow.
  * Produces chained async logic: api_call → check response → navigate.
  */
-function flowHandlerAttr(
+function flowHandler(
     el: ElementNode,
     flowMap: Map<string, Flow>,
     mode: "html" | "jsx"
 ): string {
     const flow = flowMap.get(el.id);
-    if (!flow || mode === "html") return "";
+    if (!flow) return "";
 
     const steps = flow.steps;
     if (steps.length === 0) return "";
@@ -103,25 +103,28 @@ function flowHandlerAttr(
         } else if (step.type === "navigate") {
             const navStep = step as NavigateStep;
             // If there was a preceding API call, only navigate on success
-            bodyLines.push(`window.location.href = ${JSON.stringify(navStep.pageRoute)};`);
+            bodyLines.push(mode === "jsx"
+                ? `window.location.href = ${JSON.stringify(navStep.pageRoute)};`
+                : `window.parent.postMessage({ type: "levoks:preview:navigate", pageId: ${JSON.stringify(navStep.pageId)} }, "*");`);
         }
     }
 
     if (bodyLines.length === 0) return "";
 
-    const eventName = flow.trigger.event === "submit" ? "onSubmit" : "onClick";
     const handlerBody = bodyLines.join(" ");
 
-    return ` ${eventName}={async (e) => { e.preventDefault(); const target = e.currentTarget; if (target.dataset.busy) return; target.dataset.busy = "true"; target.setAttribute("aria-busy", "true"); setStatus("Working…"); try { ${handlerBody} setStatus("Done"); } catch (err) { setStatus(err instanceof Error ? err.message : "Request failed. Please try again."); } finally { delete target.dataset.busy; target.removeAttribute("aria-busy"); } }}`;
+    return `async (e) => { e.preventDefault(); const target = e.currentTarget; if (target.dataset.busy) return; target.dataset.busy = "true"; target.setAttribute("aria-busy", "true"); setStatus("Working…"); try { ${handlerBody} setStatus("Done"); } catch (err) { setStatus(err instanceof Error ? err.message : "Request failed. Please try again."); } finally { delete target.dataset.busy; target.removeAttribute("aria-busy"); } }`;
 }
 
-// ─── Legacy wiringAttr (used only for preview HTML mode, kept for compat) ───
+// Both preview and exported React handlers use the same generated flow body.
 function wiringAttr(
     el: ElementNode,
     flowMap: Map<string, Flow>,
     mode: "html" | "jsx"
 ): string {
-    return flowHandlerAttr(el, flowMap, mode);
+    if (mode === "html") return "";
+    const handler = flowHandler(el, flowMap, mode);
+    return handler ? ` ${el.type === "form" ? "onSubmit" : "onClick"}={${handler}}` : "";
 }
 
 const renderElement = (
@@ -162,11 +165,13 @@ const renderElement = (
         baseStyles.top = `${el.layout.y}px`;
         baseStyles.width = `min(100%, ${el.layout.w}px)`;
         baseStyles.minHeight = `${el.layout.h}px`;
-    } else if ((el.styles?.position || el.layout.position) === "absolute") {
-        baseStyles.position = "absolute";
-        baseStyles.left = `${el.layout.x}px`;
-        baseStyles.top = `${el.layout.y}px`;
-        baseStyles.width = `min(100%, ${el.layout.w}px)`;
+    } else {
+        baseStyles.position = String(el.styles?.position || el.layout.position || "static");
+        if (baseStyles.position !== "static") {
+            baseStyles.left = `${el.layout.x}px`;
+            baseStyles.top = `${el.layout.y}px`;
+        }
+        baseStyles.width = el.styles?.width || `${el.layout.w}px`;
         baseStyles.minHeight = `${el.layout.h}px`;
     }
 
@@ -238,7 +243,7 @@ const renderElement = (
         case "paragraph":
             return `<${tag} ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}>${textContent(el, el.type === "title" ? "Heading" : "Text")}</${tag}>`;
         case "button":
-            return `<button ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}>${textContent(el, "Button")}</button>`;
+            return `<button type="${flowMap.has(el.id) ? "button" : "submit"}" ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}>${textContent(el, "Button")}</button>`;
         case "image":
             return `<img ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" alt="${escapeMarkup(el.props?.alt)}"${wiringAttr(el, flowMap, mode)} />`;
         case "video":
@@ -246,10 +251,11 @@ const renderElement = (
         case "menu": {
             const items = String(el.props?.items || "Home,About,Contact").split(",");
             const isVertical = el.props?.menuStyle === "vertical";
-            const menuItems = items.map((i) => `<span ${clsAttr}="${className}__item">${escapeMarkup(i.trim())}</span>`).join("");
+            const itemTag = flowMap.has(el.id) ? "button" : "span";
+            const menuItems = items.map((i) => `<${itemTag}${itemTag === "button" ? ' type="button"' : ""} ${clsAttr}="${className}__item">${escapeMarkup(i.trim())}</${itemTag}>`).join("");
             cssOut.add(`.${className} { display: flex; gap: ${isVertical ? "0.5rem" : "1.5rem"}; flex-direction: ${isVertical ? "column" : "row"}; align-items: center; }`);
-            cssOut.add(`.${className}__item { font-size: 0.9rem; cursor: pointer; }`);
-            return `<nav ${clsAttr}="${className}">${menuItems}</nav>`;
+            cssOut.add(`.${className}__item { font-size: 0.9rem; cursor: pointer; border:0; background:none; color:inherit; }`);
+            return `<nav ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}>${menuItems}</nav>`;
         }
         case "divider":
             return `<hr ${clsAttr}="${className}" />`;
@@ -257,12 +263,13 @@ const renderElement = (
             return `<iframe ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" sandbox="allow-scripts" title="Embed Frame"></iframe>`;
         case "socialbar": {
             const platforms = ["facebook", "twitter", "instagram", "linkedin", "youtube"].filter((p) => Boolean(el.props?.[p]));
+            const iconTag = flowMap.has(el.id) ? "button" : "span";
             const icons = platforms.length > 0
-                ? platforms.map((p) => `<span ${clsAttr}="${className}__icon">${p[0].toUpperCase()}</span>`).join("")
+                ? platforms.map((p) => `<${iconTag}${iconTag === "button" ? ' type="button"' : ""} aria-label="${p}" ${clsAttr}="${className}__icon">${p[0].toUpperCase()}</${iconTag}>`).join("")
                 : `<span ${clsAttr}="${className}__empty">Add social links</span>`;
             cssOut.add(`.${className} { display: flex; gap: 0.75rem; align-items: center; }`);
             cssOut.add(`.${className}__icon { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #1f2937; color: #fff; font-size: 0.8rem; }`);
-            return `<div ${clsAttr}="${className}">${icons}</div>`;
+            return `<div ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}>${icons}</div>`;
         }
         case "accordion":
             return `<details ${clsAttr}="${className}"><summary>${escapeMarkup(el.props?.headerText || "Accordion")}</summary><div>${children || "Accordion content"}</div></details>`;
@@ -284,7 +291,7 @@ const renderElement = (
             const actionAttr = requestUrl ? ` action="${safeUrl(requestUrl)}"` : "";
             const formHandler = wiringAttr(el, flowMap, mode);
             // If form has a flow, the onSubmit prevents default and uses fetch
-            if (formHandler) {
+            if (flowMap.has(el.id)) {
                 return `<form ${clsAttr}="${className}"${formHandler}>${children}</form>`;
             }
             return `<form ${clsAttr}="${className}" method="${htmlMethod}" data-request-method="${requestMethod}"${actionAttr}>${children}</form>`;
@@ -445,7 +452,6 @@ export function generateFrontendProject(
 
     const hasResponsive = [...safeGlobal, ...allElements].some(element => element.responsive && Object.keys(element.responsive).length);
     const baseCss = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 ${assetFonts(assets)}
 :root { ${Object.entries(tokens).map(([id, token]) => `--lv-${id}: ${token.value};`).join(" ")} }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -462,7 +468,20 @@ ${hasResponsive ? "" : '@media (max-width: 640px) { .page { padding: 1rem; displ
 
     const css = `${baseCss}\n${Array.from(cssParts).join("\n")}${animationCss}`;
 
-    const body = `<div class="page">${htmlParts.join("")}</div>`;
+    const body = `<div class="page">${htmlParts.join("")}<div role="status" aria-live="polite" style="position:fixed;bottom:16px;right:16px;z-index:1000;background:#fff;color:#111"></div></div>`;
+    const previewHandlers = [...flowMap.keys()].flatMap(id => {
+        const el = codegenElementsById[id];
+        if (!el) return [];
+        return [`document.querySelectorAll(${JSON.stringify("." + classNameFor(el))}).forEach(el => el.addEventListener(${JSON.stringify(el.type === "form" ? "submit" : "click")}, ${flowHandler(el, flowMap, "html")}));`];
+    }).join("\n");
+    const previewScript = `${widgetRuntime}; setupWidgets(document);
+${generateAnimationSetup(animJsElements)}
+setupAnimations(document);
+const setStatus = message => { document.querySelector('[role="status"]').textContent = message; };
+const apiFetch = async () => { throw new Error("Backend requests need the exported application runtime. No data was sent or saved."); };
+${previewHandlers}
+document.addEventListener("submit", e => { if (!e.defaultPrevented) { e.preventDefault(); setStatus("This form has no routing connection. Connect it to an endpoint or page."); } });`;
+
     const previewHtml = `<!doctype html>
 <html>
   <head>
@@ -471,7 +490,7 @@ ${hasResponsive ? "" : '@media (max-width: 640px) { .page { padding: 1rem; displ
     <title>${escapeMarkup(page?.title || "Preview")}</title>
     <style>${css}</style>
   </head>
-  <body style="background:${bg};">${body}<script>${widgetRuntime}; setupWidgets(document);</script></body>
+  <body style="background:${bg};">${body}<script>${previewScript.replace(/<\/script/gi, "<\\/script")}</script></body>
 </html>`;
 
     // Determine if we need the API client import
@@ -481,7 +500,6 @@ ${hasResponsive ? "" : '@media (max-width: 640px) { .page { padding: 1rem; displ
     const apiImport = hasEndpointWirings ? 'import { apiFetch } from "./api.js";\n' : "";
     // Generate animation useEffect code (inlined into App.jsx)
     const animUseEffect = generateAnimationUseEffect(animJsElements);
-    const needsReactImport = animUseEffect.length > 0;
 
     const appJsx = `
 import React from "react";

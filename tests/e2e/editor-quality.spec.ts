@@ -314,7 +314,10 @@ test("desktop surfaces and laptop layouts retain usable controls and save backen
     .getByRole("banner")
     .getByRole("button", { name: "Preview", exact: true })
     .click();
-  await expect(page.getByText("Design preview", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Preview mode")).toHaveValue("generated");
+  await expect(page.locator('iframe[title="Generated frontend preview"]')).toBeVisible();
+  await page.getByLabel("Preview mode").selectOption("design");
+  await expect(page.locator(".live-preview-indicator")).toHaveText("Design simulation");
   await shot(page, "preview");
   await page.keyboard.press("Escape");
 });

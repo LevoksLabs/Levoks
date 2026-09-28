@@ -402,7 +402,7 @@ export function compileProject(value: ProjectDocument) {
     2,
   );
   files["frontend/next.config.mjs"] =
-    "export default { output: 'standalone' };\n";
+    "export default { output: 'standalone', outputFileTracingRoot: import.meta.dirname, turbopack: { root: import.meta.dirname } };\n";
   files["frontend/.env.example"] =
     "APP_ORIGIN=http://localhost:3000\n" +
     backend.services

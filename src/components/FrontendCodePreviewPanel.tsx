@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
 import { useRoutingStore } from "@/store/routingStore";
-import { generateFrontendProject } from "@/lib/codegen/frontend";
-import { generateProject } from "@/lib/codegen";
-import { resolveGraph } from "@/lib/graphResolver";
+import { compileProject } from "@/lib/project/compiler";
+import { currentProject, useWorkspaceStore } from "@/store/workspaceStore";
+import GeneratedPreview from "./design/GeneratedPreview";
 import { X, FileCode2, Eye, Server, Monitor, FolderOpen, Copy, Check } from "lucide-react";
 
 // ─── Lightweight Syntax Highlighter ───
@@ -112,93 +112,34 @@ function getLanguage(filename: string): string {
 // ─── Main Panel ───
 
 const FrontendCodePreviewPanel: React.FC = () => {
-    const {
-        canvasSettings,
-        pages,
-        activePageId,
-        setFrontendGeneratedCode,
-        setFrontendCodePreviewOpen,
-        rootIds,
-        globalRootIds,
-        elementsById,
-        tokens,
-        assets,
-    } = useEditorStore();
-
-    const { services, connections: backendConnections } = useBackendStore();
-
-    const { nodes: routingNodes, connections: routingConnections, getPortsForNode } = useRoutingStore();
-
+    const editor = useEditorStore(), backend = useBackendStore(), routing = useRoutingStore();
+    const { activePageId, canvasSettings, setFrontendGeneratedCode, setFrontendCodePreviewOpen } = editor;
+    const source = useWorkspaceStore(state => state.source);
+    const projectName = useWorkspaceStore(state => state.name);
+    const [previewPage, setPreviewPage] = useState(activePageId);
     const [activeTab, setActiveTab] = useState<"preview" | "code">("preview");
     const [selectedFile, setSelectedFile] = useState<string | null>(null);
     const [copiedFile, setCopiedFile] = useState<string | null>(null);
-
-    const activePage = pages.find((p) => p.id === activePageId);
-
-    // Reconstruct element arrays from stable IDs — only recomputes when IDs or map changes
-    const elements = useMemo(
-        () => Object.values(elementsById).filter(el => { let root = el; while (root.parentId && elementsById[root.parentId]) root = elementsById[root.parentId]; return rootIds.includes(root.id); }),
-        [rootIds, elementsById]
-    );
-    const globalElements = useMemo(
-        () => Object.values(elementsById).filter(el => { let root = el; while (root.parentId && elementsById[root.parentId]) root = elementsById[root.parentId]; return globalRootIds.includes(root.id); }),
-        [globalRootIds, elementsById]
-    );
-
-    // Resolve routing canvas into FlowGraph (IR)
-    const flowGraph = useMemo(() => {
-        if (routingConnections.length === 0) return undefined;
-        return resolveGraph({
-            nodes: routingNodes,
-            connections: routingConnections,
-            pages,
-            activePageId,
-            activeElements: elements,
-            services,
-        });
-    }, [routingNodes, routingConnections, pages, elements, activePageId, services]);
-
-    // Generate frontend code (include all pages' elements + IR flow graph)
-    const { files: frontendFiles, previewHtml } = useMemo(() => {
-        return generateFrontendProject(elements, globalElements, canvasSettings, activePage, pages, undefined, flowGraph, tokens, assets);
-    }, [elements, globalElements, canvasSettings, activePage, pages, flowGraph, tokens, assets]);
-
-    // Generate backend code
-    const backendFiles = useMemo(() => {
-        if (services.length === 0) return {};
-        return generateProject(services, backendConnections);
-    }, [services, backendConnections]);
-
-    // Merge all files — prefix backend files with "backend/"
-    const allFiles = useMemo(() => {
-        const merged: Record<string, string> = {};
-
-        // Frontend files go under "frontend/"
-        for (const [path, content] of Object.entries(frontendFiles)) {
-            merged[`frontend/${path}`] = content;
+    const output = useMemo(() => {
+        try {
+            const result = compileProject(currentProject());
+            const errors = result.diagnostics.filter(item => item.severity === "error");
+            return { files: result.files, error: errors.map(item => item.message).join("\n") };
+        } catch (error) {
+            return { files: {} as Record<string, string>, error: error instanceof Error ? error.message : "Code generation failed." };
         }
-
-        // Backend files go under "backend/"
-        for (const [path, content] of Object.entries(backendFiles)) {
-            merged[`backend/${path}`] = content;
-        }
-
-        return merged;
-    }, [frontendFiles, backendFiles]);
-
-    const frontendFileList = Object.keys(frontendFiles).sort();
-    const backendFileList = Object.keys(backendFiles).sort();
-    const totalFiles = frontendFileList.length + backendFileList.length;
+    }, [editor.elementsById, editor.rootIds, editor.globalRootIds, editor.pageElementMap, editor.pages, editor.activePageId, editor.canvasSettings, editor.tokens, editor.components, editor.assets, backend.services, backend.connections, routing.nodes, routing.connections, source, projectName]);
+    const allFiles = output.files;
+    const frontendFileList = Object.keys(allFiles).filter(file => file.startsWith("frontend/")).map(file => file.slice(9)).sort();
+    const backendFileList = Object.keys(allFiles).filter(file => file.startsWith("backend/")).map(file => file.slice(8)).sort();
+    const totalFiles = Object.keys(allFiles).length;
 
     const activeFile = selectedFile;
     const activeFileContent = activeFile ? allFiles[activeFile] : null;
 
-    // Keep store in sync for export — use a ref to avoid triggering re-renders
-    const allFilesRef = useRef(allFiles);
     useEffect(() => {
-        allFilesRef.current = allFiles;
-        setFrontendGeneratedCode(allFiles);
-    }, [allFiles, setFrontendGeneratedCode]);
+        setFrontendGeneratedCode(output.error ? null : allFiles);
+    }, [allFiles, output.error, setFrontendGeneratedCode]);
 
     // Copy file content
     const copyFile = useCallback(async (filePath: string) => {
@@ -243,6 +184,7 @@ const FrontendCodePreviewPanel: React.FC = () => {
                         <X size={16} />
                     </button>
                 </div>
+                {output.error && <p role="alert">{output.error}</p>}
                 <div className="code-preview-body">
                     <div className="code-preview-sidebar">
                         {/* Live Preview */}
@@ -308,12 +250,7 @@ const FrontendCodePreviewPanel: React.FC = () => {
 
                     <div className="code-preview-content">
                         {activeTab === "preview" ? (
-                            <iframe
-                                className="code-preview-iframe"
-                                title="Frontend Preview"
-                                sandbox="allow-scripts" referrerPolicy="no-referrer"
-                                srcDoc={previewHtml}
-                            />
+                            <GeneratedPreview pageId={previewPage} width={canvasSettings.width} onNavigate={setPreviewPage} />
                         ) : (
                             activeFile && activeFileContent && (
                                 <div className="code-file-viewer">
