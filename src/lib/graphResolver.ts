@@ -28,6 +28,7 @@ import {
   NavigateStep,
   AuthStep,
   ValidateStep,
+  IRDiagnostic,
 } from "@/types/ir";
 
 // ─── Input State Shape ───
@@ -87,7 +88,7 @@ function eventForType(type: string): "click" | "submit" {
  * Algorithm:
  *   1. For each page node on the routing canvas, find all actionable elements.
  *   2. For each actionable element, find its output port & connection.
- *   3. BFS from that connection, tracking visited node IDs to prevent loops.
+ *   3. Follow each connection, tracking endpoint input ports to detect loops.
  *   4. At each hop, resolve the target node (service block or page) into a FlowStep.
  *   5. If a service node has outgoing connections, continue traversal.
  */
@@ -96,6 +97,7 @@ export function resolveGraph(input: GraphResolverInput): FlowGraph {
     input;
 
   const flows: Flow[] = [];
+  const diagnostics: IRDiagnostic[] = [];
   const pagesMeta = pages.map((p) => ({
     id: p.id,
     title: p.title,
@@ -140,19 +142,14 @@ export function resolveGraph(input: GraphResolverInput): FlowGraph {
       const firstConn = connsByFromPort.get(outputPortId);
       if (!firstConn) continue;
 
-      // BFS traversal
+      // Follow the one configured outgoing connection per port.
       const steps: FlowStep[] = [];
       const visited = new Set<string>();
-      visited.add(pageNode.id);
 
       let currentConn: RoutingConnection | undefined = firstConn;
 
       while (currentConn) {
         const targetNodeId = currentConn.toNodeId;
-
-        // Loop detection
-        if (visited.has(targetNodeId)) break;
-        visited.add(targetNodeId);
 
         const targetNode = nodeById.get(targetNodeId);
         if (!targetNode) break;
@@ -173,6 +170,19 @@ export function resolveGraph(input: GraphResolverInput): FlowGraph {
         }
 
         if (targetNode.type === "service") {
+          // Distinct endpoints may share a service. Only revisiting the same
+          // input port creates an execution loop; pages are terminal navigation.
+          if (visited.has(currentConn.toPortId)) {
+            diagnostics.push({
+              severity: "error",
+              code: "ROUTING_CYCLE",
+              flowId: `flow_${page.id}_${actionable.id}`,
+              nodeId: targetNodeId,
+              message: `Routing from "${page.title}" repeats a backend endpoint. Remove the circular connection; use a bounded Loop inside the backend workflow for repetition.`,
+            });
+            break;
+          }
+          visited.add(currentConn.toPortId);
           // ── Service step ──
           const service = serviceById.get(targetNode.refId);
           if (!service) break;
@@ -228,7 +238,7 @@ export function resolveGraph(input: GraphResolverInput): FlowGraph {
             if (outConn.fromPortId !== `${targetNode.id}:out:${blockId}`)
               continue;
             const destNode = nodeById.get(outConn.toNodeId);
-            if (destNode && !visited.has(destNode.id)) {
+            if (destNode) {
               currentConn = outConn;
               break;
             }
@@ -258,6 +268,7 @@ export function resolveGraph(input: GraphResolverInput): FlowGraph {
 
   return {
     flows,
+    ...(diagnostics.length ? { diagnostics } : {}),
     pages: pagesMeta,
     services: servicesMeta,
   };

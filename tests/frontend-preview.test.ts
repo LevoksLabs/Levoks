@@ -130,3 +130,59 @@ test("compiler blocks workflow inputs that endpoint validation would silently di
     /Declare quantity/,
   );
 });
+
+test("backend routing can return to its trigger page without restarting the flow", () => {
+  const { project, refresh } = canvasAppFixture();
+  const output = compileProject(project);
+  const flow = output.graph.flows.find(
+    (flow) => flow.trigger.elementId === refresh,
+  )!;
+  assert.deepEqual(
+    flow.steps.map((step) => step.type),
+    ["api_call", "navigate"],
+  );
+  const destination = flow.steps[1];
+  assert.ok(
+    destination.type === "navigate" &&
+      destination.pageId === flow.trigger.pageId,
+  );
+});
+
+test("routing executes distinct endpoints in one service and rejects repeated endpoint cycles", () => {
+  const { project, refresh } = canvasAppFixture();
+  const response = project.routing.connections.find(
+    (edge) => edge.id === "refresh-home",
+  )!;
+  response.toNodeId = "service";
+  response.toPortId = "service:in:confirm";
+  const output = compileProject(project);
+  assert.deepEqual(
+    output.diagnostics.filter((item) => item.severity === "error"),
+    [],
+  );
+  const flow = output.graph.flows.find(
+    (flow) => flow.trigger.elementId === refresh,
+  )!;
+  assert.deepEqual(
+    flow.steps.map((step) =>
+      step.type === "api_call" ? step.endpoint : step.type,
+    ),
+    ["/refresh", "/confirm", "navigate"],
+  );
+
+  const confirmation = project.routing.connections.find(
+    (edge) => edge.id === "confirm-home",
+  )!;
+  confirmation.toNodeId = "service";
+  confirmation.toPortId = "service:in:refresh";
+  const failures = compileProject(project).diagnostics.filter(
+    (item) => item.severity === "error",
+  );
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].code, "ROUTING_CYCLE");
+  assert.equal(failures[0].flowId, flow.id);
+  assert.throws(
+    () => generatedPreview(project, project.editor.activePageId),
+    /circular connection/,
+  );
+});

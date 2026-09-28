@@ -176,7 +176,8 @@ export const useRoutingStore = create<RoutingStore>(withProjectHistory("routing"
         if (exists) return;
         const from = get().getPortsForNode(fromNodeId).find(p => p.id === fromPortId);
         const to = get().getPortsForNode(toNodeId).find(p => p.id === toPortId);
-        if (!from || !to || from.portType !== "output" || to.portType !== "input" || fromNodeId === toNodeId) return;
+        if (!from || !to || from.portType !== "output" || to.portType !== "input") return;
+        if (fromNodeId === toNodeId && from.blockId && from.blockId === to.blockId) return;
 
         const conn: RoutingConnection = {
             id: uuidv4(),
@@ -213,11 +214,6 @@ export const useRoutingStore = create<RoutingStore>(withProjectHistory("routing"
     endConnecting: (port) => {
         const state = get();
         if (!state.connectingFrom || !port) {
-            set({ connectingFrom: null });
-            return;
-        }
-        // Can't connect to same node
-        if (state.connectingFrom.nodeId === port.nodeId) {
             set({ connectingFrom: null });
             return;
         }

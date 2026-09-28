@@ -61,11 +61,17 @@ export default function GeneratedPreview({
       const destination = editor.pages.find(
         (page) => page.id === event.data.pageId,
       );
-      if (destination) onNavigate(destination.id);
+      if (destination) {
+        // React preserves an unchanged srcDoc; explicitly reload same-page links
+        // so form values and widget state reset just as in the exported app.
+        if (destination.id === pageId && frame.current)
+          frame.current.srcdoc = result.html;
+        onNavigate(destination.id);
+      }
     };
     window.addEventListener("message", navigate);
     return () => window.removeEventListener("message", navigate);
-  }, [editor.pages, onNavigate]);
+  }, [editor.pages, onNavigate, pageId, result.html]);
   return (
     <div className="generated-preview" style={{ width, maxWidth: "100%" }}>
       <p>

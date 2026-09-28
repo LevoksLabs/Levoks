@@ -14,7 +14,7 @@ import { FlowGraph, Flow, FlowStep, IRDiagnostic } from "@/types/ir";
  * Empty array = valid graph.
  */
 export function validateIR(graph: FlowGraph): IRDiagnostic[] {
-    const diagnostics: IRDiagnostic[] = [];
+    const diagnostics: IRDiagnostic[] = [...(graph.diagnostics || [])];
 
     const pageIds = new Set(graph.pages.map((p) => p.id));
     const serviceIds = new Set(graph.services.map((s) => s.id));

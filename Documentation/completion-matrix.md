@@ -109,7 +109,7 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | IR05 | All-page Next.js generation, navigation and globals | PARTIAL | All-page Next.js generation, globals and navigation have exported browser evidence. Actual downloaded ZIP acceptance exercises menu/social routing, typed forms, REST/MongoDB, error recovery and a standalone artifact outside the repository. Normal-flow child dimensions are preserved. Broad property/widget parity and dynamic response binding remain. |
 | IR06 | Full Express/container ZIP and project restore | PARTIAL | Actual editor-downloaded ZIP contents are compared with compiler output, extracted, built and executed with real Next/Express/MongoDB. Build roots are explicitly scoped for portable standalone output. Docker image/runtime acceptance and unsupported backend block families remain. |
 | RT01 | Page/service trays, draggable freely placed nodes | PARTIAL | R canvas exists; browser interaction verification pending. |
-| RT02 | Page→page, page→service, service→service flow | PARTIAL | R resolves chained navigation/API calls. Downloaded-browser evidence covers typed form body values, URL parameters, navigation only after success and error recovery. General response-to-view/step-output bindings remain missing. |
+| RT02 | Page→page, page→service, service→service flow | PARTIAL | R resolves chained navigation/API calls, including same-page resets and distinct endpoints in one service. Circular endpoint chains produce explicit errors rather than truncated flows. Actual editor wiring → ZIP → Next/Express/MongoDB acceptance verifies call order, typed form values, URL parameters, successful return navigation and error recovery. General response-to-view/step-output bindings remain missing. |
 | RT03 | Wire selection and context-specific inspector/disabled options | PARTIAL | R basic wire state; complete context-sensitive mapping absent. |
 | AI01 | BYOK model selection/Hugging Face inference | PARTIAL | `/api/ai`; live responses/model capability discovery unverified. |
 | AI02 | Specialized/fine-tuned IR agents | MISSING | Generic completion prompting is not trained specialized agents. Model selection/training artifacts required; internal orchestration missing. |
@@ -286,4 +286,38 @@ Runtime acceptance covers numeric/boolean form values, stored documents, navigat
 
 Preview remains PARTIAL: backend networking and arbitrary edited source do not execute inside Levoks. Its allow-forms permission enables browser submit events; restrictive CSP blocks actual native form transport and all network requests. Existing sandbox tests retain parent isolation assertions and now explicitly test blocked form transport. No assertion was removed to hide a failure. The prior workflow test fixture was corrected to declare the boolean input it consumes; its behavioral assertions are unchanged.
 
-The first actual runtime attempt exposed an undeclared request-body schema in the fixture, which motivated the compiler guard. Test harness issues with browser discovery and reading response bodies after navigation were corrected. All final results and remaining external gates follow below.
+The first actual runtime attempt exposed an undeclared request-body schema in the fixture, which motivated the compiler guard. Test harness issues with browser discovery and reading response bodies after navigation were corrected.
+
+### Final verification — 28 September 2026
+
+| Check | Evidence in `.verification/` | Result |
+|---|---|---|
+| TypeScript, lint, units | `canvas-final-check.log` | Passed; 0 lint errors / 52 warnings; all 66 unit tests passed. |
+| Real database/HTTP integration | `canvas-final-integration.log` | All 11 passed. |
+| Editor browser | `canvas-final-browser.log`, `canvas-final-browser-recheck.log` | Initial run: 20 passed and one stale preview-label assertion failed. After updating the label to the explicitly named design simulation, that workflow and the canvas export workflow passed. All 21 unique workflows have passing evidence across these runs. |
+| Downloaded full-stack application | `canvas-final-export.log` | Next.js production build, 11 generated backend module checks and actual Chromium/Express/MongoDB runtime passed, including the standalone frontend copied outside the repository. |
+| Generated design and account applications | `canvas-final-design-recheck.log`, `canvas-final-account.log` | Production builds and browser runtimes passed; account verification used real Express/MongoDB and a local email worker transport. |
+| Editor production build | `canvas-final-build.log` | Passed. |
+| Dependency audit | `canvas-final-audit.json`, generated installs in export logs | Zero advisories in the root and tested generated dependency trees. |
+| Docker and live providers | No Docker executable; live providers not exercised | Existing external gates remain. No claim of hosted deployment or live-provider acceptance. |
+
+## Routing return paths and endpoint chains — 29 September 2026
+
+The routing resolver previously treated every repeated service or page node as a loop. That silently removed navigation back to the triggering page and truncated valid chains through different endpoints in one service. Traversal now follows endpoint ports: pages terminate with navigation, distinct endpoints execute in order, and revisiting an endpoint produces a `ROUTING_CYCLE` error retained through IR validation. Generated preview and export validation reject that error instead of accepting a shortened flow.
+
+The routing canvas accepts same-page links and links between distinct endpoints in a service. Direct endpoint self-links remain rejected. Same-page generated preview navigation explicitly reloads its iframe, clearing local form/widget state just as the exported application's navigation does. Backend calls still report unavailable in the isolated frontend preview; a failed call does not perform the subsequent navigation or clear input.
+
+The expanded browser fixture wires both paths through the actual routing canvas, downloads the ZIP, checks all files, then builds and runs its generated Next.js/Express application with MongoDB. It verifies ordered calls to `/refresh` then `/confirm`, successful navigation back home, direct reset navigation and a visible preview error for circular wiring. These changes extend RT02, IR05 and UX04 evidence; their broader acceptance requirements remain PARTIAL.
+
+Browser verification also caught completed wires intercepting clicks on endpoint ports. Nodes now render above connection hit areas, retaining wire selection outside node controls. The original pointer-based test passes without forced clicks. A subsequent test locator was scoped to the generated-preview alert to distinguish it from Next.js's route announcer; the error-content assertion is unchanged.
+
+| Check | Evidence in `.verification/` | Result |
+|---|---|---|
+| TypeScript, lint, units | `routing-chain-check.log`, `routing-chain-final-lint.log` | Passed; 0 lint errors / 52 existing warnings; all 68 unit tests passed. Final edited browser/UI files also passed targeted lint. |
+| Editor browser | `routing-chain-browser.log` | All 21 Chromium workflows passed in one run, including same-page wiring, same-service endpoint chaining, preview reset and circular-flow rejection. |
+| Real database/HTTP integration | `routing-chain-integration.log` | All 11 passed, including generated workflows, identity lifecycle, quotas, health, audit, encrypted vault and durable worker recovery. |
+| Editor production build | `routing-chain-build.log` | Passed, including the final routing UI and connection-layering changes. |
+| Downloaded application | `routing-chain-export-final.log` | Actual ZIP comparison/extraction, exported Next.js production build, 11 generated backend module checks and real Chromium/Express/MongoDB runtime passed. Portable standalone execution outside the repository also passed. |
+| Dependency audit | `routing-chain-audit.json`, generated installs in `routing-chain-export-final.log` | Zero advisories in the editor and tested generated frontend/backend trees. No dependencies added. |
+
+Screenshots: `routing-return-paths.png`, `canvas-preview.png`, `canvas-export-runtime.png`. The routing screenshot was visually inspected. Full-stack sandbox execution, source reconciliation, advanced data bindings and the other open matrix rows remain internal work. Docker and live-provider verification retain their existing external gates; no overall production-complete claim is made.

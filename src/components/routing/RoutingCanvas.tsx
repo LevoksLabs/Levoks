@@ -270,7 +270,7 @@ const RoutingCanvas: React.FC = () => {
         </div>
       )}
       <GraphOverview items={nodes.map(node => ({ id: node.id, label: node.type === "page" ? pages.find(page => page.id === node.refId)?.title || "Page" : services.find(service => service.id === node.refId)?.name || "Service", x: node.position.x, y: node.position.y, w: node.width, h: node.height, selected: selectedNode === node.id }))} onChoose={id => { selectNode(id); if (!ui.viewportLocked) fitNodes(true, true); }} />
-      <p className="graph-connection-status" role="status">{connectingFrom ? `Connecting ${connectingFrom.label}. Focus a port on another node and press Enter to connect, or Escape to cancel.` : `${connections.length} connections. Ports support Enter or Space to start and finish a connection.`}</p>
+      <p className="graph-connection-status" role="status">{connectingFrom ? `Connecting ${connectingFrom.label}. Focus a compatible port and press Enter to connect, or Escape to cancel.` : `${connections.length} connections. Ports support Enter or Space to start and finish a connection.`}</p>
     </div>
   );
 };

@@ -5195,6 +5195,8 @@ body {
 
 .routing-node {
   position: absolute;
+  /* Node controls must remain above the wires' generous pointer hit areas. */
+  z-index: 1;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -5410,6 +5412,7 @@ body {
 
 .routing-connections-svg {
   position: absolute;
+  z-index: 0;
   top: 0;
   left: 0;
   width: 100%;

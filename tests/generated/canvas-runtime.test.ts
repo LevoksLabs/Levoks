@@ -191,6 +191,36 @@ test(
         await page.getByPlaceholder("Quantity").fill(quantity);
         await page.getByRole("checkbox").setChecked(active);
       };
+      await fill("Discard this draft", "1", true);
+      await page
+        .getByRole("button", { name: "Reset draft", exact: true })
+        .click();
+      await expect(page.getByPlaceholder("Entry title")).toHaveValue("");
+      await fill("Reload this draft", "1", true);
+      const refreshResponse = page.waitForResponse((response) =>
+        response.url().endsWith("/4101/refresh"),
+      );
+      const confirmResponse = page.waitForResponse((response) =>
+        response.url().endsWith("/4101/confirm"),
+      );
+      const requests: string[] = [];
+      const recordRequest = (request: { url(): string }) => {
+        if (/\/4101\/(refresh|confirm)$/.test(request.url()))
+          requests.push(request.url());
+      };
+      page.on("request", recordRequest);
+      await page
+        .getByRole("button", { name: "Reload via backend", exact: true })
+        .click();
+      assert.equal((await refreshResponse).status(), 200);
+      assert.equal((await confirmResponse).status(), 200);
+      page.off("request", recordRequest);
+      assert.deepEqual(
+        requests.map((url) => url.split("/").at(-1)),
+        ["refresh", "confirm"],
+      );
+      await expect(page.getByPlaceholder("Entry title")).toHaveValue("");
+      await expect(page).toHaveURL(origin + "/");
       await fill("First entry", "2", true);
       const savedResponse = page.waitForResponse(
         (response) =>
@@ -201,7 +231,11 @@ test(
         .getByRole("button", { name: "Save entry", exact: true })
         .click();
       const savedResult = await savedResponse;
-      assert.equal(savedResult.ok(), true, savedResult.ok() ? "" : await savedResult.text());
+      assert.equal(
+        savedResult.ok(),
+        true,
+        savedResult.ok() ? "" : await savedResult.text(),
+      );
       await expect(page).toHaveURL(origin + "/entries");
       const collection = client.db().collection("entries");
       const saved = await collection.findOne({ title: "First entry" });

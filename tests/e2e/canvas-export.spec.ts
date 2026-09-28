@@ -28,6 +28,36 @@ test("canvas preview follows real routes, blocks backend simulation, and downloa
     workspace.getByLabel("Project name", { exact: true }),
   ).toHaveValue("Canvas application (import)");
   await workspace.getByRole("button", { name: "Close workspace" }).click();
+  await page.getByRole("button", { name: "Routes", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Home: Reset draft output port", exact: true })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "Home: Navigate here input port",
+      exact: true,
+    })
+    .click();
+  await expect(page.locator(".graph-connection-status")).toContainText(
+    "10 connections",
+  );
+  // Replace the direct response redirect with another endpoint in this service.
+  await page
+    .getByRole("button", {
+      name: "Entries: refresh response output port",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Entries: confirm input port", exact: true })
+    .click();
+  await expect(page.locator(".graph-connection-status")).toContainText(
+    "10 connections",
+  );
+  await page.screenshot({ path: ".verification/routing-return-paths.png" });
+  await page
+    .getByRole("button", { name: "Elements (Shift+E)", exact: true })
+    .click();
   const canvasInputSize = await page
     .locator(`.canvas-page [data-element-id="${fixture.title}"]`)
     .evaluate((el) => ({
@@ -44,12 +74,10 @@ test("canvas preview follows real routes, blocks backend simulation, and downloa
     "1",
   );
   expect(
-    await frame
-      .getByPlaceholder("Entry title")
-      .evaluate((el) => ({
-        width: getComputedStyle(el).width,
-        height: getComputedStyle(el).height,
-      })),
+    await frame.getByPlaceholder("Entry title").evaluate((el) => ({
+      width: getComputedStyle(el).width,
+      height: getComputedStyle(el).height,
+    })),
   ).toEqual(canvasInputSize);
   const inputBox = await frame.getByPlaceholder("Quantity").boundingBox();
   const saveBox = await frame
@@ -65,6 +93,18 @@ test("canvas preview follows real routes, blocks backend simulation, and downloa
   await expect(frame.getByPlaceholder("Entry title")).toHaveValue(
     "Preview item",
   );
+  await frame
+    .getByRole("button", { name: "Reload via backend", exact: true })
+    .click();
+  await expect(frame.getByRole("status")).toContainText(
+    "No data was sent or saved",
+  );
+  await expect(frame.getByPlaceholder("Entry title")).toHaveValue(
+    "Preview item",
+  );
+  await frame.getByRole("button", { name: "Reset draft", exact: true }).click();
+  await expect(frame.getByPlaceholder("Entry title")).toHaveValue("");
+  await expect(frame.getByRole("status")).toHaveText("");
   // Native form events are enabled, but CSP must still block real form transport.
   const blocked = await frame.locator("form").evaluate(
     (form) =>
@@ -141,4 +181,22 @@ test("canvas preview follows real routes, blocks backend simulation, and downloa
     ".verification/canvas-fixture.json",
     JSON.stringify({ ...fixture, project: snapshot }),
   );
+  // A reachable endpoint cycle must fail visibly, not preview a truncated flow.
+  await page.getByRole("button", { name: "Routes", exact: true }).click();
+  await page
+    .getByRole("button", {
+      name: "Entries: confirm response output port",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Entries: refresh input port", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(
+    page.locator(".generated-preview").getByRole("alert"),
+  ).toContainText("circular connection");
+  await expect(
+    page.locator('iframe[title="Generated frontend preview"]'),
+  ).toHaveCount(0);
 });

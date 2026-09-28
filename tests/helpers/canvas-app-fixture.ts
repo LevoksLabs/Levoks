@@ -101,6 +101,26 @@ export function canvasAppFixture() {
     40,
     480,
   );
+  const reset = editor.addElement(
+    {
+      ...templates.button,
+      label: "Reset draft",
+      props: { label: "Reset draft" },
+    },
+    undefined,
+    40,
+    560,
+  );
+  const refresh = editor.addElement(
+    {
+      ...templates.button,
+      label: "Reload via backend",
+      props: { label: "Reload via backend" },
+    },
+    undefined,
+    240,
+    560,
+  );
   const details = editor.addPage("Saved entries");
   editor.updatePageRoute(details, "/entries");
   editor.addElement(
@@ -153,6 +173,19 @@ export function canvasAppFixture() {
           name: "Entries",
           port: 4101,
           blocks: [
+            block("ready", "transform", { fields: { ready: true } }),
+            block(
+              "refresh",
+              "rest_endpoint",
+              { route: "/refresh", method: "GET" },
+              ["ready"],
+            ),
+            block(
+              "confirm",
+              "rest_endpoint",
+              { route: "/confirm", method: "GET" },
+              ["ready"],
+            ),
             block("model", "db_model", {
               tableName: "Entry",
               fields: [
@@ -239,6 +272,9 @@ export function canvasAppFixture() {
     edge("social", "page0", social, "page1", "page"),
     edge("back", "page1", back, "page0", "page"),
     edge("lookup", "page1", lookup, "service", "get"),
+    edge("refresh", "page0", refresh, "service", "refresh"),
+    edge("refresh-home", "service", "refresh", "page0", "page"),
+    edge("confirm-home", "service", "confirm", "page0", "page"),
   ];
   return {
     project: parseProject(project),
@@ -248,5 +284,7 @@ export function canvasAppFixture() {
     social,
     animated,
     details,
+    reset,
+    refresh,
   };
 }

@@ -64,6 +64,8 @@ export interface Flow {
 
 export interface FlowGraph {
     flows: Flow[];
+    // Preserve traversal failures so validation cannot accept a truncated flow.
+    diagnostics?: IRDiagnostic[];
     // Metadata for cross-referencing
     pages: { id: string; title: string; route: string }[];
     services: { id: string; name: string; port: number }[];
