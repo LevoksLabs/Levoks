@@ -410,9 +410,9 @@ export function compileProject(value: ProjectDocument) {
       scripts: { dev: "next dev", build: "next build", start: "next start" },
       dependencies: {
         ...customDependencies,
-        next: "^16.2.10",
-        react: "^19.2.3",
-        "react-dom": "^19.2.3",
+        next: "16.3.5",
+        react: "19.2.3",
+        "react-dom": "19.2.3",
       },
       engines: { node: ">=22" },
     },

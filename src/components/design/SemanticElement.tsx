@@ -3,6 +3,7 @@ import { createElement, type ReactNode } from "react";
 import type { ElementNode } from "@/types";
 import { nativeTree, type SemanticTree } from "@/lib/elements/native";
 import { useEditorStore } from "@/store/editorStore";
+import { orderedStyles } from "@/lib/property-values";
 
 export default function SemanticElement({
   element,
@@ -32,14 +33,6 @@ export default function SemanticElement({
   const render = (tree: SemanticTree, key: number, root = false): ReactNode => {
     if (typeof tree === "string") return tree;
     if ("slot" in tree) return children;
-    if (tree.tag === "iframe")
-      return (
-        <div key={key} className="semantic-boundary">
-          <strong>{element.label}</strong>
-          <p>{String(element.props.src)}</p>
-          <small>Embedded content loads in the exported application.</small>
-        </div>
-      );
     const click = (event: React.MouseEvent<HTMLElement>) => {
       const target = event.target as HTMLElement;
       if (target.closest("[data-dialog-open]"))
@@ -64,6 +57,9 @@ export default function SemanticElement({
     const props = {
       ...tree.attrs,
       key,
+      ...(!interactive && tree.tag === "input" && tree.attrs.defaultChecked !== undefined
+        ? { checked: Boolean(tree.attrs.defaultChecked), defaultChecked: undefined, readOnly: true } : {}),
+      ...(tree.tag === "iframe" && !interactive ? { tabIndex: -1 } : {}),
       ...(!interactive && ["input", "textarea", "select", "button", "a", "summary"].includes(tree.tag)
         ? { inert: true }
         : {}),
@@ -73,11 +69,13 @@ export default function SemanticElement({
             style: {
               color: "inherit",
               font: "inherit",
-              ...element.styles,
+              ...orderedStyles(element.styles),
+              ...(element.type === "button" && element.props.hoverBg ? { "--button-hover": String(element.props.hoverBg) } : {}),
               width: "100%",
               height: "100%",
               minWidth: 0,
               boxSizing: "border-box",
+              ...(tree.tag === "iframe" && !interactive ? { pointerEvents: "none" } : {}),
             },
           }
         : {}),

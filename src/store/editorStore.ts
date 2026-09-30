@@ -289,6 +289,16 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
             const el = state.elementsById[id];
             const next = { ...state.elementsById };
             next[id] = patchElement(el, updates, useEditorUIStore.getState().breakpoint);
+            if (next[id].definitionId === "radioButton" && next[id].props.checked && updates.props && ("checked" in updates.props || "name" in updates.props)) {
+                const formOwner = (node: ElementNode): string => {
+                    let parent = node.parentId;
+                    while (parent) { const ancestor = next[parent]; if (!ancestor) break; if (ancestor.type === "form") return parent; parent = ancestor.parentId; }
+                    return Object.entries(state.pageElementMap).find(([, roots]) => roots.some(root => collectDescendantIds(next, root).has(node.id)))?.[0] || state.activePageId;
+                };
+                const owner = formOwner(next[id]);
+                for (const sibling of Object.values(next)) if (sibling.id !== id && sibling.definitionId === "radioButton" && sibling.props.name && sibling.props.name === next[id].props.name && formOwner(sibling) === owner && sibling.props.checked)
+                    next[sibling.id] = { ...sibling, props: { ...sibling.props, checked: false } };
+            }
             return { elementsById: next };
         });
     },
@@ -303,7 +313,11 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
     updateElementSize: (id, w, h) => {
         set(state => {
             if (!state.elementsById[id]) return state;
-            return { elementsById: { ...state.elementsById, [id]: updateLayout(state.elementsById[id], { w, h }) } };
+            const node = state.elementsById[id], breakpoint = useEditorUIStore.getState().breakpoint, current = resolveElement(node, breakpoint);
+            const styles: Record<string, string> = {};
+            if (w !== current.layout.w && current.styles.width) styles.width = `${w}px`;
+            if (h !== current.layout.h && current.styles.height) styles.height = `${h}px`;
+            return { elementsById: { ...state.elementsById, [id]: patchElement(node, { layout: { ...current.layout, w, h }, styles }, breakpoint) } };
         });
     },
 

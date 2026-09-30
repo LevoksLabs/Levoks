@@ -10,7 +10,10 @@ import { assetElement } from "@/lib/design-assets";
 import { resolveElement, fontFamily } from "@/lib/design";
 import { useEditorStore } from "@/store/editorStore";
 import TabsWidget from "./design/TabsWidget";
-import { widgetNumber } from "@/lib/widgets";
+import { widgetNumber, choiceCSS } from "@/lib/widgets";
+import { orderedStyles } from "@/lib/property-values";
+import { embedAttributes } from "@/lib/elements/embed";
+import { safeElementUrl } from "@/lib/elements/native";
 import { ICON_PATHS } from "@/lib/icon-paths";
 import VectorShape from "./design/VectorShape";
 import { useDroppable } from "@dnd-kit/core";
@@ -78,22 +81,22 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
     const resolvedPosition = (rawPosition || (isContainer ? "relative" : "static")) as React.CSSProperties["position"];
     const isPositionedChild = resolvedPosition !== "static";
     const positionStyles: React.CSSProperties = isRoot
-        ? { position: "absolute", left: `${layout.x}px`, top: `${layout.y}px`, width: String(element.styles.width || widthPx), minHeight: heightPx, height: isTextLike ? "auto" : String(element.styles.height || heightPx) }
+        ? { position: "absolute", left: `${layout.x}px`, top: `${layout.y}px`, width: String(element.styles.width || widthPx), minHeight: element.styles.height ? undefined : heightPx, height: isTextLike ? "auto" : String(element.styles.height || heightPx) }
         : {
             position: resolvedPosition, left: isPositionedChild ? `${layout.x}px` : undefined, top: isPositionedChild ? `${layout.y}px` : undefined,
-            width: String(element.styles.width || widthPx), minHeight: heightPx, height: isTextLike ? "auto" : String(element.styles.height || heightPx)
+            width: String(element.styles.width || widthPx), minHeight: element.styles.height ? undefined : heightPx, height: isTextLike ? "auto" : String(element.styles.height || heightPx)
         };
 
     const mergedStyles: React.CSSProperties = {
-        ...(element.type === "native" ? {} : element.styles as React.CSSProperties),
+        ...(["native", "button", "input"].includes(element.type) ? {} : orderedStyles(element.styles) as React.CSSProperties),
         ...positionStyles,
         ...(element.type === "shape" && element.props.shapeType && element.props.shapeType !== "rectangle" ? { backgroundColor: "transparent" } : {}),
         fontFamily: fontFamily(element.styles.fontFamily),
         ...(element.type === "gallery" ? { display: "block" } : {}),
-        ...(element.type === "input" ? { border: "none", background: "transparent", backgroundColor: "transparent", boxShadow: "none", padding: "0" } : {}),
+        
         cursor: readOnly ? (element.styles.cursor as React.CSSProperties["cursor"]) || "default" : (layout.locked ? "not-allowed" : (isSelected ? "grab" : "default")),
         userSelect: "none",
-        overflow: (isContainer || element.vector) ? "visible" : (isTextLike ? "visible" : "hidden"),
+        overflow: (element.styles.overflow as React.CSSProperties["overflow"]) || ((isContainer || element.vector || isTextLike) ? "visible" : "hidden"),
         opacity: layout.opacity ?? 1,
         transform: layout.rotation ? `rotate(${layout.rotation}deg)` : undefined,
     };
@@ -124,15 +127,6 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
         }
     };
 
-    const handleReadOnlyAction = () => {
-        if (!readOnly) return;
-        if (element.actions?.type === "redirect" && element.actions.target) window.open(String(element.actions.target), "_blank", "noopener,noreferrer");
-        if (element.actions?.type === "scroll" && element.actions.target) {
-            const target = document.querySelector(String(element.actions.target));
-            if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-    };
-
     const containerPlaceholder = (text: string) =>
         element.children.length === 0 && <div className="container-placeholder"><span>{text}</span></div>;
 
@@ -157,34 +151,27 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
                     letterSpacing: String(element.styles.letterSpacing || "normal"), textDecoration: String(element.styles.textDecoration || "none"),
                     textTransform: (element.styles.textTransform as React.CSSProperties["textTransform"]) || "none"
                 }}>
-                    {String(element.props.content || "Add a Title")}</Tag>;
+                    {String(element.props.content ?? "Add a Title")}</Tag>;
             }
             case "text": return <p className="el-text-inner" style={{
                 margin: 0, textAlign: (element.styles.textAlign as React.CSSProperties["textAlign"]) || "left",
                 fontFamily: fontFamily(element.styles.fontFamily), letterSpacing: String(element.styles.letterSpacing || "normal"),
                 textDecoration: String(element.styles.textDecoration || "none"), textTransform: (element.styles.textTransform as React.CSSProperties["textTransform"]) || "none"
             }}>
-                {String(element.props.content || "Text")}</p>;
+                {String(element.props.content ?? "Text")}</p>;
             case "paragraph": return <p className="el-paragraph-inner" style={{
                 margin: 0, textAlign: (element.styles.textAlign as React.CSSProperties["textAlign"]) || "left",
                 fontFamily: fontFamily(element.styles.fontFamily), letterSpacing: String(element.styles.letterSpacing || "normal"),
                 textDecoration: String(element.styles.textDecoration || "none"), textTransform: (element.styles.textTransform as React.CSSProperties["textTransform"]) || "none"
             }}>
-                {String(element.props.content || "Paragraph text...")}</p>;
-            case "button": return <button className="el-button-inner" disabled={Boolean(element.props.disabled || element.props.loading)} aria-busy={element.props.loading ? true : undefined} onClick={handleReadOnlyAction} style={{
-                background: "inherit", backgroundColor: "inherit", color: "inherit", borderRadius: String(element.styles.borderRadius || "6px"),
-                fontSize: String(element.styles.fontSize || "14px"), fontWeight: String(element.styles.fontWeight || "500"), cursor: "pointer", border: "none",
-                width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-                textAlign: (element.styles.textAlign as React.CSSProperties["textAlign"]) || "center", fontFamily: fontFamily(element.styles.fontFamily),
-                textTransform: (element.styles.textTransform as React.CSSProperties["textTransform"]) || "none", letterSpacing: String(element.styles.letterSpacing || "normal"),
-                padding: String(element.styles.padding || "0")
-            }}>{String(element.props.label || "Button")}</button>;
+                {String(element.props.content ?? "Paragraph text...")}</p>;
+            case "button":
+            case "input": return <SemanticElement key={JSON.stringify(element.props)} element={element} interactive={readOnly}>{null}</SemanticElement>;
             case "image": return <img draggable={false} src={String(element.props.src || "")} alt={String(element.props.alt || "")} style={{
-                width: "100%", height: "100%", objectFit: (String(element.props.objectFit || "cover")) as React.CSSProperties["objectFit"],
+                width: "100%", height: "100%", objectFit: (String(element.props.objectFit || "cover")) as React.CSSProperties["objectFit"], objectPosition: String(element.props.objectPosition || "50% 50%"),
                 borderRadius: String(element.styles.borderRadius || "0"), pointerEvents: "none",
             }} />;
-            case "video": return <div className="video-placeholder"><span className="video-icon">▶</span><span>Video Player</span>
-                <span className="video-meta">{element.props.autoplay ? "Autoplay" : ""} {element.props.loop ? "• Loop" : ""} {element.props.muted ? "• Muted" : ""}</span></div>;
+            case "video": return <video poster={safeElementUrl(element.props.poster) || undefined} src={safeElementUrl(element.props.src) || undefined} controls={Boolean(element.props.controls)} autoPlay={readOnly && Boolean(element.props.autoplay)} loop={Boolean(element.props.loop)} muted={Boolean(element.props.muted)} style={{ width: "100%", height: "100%", pointerEvents: readOnly ? "auto" : "none" }} />;
             case "gallery": return element.children.length === 0 ? (
                 <div className="gallery-placeholder" style={{ gridTemplateColumns: `repeat(${Number(element.props.columns) || 3}, 1fr)`, gap: `${Number(element.props.gap) || 8}px` }}>
                     {Array.from({ length: Number(element.props.columns) || 3 }).map((_, i) => <div key={i} className="gallery-item-ph">🖼</div>)}</div>
@@ -197,20 +184,6 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
                     {element.children.length === 0 ? containerPlaceholder("Drop form elements here") : <Renderer elementIds={element.children} isRoot={false} readOnly={readOnly} />}
                 </form>;
             }
-            case "input": {
-                const it = String(element.props.inputType || "text");
-                const cip = {
-                    name: String(element.props.name || ""), placeholder: String(element.props.placeholder || ""),
-                    required: Boolean(element.props.required), maxLength: Number(element.props.maxLength) > 0 ? Number(element.props.maxLength) : undefined,
-                    style: {
-                        width: "100%", height: "100%", padding: String(element.styles.padding || "12px 16px"), border: String(element.styles.border || "1px solid #d1d5db"),
-                        borderRadius: String(element.styles.borderRadius || "8px"), fontSize: String(element.styles.fontSize || "14px"),
-                        backgroundColor: String(element.styles.backgroundColor || "#fff"), boxShadow: String(element.styles.boxShadow || "none"),
-                        boxSizing: "border-box" as const, outline: "none", resize: "none" as const
-                    }, readOnly: true,
-                };
-                return it === "textarea" ? <textarea {...cip} /> : <input {...cip} type={it} />;
-            }
             case "shape": return element.vector ? <VectorShape element={element} editable={isSelected && !readOnly && !layout.locked} /> : <PrimitiveShape shapeType={String(element.props.shapeType || "rectangle")} color={String(element.styles.backgroundColor || "#6366f1")} />;
             case "divider": return <hr style={{ width: "100%", border: "none", height: "100%", backgroundColor: String(element.styles.backgroundColor || "#e5e7eb") }} />;
             case "menu": {
@@ -220,7 +193,7 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
                     {items.map((item, i) => <span key={i} className="menu-item">{item.trim()}</span>)}</nav>;
             }
             case "repeater": return <div className="repeater-content" style={{ display: "flex", flexDirection: element.props.direction === "row" ? "row" : "column", gap: String(element.styles.gap || "12px"), width: "100%" }}>{element.children.length ? Array.from({ length: widgetNumber(element.props.repeatCount, 3, 1, 20) }, (_, index) => <div key={index} className="repeater-item"><Renderer elementIds={element.children} isRoot={false} readOnly={readOnly || index > 0} /></div>) : containerPlaceholder("Add a template to repeat")}</div>;
-            case "frame": return <div className="frame-placeholder"><span>⟨/⟩</span><span>Embed Frame</span><span className="frame-url">{String(element.props.src || "https://example.com")}</span></div>;
+            case "frame": return <iframe {...embedAttributes(element.props)} style={{ width: "100%", height: "100%", border: 0, pointerEvents: readOnly ? "auto" : "none" }} tabIndex={readOnly ? 0 : -1} />;
             case "icon": {
                 const svg = <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICON_PATHS[String(element.props.icon || "star")] || ICON_PATHS.star} /></svg>;
                 return <div className="icon-element" style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: String(element.props.iconColor || "#374151") }}>
@@ -236,10 +209,7 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
             }
             case "accordion": {
                 const expanded = Boolean(element.props.expanded);
-                return <div className="accordion-element"><div className="accordion-header"><span>{String(element.props.headerText || "Accordion Header")}</span>
-                    <span className="accordion-arrow">{expanded ? "▼" : "▶"}</span></div>
-                    {expanded && <div className="accordion-body">{element.children.length === 0 ? containerPlaceholder("Drop content here") :
-                        <Renderer elementIds={element.children} isRoot={false} readOnly={readOnly} />}</div>}</div>;
+                return <details open={expanded} onToggle={event => { if (!readOnly && event.currentTarget.open !== expanded) useEditorStore.getState().updateElement(element.id, { props: { expanded: event.currentTarget.open } }); }}><summary>{String(element.props.headerText || "Accordion Header")}</summary><div><Renderer elementIds={element.children} isRoot={false} readOnly={readOnly} /></div></details>;
             }
             case "tabs": return <TabsWidget element={element} render={ids => <Renderer elementIds={ids} readOnly={readOnly} />} onSelect={readOnly ? undefined : index => useEditorStore.getState().updateElement(element.id, { props: { activeTab: index } })} />;
             default: return null;
@@ -439,6 +409,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = (props) => {
 
 const Renderer: React.FC<RendererProps> = ({ elementIds, isRoot = false, readOnly = false }) => (
     <>
+        {isRoot && <style>{choiceCSS}</style>}
         {elementIds.map((id) => (
             <ElementRenderer key={id} elementId={id} isRoot={isRoot} readOnly={readOnly} />
         ))}

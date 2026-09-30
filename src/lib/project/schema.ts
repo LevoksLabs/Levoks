@@ -408,6 +408,18 @@ export function parseProject(value: unknown): ProjectDocument {
         if (!definition.children && node.children.length) throw new Error("This element does not accept children.");
         for (const [key, value] of Object.entries(node.props)) if (!definition.propsSchema[key] || typeof value !== definition.propsSchema[key].type) throw new Error(`Invalid ${definition.name} property: ${key}`);
         if (definition.tag === "input" && node.props.type !== definition.template.props.type) throw new Error("Input type is defined by the element registry.");
+        // Upgrade the old 28px unlabeled choices once, in semantic state. Never
+        // leave a canvas-only size/label correction that disappears on export.
+        if (!project.source && ["radioButton", "checkbox", "switch"].includes(definition.id) && node.props.label === undefined) {
+          node.props.label = String(node.props.ariaLabel || (definition.id === "radioButton" ? "Option" : definition.name));
+          if (node.layout.w <= 40 && !node.styles.width) node.layout.w = 200;
+          if (node.layout.h <= 28 && !node.styles.height) node.layout.h = 36;
+          node.styles.display ||= "flex";
+          node.styles.alignItems ||= "center";
+          node.styles.gap ||= "8px";
+          if (node.styles.padding === "10px 12px") node.styles.padding = "4px";
+          if (node.styles.border === "1px solid #9ca3af") node.styles.border = "none";
+        }
       }
       for (const event of Object.keys(node.events || {})) if (!definition.events.includes(event)) throw new Error(`Unsupported event: ${event}`);
     }

@@ -4,6 +4,7 @@ import { Play, Pause, X, Plus, Trash2 } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useEditorUIStore } from "@/store/editorUIStore";
 import { motionFrames } from "@/lib/design";
+import { ParameterControl } from "./ParameterControl";
 import type { ElementNode } from "@/types";
 type Motion = NonNullable<ElementNode["motion"]>;
 const initialFrame = { time: 0, x: 0, y: 0, rotation: 0, scale: 1, opacity: 1 };
@@ -92,15 +93,15 @@ export default function MotionPanel() {
   ) => (
     <label key={field}>
       {field === "time" ? "Offset" : field}
-      <input
-        aria-label={`Keyframe ${index + 1} ${field}`}
-        type="number"
+      <ParameterControl
+        label={`Keyframe ${index + 1} ${field}`}
+        unit={field === "rotation" ? "°" : ["x", "y"].includes(field) ? "px" : ""}
+        sensitivity={field === "scale" || field === "opacity" || field === "time" ? 0.005 : 0.5}
         min={min}
         max={max}
         step={step}
         value={frame[field]}
-        onChange={(event) => {
-          const value = Number(event.target.value);
+        onChange={(value) => {
           if (
             !Number.isFinite(value) ||
             value < min ||

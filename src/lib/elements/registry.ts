@@ -4,6 +4,7 @@ import {
   sidebarCategories as legacyCategories,
 } from "@/templates/legacy";
 import { DEFAULT_LAYOUT } from "@/lib/defaults";
+import { ICON_PATHS } from "@/lib/icon-paths";
 
 export type ElementTemplate = Omit<
   ElementNode,
@@ -267,8 +268,10 @@ for (const [id, name, type] of [
       ariaLabel: name,
       required: false,
       disabled: false,
+      ...(!["checkbox", "radio", "file", "range", "color"].includes(type) ? { label: "", helperText: "", error: "", readOnly: false, pattern: "" } : {}),
       ...(type === "checkbox" || type === "radio"
         ? {
+            label: type === "radio" ? "Option" : name,
             checked: false,
             value: "yes",
             ...(id === "switch" ? { role: "switch" } : {}),
@@ -283,10 +286,10 @@ for (const [id, name, type] of [
                 : {}),
             }),
     },
-    inputStyles,
+    ["checkbox", "radio"].includes(type) ? { display: "flex", alignItems: "center", gap: "8px", padding: "4px", color: "#1f2937" } : inputStyles,
     false,
     "tag",
-    ["checkbox", "radio"].includes(type) ? [28, 28] : [300, 44],
+    ["checkbox", "radio"].includes(type) ? [200, 36] : [300, 44],
   );
 native(
   "textarea",
@@ -301,6 +304,7 @@ native(
     required: false,
     disabled: false,
     rows: 4,
+    label: "", helperText: "", error: "", readOnly: false,
   },
   inputStyles,
   false,
@@ -323,6 +327,7 @@ for (const [id, name, multiple] of [
       multiple,
       required: false,
       disabled: false,
+      label: "", helperText: "", error: "", ...(!multiple ? { value: "Option one", placeholder: "Choose an option" } : {}),
     },
     inputStyles,
     false,
@@ -497,7 +502,7 @@ for (const [id, name] of [
     name,
     "Advanced",
     "iframe",
-    { src: "https://example.com", title: name },
+    { src: "", title: name, embedType: "html", source: "<p style=\"font:16px system-ui;padding:16px\">Your embedded content</p>", allowScripts: false, allowForms: false },
     { border: "1px solid #d1d5db" },
     false,
     "iframe",
@@ -722,6 +727,12 @@ for (const id of [
   "richText",
 ])
   definitions.find((d) => d.id === id)!.status = "experimental";
+
+const buttonFields = definitions.find(d => d.id === "button")!.propsSchema;
+buttonFields.type.options = ["button", "submit", "reset"];
+buttonFields.variant.options = ["solid", "outline", "ghost"];
+buttonFields.icon.options = ["", ...Object.keys(ICON_PATHS)];
+buttonFields.iconPosition.options = ["left", "right"];
 
 export const ELEMENT_REGISTRY: Readonly<Record<string, ElementDefinition>> =
   Object.fromEntries(definitions.map((d) => [d.id, d]));

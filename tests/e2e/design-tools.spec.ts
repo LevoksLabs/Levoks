@@ -271,7 +271,7 @@ test("responsive overrides, token bindings and component instances survive save 
   await inspector
     .getByLabel("Fill token", { exact: true })
     .selectOption({ label: "Brand" });
-  await expect(element).toHaveCSS("background-color", "rgb(51, 68, 119)");
+  await expect(element.locator(':scope > button')).toHaveCSS("background-color", "rgb(51, 68, 119)");
   await page.getByLabel("Component name", { exact: true }).fill("Action");
   await page
     .getByRole("button", { name: "Save selection as component", exact: true })
@@ -284,7 +284,7 @@ test("responsive overrides, token bindings and component instances survive save 
   ).toHaveCount(3);
   await page.getByLabel("Token Brand", { exact: true }).fill("#774433");
   await page.getByLabel("Token Brand", { exact: true }).press("Enter");
-  await expect(element).toHaveCSS("background-color", "rgb(119, 68, 51)");
+  await expect(element.locator(':scope > button')).toHaveCSS("background-color", "rgb(119, 68, 51)");
   await page.getByRole("button", { name: "Save project", exact: true }).click();
   await page.reload();
   await expect(
@@ -517,9 +517,11 @@ test("pen curves, reusable shapes, multiple motion tracks and layer keyboard con
   await page.getByRole("button", { name: "Insert Petal", exact: true }).click();
   await expect(shape).toHaveCount(2);
   await page.locator(`.canvas-page [data-element-id="${button}"]`).click();
+  await expect(page.locator(`.canvas-page [data-element-id="${button}"]`)).toHaveClass(/element-selected/);
   await page
     .locator(`.canvas-page [data-element-id="${other}"]`)
     .click({ modifiers: ["Shift"] });
+  await expect(page.locator('.canvas-page .element-selected')).toHaveCount(2);
   await page
     .getByRole("button", { name: "Motion timeline", exact: true })
     .click();

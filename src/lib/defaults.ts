@@ -103,7 +103,7 @@ export const DEFAULT_STYLES: Record<ElementType, Record<string, string | number>
         fontWeight: "600",
         cursor: "pointer",
         border: "none",
-        display: "inline-block",
+        display: "inline-flex",
         textAlign: "center",
         fontFamily: "Inter",
     },
@@ -200,12 +200,12 @@ export const DEFAULT_PROPS: Record<ElementType, Record<string, string | number |
     title: { content: "Add a Title", level: 2 },
     text: { content: "Edit this text" },
     paragraph: { content: "This is a paragraph. Click to edit and add your own text. Customize the font, size, and color in the properties panel." },
-    button: { label: "Click me" },
+    button: { label: "Click me", type: "button", disabled: false, loading: false, loadingLabel: "Loading…", icon: "", iconPosition: "left", href: "", variant: "solid" },
     image: { src: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop", alt: "Placeholder image", objectFit: "cover" },
     video: { src: "https://www.w3schools.com/html/mov_bbb.mp4", autoplay: false, controls: true, loop: false, muted: false },
     gallery: { columns: 3, gap: 8 },
     form: { requestMethod: "POST", requestUrl: "/api/contact" },
-    input: { placeholder: "Enter text...", inputType: "text", required: false },
+    input: { placeholder: "Enter text...", inputType: "text", required: false, name: "field", label: "", value: "", disabled: false, readOnly: false, pattern: "", helperText: "", error: "" },
     shape: { shapeType: "rectangle" },
     divider: {},
     menu: { items: "Home,About,Services,Contact", menuStyle: "horizontal" },
@@ -215,7 +215,7 @@ export const DEFAULT_PROPS: Record<ElementType, Record<string, string | number |
     spacer: { spacerHeight: 40 },
     socialbar: { facebook: true, twitter: true, instagram: true, linkedin: false, youtube: false, iconSize: 24, iconStyle: "filled" },
     accordion: { headerText: "Accordion Header", expanded: true },
-    tabs: { tabTitles: "Tab 1,Tab 2,Tab 3", activeTab: 0 },
+    tabs: { tabTitles: "Tab 1,Tab 2,Tab 3", tabContents: "First tab content\nSecond tab content\nThird tab content", activeTab: 0 },
 };
 
 // ─── Utility: Strip Defaults for Codegen ───

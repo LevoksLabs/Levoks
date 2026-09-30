@@ -76,7 +76,7 @@ export default function GeneratedPreview({
     <div className="generated-preview" style={{ width, maxWidth: "100%" }}>
       <p>
         Generated frontend · isolated preview. Page links, widgets and
-        animations work here. Backend requests, external assets and source edits
+        animations and embeds work here. Backend requests and source edits
         require the exported application runtime.
       </p>
       {result.error ? (

@@ -91,6 +91,7 @@ export default function DesignInspector({ element }: { element: ElementNode }) {
                 )?.[1];
                 store.updateElement(element.id, {
                   styles: {
+                    ...(property === "backgroundColor" ? { background: "" } : {}),
                     [property]: event.target.value
                       ? `var(--lv-${event.target.value})`
                       : store.tokens[old || ""]?.value || "inherit",

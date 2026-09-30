@@ -8,7 +8,9 @@ import { generateAnimationCSS, generateAnimationSetup, generateAnimationUseEffec
 import { assetElement, assetFonts } from "@/lib/design-assets";
 import { SHAPE_PATHS } from "@/lib/shape-paths";
 import { ICON_PATHS } from "@/lib/icon-paths";
-import { widgetNumber, tabLabels } from "@/lib/widgets";
+import { widgetNumber, tabLabels, tabsCSS, choiceCSS } from "@/lib/widgets";
+import { orderedStyles } from "@/lib/property-values";
+import { embedAttributes } from "@/lib/elements/embed";
 import { widgetRuntime } from "./widget-runtime";
 import { resolveElement, vectorPath, motionFrames, fontFamily } from "@/lib/design";
 
@@ -36,7 +38,7 @@ const SAFE_UNIT = (value: string | number | undefined, fallback?: string): strin
 };
 
 const cssFromStyles = (styles: Record<string, string | number>): string => {
-    const entries = Object.entries(styles)
+    const entries = Object.entries(orderedStyles(styles))
         .filter(([_, v]) => v !== undefined && v !== null && String(v).trim() !== "")
         .map(([k, v]) => {
             const prop = k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
@@ -49,7 +51,7 @@ const cssFromStyles = (styles: Record<string, string | number>): string => {
 
 const textContent = (el: ElementNode, fallback: string): string => {
     const raw = el.props?.content ?? el.props?.label;
-    if (raw === undefined || raw === null || String(raw).trim() === "") return fallback;
+    if (raw === undefined || raw === null) return fallback;
     return escapeMarkup(raw);
 };
 
@@ -225,13 +227,14 @@ const renderElementBody = (
     }
 
     if (!["title", "text", "paragraph"].includes(el.type)) baseStyles.height = `${el.layout.h}px`;
-    const mergedStyles = { ...baseStyles, ...(el.styles || {}), ...(!el.layout.visible ? { display: "none" } : {}), opacity: el.layout.opacity, ...(el.layout.rotation ? { transform: `rotate(${el.layout.rotation}deg)` } : {}) };
+    if (el.styles.height && !el.styles.minHeight) delete baseStyles.minHeight;
+    const mergedStyles = { ...baseStyles, ...(el.type === "image" ? { objectFit: String(el.props.objectFit || "cover"), objectPosition: String(el.props.objectPosition || "50% 50%") } : {}), ...(el.type === "button" && el.props.hoverBg ? { "--button-hover": String(el.props.hoverBg) } : {}), ...(el.styles || {}), ...(!el.layout.visible ? { display: "none" } : {}), opacity: el.layout.opacity, ...(el.layout.rotation ? { transform: `rotate(${el.layout.rotation}deg)` } : {}) };
     const css = cssFromStyles(mergedStyles);
     cssOut.add(`.${className} { ${css} }`);
     for (const breakpoint of ["tablet", "mobile"] as const) {
         if (!el.responsive?.[breakpoint]) continue;
         const resolved = resolveElement(el, breakpoint), layout = resolved.layout;
-        const override = { ...resolved.styles, left: `${layout.x}px`, top: `${layout.y}px`, width: resolved.styles.width || `${layout.w}px`, position: isRoot ? "absolute" : String(resolved.styles.position || layout.position || "static"), minHeight: `${layout.h}px`, ...(!["title", "text", "paragraph"].includes(el.type) ? { height: `${layout.h}px` } : {}), opacity: layout.opacity, transform: `rotate(${layout.rotation}deg)`, display: layout.visible ? String(resolved.styles.display || baseStyles.display || "block") : "none" };
+        const override = { ...resolved.styles, left: `${layout.x}px`, top: `${layout.y}px`, width: resolved.styles.width || `${layout.w}px`, position: isRoot ? "absolute" : String(resolved.styles.position || layout.position || "static"), minHeight: resolved.styles.minHeight || (resolved.styles.height ? "0" : `${layout.h}px`), ...(!["title", "text", "paragraph"].includes(el.type) ? { height: resolved.styles.height || `${layout.h}px` } : {}), opacity: layout.opacity, transform: `rotate(${layout.rotation}deg)`, display: layout.visible ? String(resolved.styles.display || baseStyles.display || "block") : "none" };
         cssOut.add(`@media (max-width: ${breakpoint === "tablet" ? 1024 : 600}px) { .page .${className} { ${cssFromStyles(override)} } }`);
     }
     if (el.motion) {
@@ -245,7 +248,7 @@ const renderElementBody = (
     }).join("");
     const clsAttr = mode === "jsx" ? "className" : "class";
 
-    if (el.type === "native") return nativeMarkup(nativeTree(el), mode, children, ` ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}`);
+    if (["native", "button", "input"].includes(el.type)) { cssOut.add(choiceCSS); return nativeMarkup(nativeTree(el), mode, children, ` ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}`); }
     if (el.type === "custom") {
         if (mode === "html") return `<div ${clsAttr}="${className}">${escapeMarkup(el.label)} — custom source runs in the exported application.</div>`;
         return `<div className="${className}"><${customIdentifier(el.definitionId!)} {...${JSON.stringify(el.props)}}${wiringAttr(el, flowMap, mode)}>${children}</${customIdentifier(el.definitionId!)}></div>`;
@@ -256,12 +259,10 @@ const renderElementBody = (
         case "text":
         case "paragraph":
             return `<${tag} ${clsAttr}="${className}">${textContent(el, el.type === "title" ? "Heading" : "Text")}</${tag}>`;
-        case "button":
-            return `<button type="${flowMap.has(el.id) ? "button" : escapeMarkup(el.props.type || "submit")}"${el.props.disabled || el.props.loading ? " disabled" : ""}${el.props.loading ? ' aria-busy="true"' : ""} ${clsAttr}="${className}">${textContent(el, "Button")}</button>`;
         case "image":
             return `<img ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" alt="${escapeMarkup(el.props?.alt)}" />`;
         case "video":
-            return `<video ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" ${el.props?.autoplay ? (mode === "jsx" ? "autoPlay" : "autoplay") : ""} ${el.props?.loop ? "loop" : ""} ${el.props?.muted ? "muted" : ""} controls></video>`;
+            return `<video ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" poster="${safeUrl(el.props.poster)}" ${el.props?.autoplay ? (mode === "jsx" ? "autoPlay" : "autoplay") : ""} ${el.props?.loop ? "loop" : ""} ${el.props?.muted ? "muted" : ""} ${el.props.controls ? "controls" : ""}></video>`;
         case "menu": {
             const items = String(el.props?.items || "Home,About,Contact").split(",");
             const isVertical = el.props?.menuStyle === "vertical";
@@ -274,7 +275,7 @@ const renderElementBody = (
         case "divider":
             return `<hr ${clsAttr}="${className}" />`;
         case "frame":
-            return `<iframe ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" sandbox="allow-scripts" title="Embed Frame"></iframe>`;
+            return nativeMarkup({ tag: "iframe", attrs: embedAttributes(el.props), children: [] }, mode, "", ` ${clsAttr}="${className}"`);
         case "socialbar": {
             const platforms = ["facebook", "twitter", "instagram", "linkedin", "youtube"].filter((p) => Boolean(el.props?.[p]));
             const iconTag = flowMap.has(el.id) ? "button" : "span";
@@ -286,11 +287,11 @@ const renderElementBody = (
             return `<div ${clsAttr}="${className}">${icons}</div>`;
         }
         case "accordion":
-            return `<details ${clsAttr}="${className}"><summary>${escapeMarkup(el.props?.headerText || "Accordion")}</summary><div>${children || "Accordion content"}</div></details>`;
+            return `<details ${clsAttr}="${className}"${el.props.expanded ? " open" : ""}><summary>${escapeMarkup(el.props?.headerText || "Accordion")}</summary><div>${children}</div></details>`;
         case "tabs": {
             const labels = tabLabels(el), active = widgetNumber(el.props.activeTab, 0, 0, labels.length - 1);
-            cssOut.add(`.${className} > [role="tablist"] { display:flex; gap:4px; border-bottom:1px solid #d1d5db; } .${className} > [role="tablist"] button { border:0; padding:12px 16px; background:transparent; color:inherit; } .${className} [role="tab"][aria-selected="true"] { box-shadow: inset 0 -2px currentColor; font-weight:600; } .${className} > [role="tabpanel"] { position:relative; padding:16px; min-height:120px; } .${className} > [hidden] { display:none !important; }`);
-            return `<div ${clsAttr}="${className}" data-levoks-tabs="true" data-active-tab="${active}"><div role="tablist" aria-label="${escapeMarkup(el.label || "Content tabs")}">${labels.map((label, index) => `<button type="button" role="tab" aria-selected="${index === active}" ${mode === "jsx" ? "tabIndex" : "tabindex"}="${index === active ? 0 : -1}">${escapeMarkup(label)}</button>`).join("")}</div>${labels.map((_, index) => `<div role="tabpanel" ${index !== active ? "hidden" : ""}>${el.children[index] && elementsById[el.children[index]] ? renderElement(elementsById[el.children[index]], false, cssOut, mode, flowMap, elementsById) : ""}</div>`).join("")}</div>`;
+            cssOut.add(tabsCSS(`.${className}`));
+            return `<div ${clsAttr}="${className}" data-levoks-tabs="true" data-active-tab="${active}"><div role="tablist" aria-label="${escapeMarkup(el.label || "Content tabs")}">${labels.map((label, index) => `<button type="button" role="tab" aria-selected="${index === active}" ${mode === "jsx" ? "tabIndex" : "tabindex"}="${index === active ? 0 : -1}">${escapeMarkup(label)}</button>`).join("")}</div>${labels.map((_, index) => `<div role="tabpanel" ${mode === "jsx" ? "tabIndex" : "tabindex"}="0" ${index !== active ? "hidden" : ""}>${el.children[index] && elementsById[el.children[index]] ? renderElement(elementsById[el.children[index]], false, cssOut, mode, flowMap, elementsById) : escapeMarkup(String(el.props.tabContents || "").split("\n")[index] || "")}</div>`).join("")}</div>`;
         }
         case "gallery":
             cssOut.add(`.${className} { display:grid; grid-template-columns:repeat(${widgetNumber(el.props.columns, 3, 1, 8)}, minmax(0, 1fr)); gap:${widgetNumber(el.props.gap, 8, 0, 100)}px; } .${className} > * { position:relative !important; left:auto !important; top:auto !important; width:100%; max-width:100%; }`);
@@ -309,19 +310,6 @@ const renderElementBody = (
                 return `<form ${clsAttr}="${className}"${formHandler}>${children}</form>`;
             }
             return `<form ${clsAttr}="${className}" method="${htmlMethod}" data-request-method="${requestMethod}"${actionAttr}>${children}</form>`;
-        }
-        case "input": {
-            const inputType = escapeMarkup(el.props?.inputType || "text");
-            const placeholder = escapeMarkup(el.props?.placeholder || "");
-            const name = escapeMarkup(el.props?.name || "").trim();
-            const nameAttr = name ? ` name="${name}"` : "";
-            const requiredAttr = el.props?.required ? " required" : "";
-            const maxLength = Number(el.props?.maxLength);
-            const maxLengthAttr = Number.isFinite(maxLength) && maxLength > 0 ? ` ${mode === "jsx" ? "maxLength" : "maxlength"}="${maxLength}"` : "";
-            if (inputType === "textarea") {
-                return `<textarea ${clsAttr}="${className}"${nameAttr} placeholder="${placeholder}"${requiredAttr}${maxLengthAttr}></textarea>`;
-            }
-            return `<input ${clsAttr}="${className}" type="${inputType}"${nameAttr} placeholder="${placeholder}"${requiredAttr}${maxLengthAttr} />`;
         }
         case "shape":
             if (el.vector) return `<svg ${clsAttr}="${className}" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${escapeMarkup(el.label || "Vector shape")}"><path d="${vectorPath(el.vector)}" fill="${el.vector.closed ? el.vector.fill : "none"}" stroke="${el.vector.stroke}" ${mode === "jsx" ? "strokeWidth" : "stroke-width"}="${el.vector.strokeWidth}" ${mode === "jsx" ? "vectorEffect" : "vector-effect"}="non-scaling-stroke" /></svg>`;
@@ -343,7 +331,7 @@ const renderElementBody = (
 
 function renderElement(el: ElementNode, isRoot: boolean, cssOut: Set<string>, mode: "html" | "jsx", flowMap: Map<string, Flow> = new Map(), elementsById: Record<string, ElementNode> = {}): string {
     let markup = renderElementBody(el, isRoot, cssOut, mode, flowMap, elementsById);
-    if (el.type === "native") return markup;
+    if (["native", "button", "input"].includes(el.type)) return markup;
     if (el.accessibility?.label) markup = markup.replace(/^(<[^>]*?) aria-label="[^"]*"/, "$1");
     const attrs = (el.type === "custom" ? "" : wiringAttr(el, flowMap, mode)) + ` id="${escapeMarkup(el.id)}"` + (el.accessibility?.label ? ` aria-label="${escapeMarkup(el.accessibility.label)}"` : "") + (el.accessibility?.description ? ` aria-description="${escapeMarkup(el.accessibility.description)}"` : "") + (el.accessibility?.hidden ? ' aria-hidden="true"' : "");
     return markup.replace(/^<([a-z][a-z0-9]*)/, `<$1${attrs}`);

@@ -2,6 +2,7 @@
 // Event delegation also supports nested tabs and repeated widgets.
 export const widgetRuntime = `
 function setupWidgets(root) {
+  root.querySelectorAll('[data-error-message]').forEach(input => input.setCustomValidity?.(input.dataset.errorMessage));
   const widgets = Array.from(root.querySelectorAll('[data-levoks-tabs]'));
   const cleanup = [];
   const semanticClick = event => {

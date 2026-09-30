@@ -1,5 +1,7 @@
 "use client";
 import ElementProperties from "./design/ElementProperties";
+import { ParameterControl, DimensionControl, LENGTH_UNITS } from "./design/ParameterControl";
+import SpacingControl from "./design/SpacingControl";
 
 import { useEditorUIStore } from "@/store/editorUIStore";
 import { canGroup } from "@/lib/grouping";
@@ -120,6 +122,7 @@ const Field: React.FC<{
       <label id={id}>{label}</label>
       <div className="insp-field-input">
         {Children.map(children, (child) =>
+          isValidElement(child) && child.type === ColorControl ? cloneElement(child as React.ReactElement<{ label: string }>, { label }) :
           isValidElement(child) &&
           ["input", "select", "textarea"].includes(String(child.type))
             ? cloneElement(
@@ -224,25 +227,14 @@ const parseSolidColor = (
   return { hex: fallback, alpha: 1 };
 };
 
-// Shared slider background helper: solid accent-color progress fill for WebKit
-const sliderBg = (
-  val: number,
-  min: number,
-  max: number,
-): React.CSSProperties => {
-  const pct = Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100));
-  return {
-    background: `linear-gradient(to right, var(--accent, #116dff) ${pct}%, var(--bg-input, #2a2a35) ${pct}%)`,
-  };
-};
-
 //Color and gradient control function
 const ColorControl: React.FC<{
+  label?: string;
   value: string;
   onChange: (value: string) => void;
   fallback?: string;
   allowGradient?: boolean;
-}> = ({ value, onChange, fallback = "#ffffff" }) => {
+}> = ({ value, onChange, fallback = "#ffffff", label = "Color" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -267,12 +259,13 @@ const ColorControl: React.FC<{
         <button
           className="color-swatch-trigger"
           type="button"
-          aria-label="Open color picker"
+          aria-label={`Pick ${label.toLowerCase()}`}
           aria-expanded={isOpen}
           style={{ background: value || fallback }}
           onClick={() => setIsOpen(!isOpen)}
         />
         <input
+          aria-label={label}
           type="text"
           value={value || ""}
           onChange={(e) => onChange(e.target.value)}
@@ -529,50 +522,16 @@ const ShadowControl: React.FC<{
             <div className="shadow-sliders">
               <div className="shadow-slider-row">
                 <span className="shadow-slider-label">Distance</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={50}
-                  step={1}
-                  value={shadow.distance}
-                  style={sliderBg(shadow.distance, 0, 50)}
-                  onChange={(e) =>
-                    update({ distance: parseInt(e.target.value) })
-                  }
-                  className="editor-slider"
-                />
-                <span className="shadow-slider-value">{shadow.distance}</span>
+                <ParameterControl label={label + " Distance"} value={shadow.distance} unit="px" min={0} max={1000} onChange={value => update({ distance: value })} />
               </div>
               <div className="shadow-slider-row">
                 <span className="shadow-slider-label">Blur</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={80}
-                  step={1}
-                  value={shadow.blur}
-                  style={sliderBg(shadow.blur, 0, 80)}
-                  onChange={(e) => update({ blur: parseInt(e.target.value) })}
-                  className="editor-slider"
-                />
-                <span className="shadow-slider-value">{shadow.blur}</span>
+                <ParameterControl label={label + " Blur"} value={shadow.blur} unit="px" min={0} max={1000} onChange={value => update({ blur: value })} />
               </div>
               {!isTextShadow && (
                 <div className="shadow-slider-row">
                   <span className="shadow-slider-label">Spread</span>
-                  <input
-                    type="range"
-                    min={-20}
-                    max={30}
-                    step={1}
-                    value={shadow.spread}
-                    style={sliderBg(shadow.spread, -20, 30)}
-                    onChange={(e) =>
-                      update({ spread: parseInt(e.target.value) })
-                    }
-                    className="editor-slider"
-                  />
-                  <span className="shadow-slider-value">{shadow.spread}</span>
+                  <ParameterControl label={label + " Spread"} value={shadow.spread} unit="px" min={-1000} max={1000} onChange={value => update({ spread: value })} />
                 </div>
               )}
             </div>
@@ -796,8 +755,9 @@ const PropertyInspector: React.FC = () => {
 
   const setProp = (key: string, val: string | number | boolean) =>
     updateElement(el.id, { props: { ...el.props, [key]: val } });
+  const borderParts = String(el.styles.border || "").trim().split(/\s+/);
   const setStyle = (key: string, val: string | number) =>
-    updateElement(el.id, { styles: { ...el.styles, [key]: val } });
+    updateElement(el.id, { styles: { [key]: val } });
   const setBackgroundStyle = (value: string) => {
     const nextStyles: Record<string, string | number> = { ...el.styles };
     if (isGradientColor(value)) {
@@ -956,104 +916,18 @@ const PropertyInspector: React.FC = () => {
         {/* ─── DESIGN TAB ─── */}
         {activeTab === "design" && (
           <>
-            {/* Position & Size */}
             <Section title="Position & Size">
               <div className="insp-row-2">
-                <Field label="X">
-                  <input
-                    type="number"
-                    value={Math.round(el.layout.x)}
-                    onChange={(e) => {
-                      const parsed = parseNumericInput(e.target.value);
-                      if (parsed === null) return;
-                      updateElementPosition(el.id, parsed, el.layout.y);
-                    }}
-                  />
-                </Field>
-                <Field label="Y">
-                  <input
-                    type="number"
-                    value={Math.round(el.layout.y)}
-                    onChange={(e) => {
-                      const parsed = parseNumericInput(e.target.value);
-                      if (parsed === null) return;
-                      updateElementPosition(el.id, el.layout.x, parsed);
-                    }}
-                  />
-                </Field>
+                <Field label="X"><ParameterControl label="X" value={el.layout.x} unit="px" onChange={n => updateElementPosition(el.id, n, el.layout.y)} /></Field>
+                <Field label="Y"><ParameterControl label="Y" value={el.layout.y} unit="px" onChange={n => updateElementPosition(el.id, el.layout.x, n)} /></Field>
               </div>
               <div className="insp-row-2">
-                <Field label="W">
-                  <input
-                    type="number"
-                    value={Math.round(el.layout.w)}
-                    onChange={(e) => {
-                      const parsed = parseNumericInput(e.target.value);
-                      if (parsed === null) return;
-                      updateElementSize(
-                        el.id,
-                        Math.max(40, parsed),
-                        el.layout.h,
-                      );
-                    }}
-                  />
-                </Field>
-                <Field label="H">
-                  <input
-                    type="number"
-                    value={Math.round(el.layout.h)}
-                    onChange={(e) => {
-                      const parsed = parseNumericInput(e.target.value);
-                      if (parsed === null) return;
-                      updateElementSize(
-                        el.id,
-                        el.layout.w,
-                        Math.max(20, parsed),
-                      );
-                    }}
-                  />
-                </Field>
+                <Field label="W"><DimensionControl label="W" value={el.styles.width || el.layout.w + "px"} units={[...LENGTH_UNITS, "auto"]} onChange={v => { setStyle("width", v); if (v.endsWith("px")) updateElementSize(el.id, Math.max(1, parseFloat(v)), el.layout.h); }} /></Field>
+                <Field label="H"><DimensionControl label="H" value={el.styles.height || el.layout.h + "px"} units={[...LENGTH_UNITS, "auto"]} onChange={v => { setStyle("height", v); if (v.endsWith("px")) updateElementSize(el.id, el.layout.w, Math.max(1, parseFloat(v))); }} /></Field>
               </div>
               <div className="insp-row-2">
-                <Field label="Rotation">
-                  <input
-                    type="number"
-                    value={el.layout.rotation || 0}
-                    onChange={(e) => {
-                      const parsed = parseNumericInput(e.target.value);
-                      if (parsed === null) return;
-                      updateElementRotation(el.id, parsed);
-                    }}
-                    min={0}
-                    max={360}
-                  />
-                </Field>
-                <Field label="Opacity">
-                  <div className="opacity-control">
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={Math.round((el.layout.opacity ?? 1) * 100)}
-                      onChange={(e) =>
-                        updateElementOpacity(
-                          el.id,
-                          Number(e.target.value) / 100,
-                        )
-                      }
-                      className="editor-slider"
-                      style={sliderBg(
-                        Math.round((el.layout.opacity ?? 1) * 100),
-                        0,
-                        100,
-                      )}
-                    />
-                    <span className="opacity-value">
-                      {Math.round((el.layout.opacity ?? 1) * 100)}%
-                    </span>
-                  </div>
-                </Field>
+                <Field label="Rotation"><ParameterControl label="Rotation" value={el.layout.rotation} unit="°" sensitivity={0.25} onChange={n => updateElementRotation(el.id, n)} /></Field>
+                <Field label="Opacity"><ParameterControl label="Opacity" value={(el.layout.opacity ?? 1) * 100} unit="%" min={0} max={100} sensitivity={0.2} onChange={n => updateElementOpacity(el.id, n / 100)} /></Field>
               </div>
             </Section>
 
@@ -1079,7 +953,7 @@ const PropertyInspector: React.FC = () => {
             </Section>
 
             {/* Text controls — only for text-like elements */}
-            {(isTextElement || el.type === "button") && (
+            {(!["image", "video", "shape", "divider", "spacer"].includes(el.type)) && (
               <Section title="Typography">
                 <Field label="Font family">
                   <select
@@ -1095,14 +969,7 @@ const PropertyInspector: React.FC = () => {
                   </select>
                 </Field>
                 <div className="insp-row-2">
-                  <Field label="Font size">
-                    <input
-                      type="text"
-                      value={String(el.styles.fontSize || "")}
-                      onChange={(e) => setStyle("fontSize", e.target.value)}
-                      placeholder="16px"
-                    />
-                  </Field>
+                  <Field label="Font size"><DimensionControl label="Font size" value={el.styles.fontSize ?? ""} onChange={v => setStyle("fontSize", v)} fallback="16px" /></Field>
                   <Field label="Weight">
                     <select
                       value={String(el.styles.fontWeight || "400")}
@@ -1137,24 +1004,8 @@ const PropertyInspector: React.FC = () => {
                   </div>
                 </Field>
                 <div className="insp-row-2">
-                  <Field label="Letter spacing">
-                    <input
-                      type="text"
-                      value={String(el.styles.letterSpacing || "")}
-                      onChange={(e) =>
-                        setStyle("letterSpacing", e.target.value)
-                      }
-                      placeholder="normal"
-                    />
-                  </Field>
-                  <Field label="Line height">
-                    <input
-                      type="text"
-                      value={String(el.styles.lineHeight || "")}
-                      onChange={(e) => setStyle("lineHeight", e.target.value)}
-                      placeholder="1.5"
-                    />
-                  </Field>
+                  <Field label="Letter spacing"><DimensionControl label="Letter spacing" value={el.styles.letterSpacing ?? ""} onChange={v => setStyle("letterSpacing", v)} min={-Infinity} units={["px", "rem", "em"]} /></Field>
+                  <Field label="Line height"><DimensionControl label="Line height" value={el.styles.lineHeight ?? ""} onChange={v => setStyle("lineHeight", v)} units={["", "px", "%", "rem", "em"]} fallback="1.5" /></Field>
                 </div>
                 <Field label="Text transform">
                   <select
@@ -1300,40 +1151,12 @@ const PropertyInspector: React.FC = () => {
             {/* Sizing */}
             <Section title="Sizing" defaultOpen={false}>
               <div className="insp-row-2">
-                <Field label="Min W">
-                  <input
-                    type="text"
-                    value={String(el.styles.minWidth || "")}
-                    onChange={(e) => setStyle("minWidth", e.target.value)}
-                    placeholder="auto"
-                  />
-                </Field>
-                <Field label="Max W">
-                  <input
-                    type="text"
-                    value={String(el.styles.maxWidth || "")}
-                    onChange={(e) => setStyle("maxWidth", e.target.value)}
-                    placeholder="none"
-                  />
-                </Field>
+                <Field label="Min W"><DimensionControl label="Min W" value={el.styles.minWidth ?? ""} onChange={v => setStyle("minWidth", v)}  /></Field>
+                <Field label="Max W"><DimensionControl label="Max W" value={el.styles.maxWidth ?? ""} onChange={v => setStyle("maxWidth", v)}  /></Field>
               </div>
               <div className="insp-row-2">
-                <Field label="Min H">
-                  <input
-                    type="text"
-                    value={String(el.styles.minHeight || "")}
-                    onChange={(e) => setStyle("minHeight", e.target.value)}
-                    placeholder="auto"
-                  />
-                </Field>
-                <Field label="Max H">
-                  <input
-                    type="text"
-                    value={String(el.styles.maxHeight || "")}
-                    onChange={(e) => setStyle("maxHeight", e.target.value)}
-                    placeholder="none"
-                  />
-                </Field>
+                <Field label="Min H"><DimensionControl label="Min H" value={el.styles.minHeight ?? ""} onChange={v => setStyle("minHeight", v)}  /></Field>
+                <Field label="Max H"><DimensionControl label="Max H" value={el.styles.maxHeight ?? ""} onChange={v => setStyle("maxHeight", v)}  /></Field>
               </div>
               <Field label="Box Sizing">
                 <select
@@ -1351,7 +1174,7 @@ const PropertyInspector: React.FC = () => {
               <div className="insp-row-2">
                 <Field label="Style">
                   <select
-                    value={String(el.styles.borderStyle || "none")}
+                    value={String(el.styles.borderStyle || borderParts.find(part => ["none", "solid", "dashed", "dotted", "double", "groove", "ridge"].includes(part)) || "none")}
                     onChange={(e) => setStyle("borderStyle", e.target.value)}
                   >
                     {[
@@ -1369,30 +1192,16 @@ const PropertyInspector: React.FC = () => {
                     ))}
                   </select>
                 </Field>
-                <Field label="Width">
-                  <input
-                    type="text"
-                    value={String(el.styles.borderWidth || "")}
-                    onChange={(e) => setStyle("borderWidth", e.target.value)}
-                    placeholder="0px"
-                  />
-                </Field>
+                <Field label="Width"><DimensionControl label="Width" value={el.styles.borderWidth ?? (/^\d/.test(borderParts[0]) ? borderParts[0] : "0px")} onChange={v => setStyle("borderWidth", v)} units={["px", "rem", "em"]} /></Field>
               </div>
               <Field label="Color">
                 <ColorControl
-                  value={String(el.styles.borderColor || "")}
+                  value={String(el.styles.borderColor || borderParts.slice(2).join(" ") || "")}
                   onChange={(value) => setStyle("borderColor", value)}
                   fallback="#000000"
                 />
               </Field>
-              <Field label="Radius">
-                <input
-                  type="text"
-                  value={String(el.styles.borderRadius || "")}
-                  onChange={(e) => setStyle("borderRadius", e.target.value)}
-                  placeholder="0px"
-                />
-              </Field>
+              <SpacingControl key={el.id + "radius"} label="Radius" property="borderRadius" styles={el.styles} onChange={styles => updateElement(el.id, { styles })} />
             </Section>
 
             {/* Shadow */}
@@ -1412,32 +1221,9 @@ const PropertyInspector: React.FC = () => {
 
             {/* Spacing */}
             <Section title="Spacing">
-              <div className="insp-row-2">
-                <Field label="Padding">
-                  <input
-                    type="text"
-                    value={String(el.styles.padding || "")}
-                    onChange={(e) => setStyle("padding", e.target.value)}
-                    placeholder="0px"
-                  />
-                </Field>
-                <Field label="Margin">
-                  <input
-                    type="text"
-                    value={String(el.styles.margin || "")}
-                    onChange={(e) => setStyle("margin", e.target.value)}
-                    placeholder="0px"
-                  />
-                </Field>
-              </div>
-              <Field label="Gap">
-                <input
-                  type="text"
-                  value={String(el.styles.gap || "")}
-                  onChange={(e) => setStyle("gap", e.target.value)}
-                  placeholder="0px"
-                />
-              </Field>
+              <SpacingControl key={el.id + "padding"} label="Padding" property="padding" styles={el.styles} onChange={styles => updateElement(el.id, { styles })} />
+              <SpacingControl key={el.id + "margin"} label="Margin" property="margin" styles={el.styles} onChange={styles => updateElement(el.id, { styles })} />
+              <Field label="Gap"><DimensionControl label="Gap" value={el.styles.gap || "0px"} onChange={v => setStyle("gap", v)} /></Field>
             </Section>
 
             {/* Effects */}
@@ -1673,6 +1459,7 @@ const PropertyInspector: React.FC = () => {
                     <option value="none">None</option>
                   </select>
                 </Field>
+                <Field label="Object position"><select value={String(el.props.objectPosition || "50% 50%")} onChange={e => setProp("objectPosition", e.target.value)}>{[["Center", "50% 50%"], ["Top", "50% 0%"], ["Bottom", "50% 100%"], ["Left", "0% 50%"], ["Right", "100% 50%"]].map(([label, value]) => <option key={value} value={value}>{label}</option>)}</select></Field>
                 <Field label="Link URL">
                   <input
                     type="text"
@@ -1739,7 +1526,7 @@ const PropertyInspector: React.FC = () => {
 
             {/* Video */}
             {el.type === "video" && (
-              <Section title="Video">
+              <Section title="Video"><Field label="Player controls"><input type="checkbox" checked={Boolean(el.props.controls)} onChange={e => setProp("controls", e.target.checked)} /></Field>
                 <Field label="Video URL">
                   <input
                     type="text"
@@ -2038,6 +1825,11 @@ const PropertyInspector: React.FC = () => {
             {/* Tabs */}
             {el.type === "tabs" && (
               <Section title="Tabs">
+                <Field label="Tab content (one line per tab)"><textarea aria-label="Tab content" rows={4} value={String(el.props.tabContents || "")} onChange={e => setProp("tabContents", e.target.value)} /></Field>
+                <p className="panel-caption">Add child containers for richer content. Each child replaces the corresponding text panel.</p>
+                {[["Active tab color", "--tab-active-color"], ["Inactive tab color", "--tab-inactive-color"], ["Active tab background", "--tab-active-bg"], ["Inactive tab background", "--tab-inactive-bg"]].map(([label, key]) => <Field key={key} label={label}><ColorControl value={String(el.styles[key] || "")} onChange={v => setStyle(key, v)} /></Field>)}
+                <Field label="Tab spacing"><DimensionControl label="Tab spacing" value={el.styles["--tab-gap"] || "4px"} onChange={v => setStyle("--tab-gap", v)} /></Field>
+                <Field label="Panel padding"><DimensionControl label="Panel padding" value={el.styles["--tab-panel-padding"] || "16px"} onChange={v => setStyle("--tab-panel-padding", v)} /></Field>
                 <Field label="Tab titles (comma-sep)">
                   <input
                     type="text"

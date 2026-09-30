@@ -30,7 +30,7 @@ export function generatedPreview(value: unknown, pageId: string) {
     editor.tokens,
     editor.assets,
   );
-  const policy = `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none';`;
+  const policy = `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: https:; font-src data:; media-src data: blob: https:; connect-src 'none'; frame-src https: http: about:; form-action 'none'; base-uri 'none';`;
   return previewHtml.replace(
     "<head>",
     `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`,
