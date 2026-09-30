@@ -4,6 +4,13 @@ export const widgetRuntime = `
 function setupWidgets(root) {
   const widgets = Array.from(root.querySelectorAll('[data-levoks-tabs]'));
   const cleanup = [];
+  const semanticClick = event => {
+    const open = event.target.closest('[data-dialog-open]'), close = event.target.closest('[data-dialog-close]'), slide = event.target.closest('[data-slide]');
+    if (open) open.closest('[data-levoks-dialog]').querySelector('dialog').showModal();
+    if (close) close.closest('dialog').close();
+    if (slide) { const panels = Array.from(slide.closest('[data-levoks-carousel]').querySelectorAll('[data-slide-panel]')); if (!panels.length) return; const active = panels.findIndex(p => !p.hidden); const next = (active + Number(slide.dataset.slide) + panels.length) % panels.length; panels.forEach((panel, index) => panel.hidden = index !== next); }
+  };
+  root.addEventListener('click', semanticClick); cleanup.push(() => root.removeEventListener('click', semanticClick));
   widgets.forEach((widget, widgetIndex) => {
     const list = widget.querySelector(':scope > [role="tablist"]');
     const tabs = Array.from(list.children);

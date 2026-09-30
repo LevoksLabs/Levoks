@@ -75,6 +75,8 @@ export interface ActionData {
 }
 
 export type ElementType =
+    | "native"
+    | "custom"
     | "section"
     | "container"
     | "columns"
@@ -101,6 +103,7 @@ export type ElementType =
 
 // Which element types can accept children
 export const CONTAINER_TYPES: ElementType[] = [
+    "native", "custom", "gallery",
     "section",
     "container",
     "columns",
@@ -125,6 +128,11 @@ export interface ElementLayout {
 }
 
 export interface ElementNode {
+    /** Missing on v1 documents: resolve the definition from type. */
+    definitionId?: string;
+    definitionVersion?: number;
+    events?: Record<string, { action: "navigate" | "scroll"; target: string }>;
+    accessibility?: { label?: string; description?: string; hidden?: boolean };
     id: string;
     type: ElementType;
     parentId: string | null;
@@ -160,7 +168,7 @@ export interface SidebarCategory {
     id: string;
     label: string;
     icon: string;
-    items: { type: ElementType; label: string; icon: string }[];
+    items: { type: ElementType; definitionId?: string; label: string; icon: string }[];
 }
 
 export interface DesignAsset { name: string; mime: "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "font/woff" | "font/woff2"; source: string; width?: number; height?: number; }

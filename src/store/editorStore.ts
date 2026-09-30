@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { canHaveChildren } from "@/lib/elements/registry";
+import { customDefinitionSchema, type CustomDefinition } from "@/lib/elements/custom";
 import { ElementNode, Page, ElementType, CONTAINER_TYPES, DesignToken, ComponentDefinition, DesignAsset } from "@/types";
 import { generateElementId, generatePageId, deepCloneSubtree, syncCounters } from "@/lib/idGenerator";
 import { DEFAULT_LAYOUT, DEFAULT_STYLES, DEFAULT_PROPS } from "@/lib/defaults";
@@ -16,6 +18,8 @@ import { projectHistory, withProjectHistory } from "./projectHistory";
 type NewElement = Omit<ElementNode, "id" | "parentId" | "children" | "layout"> & { layout?: Partial<ElementNode["layout"]>; children?: NewElement[] };
 
 interface EditorStore {
+    customElements: Record<string, CustomDefinition>;
+    setCustomElement: (id: string, value: CustomDefinition) => void;
     assets: Record<string, DesignAsset>;
     tokens: Record<string, DesignToken>;
     components: Record<string, ComponentDefinition>;
@@ -150,7 +154,13 @@ function buildTemplateElements(
 
 const defaultPageId = generatePageId();
 
-export const useEditorStore = create<EditorStore>(withProjectHistory("editor", ["assets", "tokens", "components", "elementsById", "rootIds", "globalRootIds", "pages", "activePageId", "pageElementMap", "canvasSettings"], (set, get) => ({
+export const useEditorStore = create<EditorStore>(withProjectHistory("editor", ["customElements", "assets", "tokens", "components", "elementsById", "rootIds", "globalRootIds", "pages", "activePageId", "pageElementMap", "canvasSettings"], (set, get) => ({
+    customElements: {},
+    setCustomElement: (id, value) => {
+        const definition = customDefinitionSchema.parse(value);
+        if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error("Invalid custom element ID.");
+        set(state => ({ customElements: { ...state.customElements, [id]: definition } }));
+    },
     elementsById: {},
     rootIds: [],
     globalRootIds: [],
@@ -229,6 +239,7 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
     frontendCodePreviewOpen: false,
 
     addElement: (elementData, parentId, dropX, dropY) => {
+        if (parentId && (!get().elementsById[parentId] || !canHaveChildren(get().elementsById[parentId], get().customElements))) throw new Error("Choose a container for this element.");
         const id = generateElementId(elementData.type);
         const nested = buildTemplateElements(elementData.children || [], id);
         const isInContainer = parentId ? CONTAINER_TYPES.includes(get().elementsById[parentId]?.type) : false;
@@ -242,6 +253,10 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
             position: isInContainer ? (elementData.layout?.position || "absolute") : (elementData.layout?.position || DEFAULT_LAYOUT[elementData.type]?.position || "absolute"),
         };
         const element: ElementNode = {
+            definitionId: elementData.definitionId,
+            definitionVersion: elementData.definitionVersion,
+            events: elementData.events,
+            accessibility: elementData.accessibility,
             type: elementData.type,
             label: elementData.label,
             props: elementData.props || { ...(DEFAULT_PROPS[elementData.type] || {}) },
@@ -378,6 +393,7 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
         set(state => {
             if (!state.elementsById[id]) return state;
             if (targetParentId && !state.elementsById[targetParentId]) return state;
+            if (targetParentId && !canHaveChildren(state.elementsById[targetParentId], state.customElements)) return state;
             if (targetParentId && isAncestorOf(state.elementsById, id, targetParentId)) return state;
             if (targetParentId === id) return state;
             const d = detachElement(state.elementsById, state.rootIds, id);
@@ -611,6 +627,8 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
         const nested = buildTemplateElements(elementData.children || [], id);
         const element: ElementNode = {
             type: elementData.type, label: elementData.label,
+            definitionId: elementData.definitionId, definitionVersion: elementData.definitionVersion,
+            events: elementData.events, accessibility: elementData.accessibility,
             props: elementData.props || { ...(DEFAULT_PROPS[elementData.type] || {}) },
             styles: elementData.styles || { ...(DEFAULT_STYLES[elementData.type] || {}) },
             responsive: elementData.responsive, vector: elementData.vector, motion: elementData.motion,

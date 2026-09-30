@@ -60,7 +60,8 @@ export interface Flow {
 }
 
 // ─── FlowGraph ───
-// The complete IR for the entire project
+// Routing IR. The application IR also includes the validated project and
+// versioned element/backend contracts (lib/project/ir.ts).
 
 export interface FlowGraph {
     flows: Flow[];

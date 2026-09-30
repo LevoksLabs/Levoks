@@ -9,7 +9,7 @@ import {
     RoutingNode,
     NodePort,
     RoutingConnection,
-    ACTIONABLE_ELEMENT_TYPES,
+    isActionableElement,
     DEFAULT_PAGE_NODE_SIZE,
     DEFAULT_SERVICE_NODE_SIZE,
     MIN_ZOOM,
@@ -81,7 +81,7 @@ function collectActionableElements(
 ): { id: string; label: string; type: ElementNode["type"] }[] {
     const result: { id: string; label: string; type: ElementNode["type"] }[] = [];
     for (const el of elements) {
-        if (ACTIONABLE_ELEMENT_TYPES.includes(el.type)) {
+        if (isActionableElement(el)) {
             const displayLabel = getElementDisplayLabel(el);
             result.push({
                 id: el.id,

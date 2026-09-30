@@ -3,6 +3,8 @@
 // ═══════════════════════════════════════════════════
 
 import { ElementType } from "./index";
+import type { ElementNode } from "./index";
+import { definitionFor } from "@/lib/elements/registry";
 
 // Element types that can trigger actions and thus expose output ports
 export const ACTIONABLE_ELEMENT_TYPES: ElementType[] = [
@@ -12,6 +14,9 @@ export const ACTIONABLE_ELEMENT_TYPES: ElementType[] = [
     "socialbar",
     "image",      // image can be a link
 ];
+export function isActionableElement(element: ElementNode) {
+    return ACTIONABLE_ELEMENT_TYPES.includes(element.type) || (element.type === "native" && ["button", "a"].includes(definitionFor(element)?.tag || ""));
+}
 
 // ─── Routing Node ───
 // Represents a page or backend service placed on the routing canvas

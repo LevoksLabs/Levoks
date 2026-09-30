@@ -1,4 +1,6 @@
 import { ElementNode, Page, DesignToken, DesignAsset } from "@/types";
+import { nativeMarkup, nativeTree } from "@/lib/elements/native";
+import { customIdentifier, type CustomDefinition } from "@/lib/elements/custom";
 import { FlowGraph, Flow, ApiCallStep, NavigateStep } from "@/types/ir";
 import { ElementWiring, EndpointTarget, PageTarget } from "./connectionResolver";
 import { generateAnimationCSS, generateAnimationSetup, generateAnimationUseEffect } from "./animationCodegen";
@@ -124,10 +126,16 @@ function wiringAttr(
 ): string {
     if (mode === "html") return "";
     const handler = flowHandler(el, flowMap, mode);
-    return handler ? ` ${el.type === "form" ? "onSubmit" : "onClick"}={${handler}}` : "";
+    const event = el.type === "form" ? "onSubmit" : "onClick";
+    const explicit = Object.entries(el.events || {}).filter(([key]) => !handler || key !== event).map(([key, action]) => ` ${key}={${semanticHandler(action)}}`).join("");
+    return (handler ? ` ${event}={${handler}}` : "") + explicit;
 }
 
-const renderElement = (
+function semanticHandler(action: NonNullable<ElementNode["events"]>[string]) {
+    return `(e) => { e.preventDefault?.(); ${action.action === "navigate" ? `navigateToPage(${JSON.stringify(action.target)});` : `document.querySelector(${JSON.stringify(".el-" + action.target)})?.scrollIntoView({behavior: "smooth"});`} }`;
+}
+
+const renderElementBody = (
     el: ElementNode,
     isRoot: boolean,
     cssOut: Set<string>,
@@ -223,7 +231,7 @@ const renderElement = (
     for (const breakpoint of ["tablet", "mobile"] as const) {
         if (!el.responsive?.[breakpoint]) continue;
         const resolved = resolveElement(el, breakpoint), layout = resolved.layout;
-        const override = { ...resolved.styles, left: `${layout.x}px`, top: `${layout.y}px`, width: `${layout.w}px`, minHeight: `${layout.h}px`, ...(!["title", "text", "paragraph"].includes(el.type) ? { height: `${layout.h}px` } : {}), opacity: layout.opacity, transform: `rotate(${layout.rotation}deg)`, display: layout.visible ? String(resolved.styles.display || baseStyles.display || "block") : "none" };
+        const override = { ...resolved.styles, left: `${layout.x}px`, top: `${layout.y}px`, width: resolved.styles.width || `${layout.w}px`, position: isRoot ? "absolute" : String(resolved.styles.position || layout.position || "static"), minHeight: `${layout.h}px`, ...(!["title", "text", "paragraph"].includes(el.type) ? { height: `${layout.h}px` } : {}), opacity: layout.opacity, transform: `rotate(${layout.rotation}deg)`, display: layout.visible ? String(resolved.styles.display || baseStyles.display || "block") : "none" };
         cssOut.add(`@media (max-width: ${breakpoint === "tablet" ? 1024 : 600}px) { .page .${className} { ${cssFromStyles(override)} } }`);
     }
     if (el.motion) {
@@ -237,15 +245,21 @@ const renderElement = (
     }).join("");
     const clsAttr = mode === "jsx" ? "className" : "class";
 
+    if (el.type === "native") return nativeMarkup(nativeTree(el), mode, children, ` ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}`);
+    if (el.type === "custom") {
+        if (mode === "html") return `<div ${clsAttr}="${className}">${escapeMarkup(el.label)} — custom source runs in the exported application.</div>`;
+        return `<div className="${className}"><${customIdentifier(el.definitionId!)} {...${JSON.stringify(el.props)}}${wiringAttr(el, flowMap, mode)}>${children}</${customIdentifier(el.definitionId!)}></div>`;
+    }
+
     switch (el.type) {
         case "title":
         case "text":
         case "paragraph":
-            return `<${tag} ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}>${textContent(el, el.type === "title" ? "Heading" : "Text")}</${tag}>`;
+            return `<${tag} ${clsAttr}="${className}">${textContent(el, el.type === "title" ? "Heading" : "Text")}</${tag}>`;
         case "button":
-            return `<button type="${flowMap.has(el.id) ? "button" : "submit"}" ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}>${textContent(el, "Button")}</button>`;
+            return `<button type="${flowMap.has(el.id) ? "button" : escapeMarkup(el.props.type || "submit")}"${el.props.disabled || el.props.loading ? " disabled" : ""}${el.props.loading ? ' aria-busy="true"' : ""} ${clsAttr}="${className}">${textContent(el, "Button")}</button>`;
         case "image":
-            return `<img ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" alt="${escapeMarkup(el.props?.alt)}"${wiringAttr(el, flowMap, mode)} />`;
+            return `<img ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" alt="${escapeMarkup(el.props?.alt)}" />`;
         case "video":
             return `<video ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" ${el.props?.autoplay ? (mode === "jsx" ? "autoPlay" : "autoplay") : ""} ${el.props?.loop ? "loop" : ""} ${el.props?.muted ? "muted" : ""} controls></video>`;
         case "menu": {
@@ -255,7 +269,7 @@ const renderElement = (
             const menuItems = items.map((i) => `<${itemTag}${itemTag === "button" ? ' type="button"' : ""} ${clsAttr}="${className}__item">${escapeMarkup(i.trim())}</${itemTag}>`).join("");
             cssOut.add(`.${className} { display: flex; gap: ${isVertical ? "0.5rem" : "1.5rem"}; flex-direction: ${isVertical ? "column" : "row"}; align-items: center; }`);
             cssOut.add(`.${className}__item { font-size: 0.9rem; cursor: pointer; border:0; background:none; color:inherit; }`);
-            return `<nav ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}>${menuItems}</nav>`;
+            return `<nav ${clsAttr}="${className}">${menuItems}</nav>`;
         }
         case "divider":
             return `<hr ${clsAttr}="${className}" />`;
@@ -269,7 +283,7 @@ const renderElement = (
                 : `<span ${clsAttr}="${className}__empty">Add social links</span>`;
             cssOut.add(`.${className} { display: flex; gap: 0.75rem; align-items: center; }`);
             cssOut.add(`.${className}__icon { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #1f2937; color: #fff; font-size: 0.8rem; }`);
-            return `<div ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}>${icons}</div>`;
+            return `<div ${clsAttr}="${className}">${icons}</div>`;
         }
         case "accordion":
             return `<details ${clsAttr}="${className}"><summary>${escapeMarkup(el.props?.headerText || "Accordion")}</summary><div>${children || "Accordion content"}</div></details>`;
@@ -289,7 +303,7 @@ const renderElement = (
             const htmlMethod = requestMethod === "GET" ? "get" : "post";
             const requestUrl = String(el.props?.requestUrl || "").trim();
             const actionAttr = requestUrl ? ` action="${safeUrl(requestUrl)}"` : "";
-            const formHandler = wiringAttr(el, flowMap, mode);
+            const formHandler = "";
             // If form has a flow, the onSubmit prevents default and uses fetch
             if (flowMap.has(el.id)) {
                 return `<form ${clsAttr}="${className}"${formHandler}>${children}</form>`;
@@ -327,6 +341,14 @@ const renderElement = (
     }
 };
 
+function renderElement(el: ElementNode, isRoot: boolean, cssOut: Set<string>, mode: "html" | "jsx", flowMap: Map<string, Flow> = new Map(), elementsById: Record<string, ElementNode> = {}): string {
+    let markup = renderElementBody(el, isRoot, cssOut, mode, flowMap, elementsById);
+    if (el.type === "native") return markup;
+    if (el.accessibility?.label) markup = markup.replace(/^(<[^>]*?) aria-label="[^"]*"/, "$1");
+    const attrs = (el.type === "custom" ? "" : wiringAttr(el, flowMap, mode)) + ` id="${escapeMarkup(el.id)}"` + (el.accessibility?.label ? ` aria-label="${escapeMarkup(el.accessibility.label)}"` : "") + (el.accessibility?.description ? ` aria-description="${escapeMarkup(el.accessibility.description)}"` : "") + (el.accessibility?.hidden ? ' aria-hidden="true"' : "");
+    return markup.replace(/^<([a-z][a-z0-9]*)/, `<$1${attrs}`);
+}
+
 export function generateFrontendProject(
     elements: ElementNode[],
     globalElements: ElementNode[],
@@ -336,7 +358,8 @@ export function generateFrontendProject(
     wirings?: ElementWiring[],
     flowGraph?: FlowGraph,
     tokens: Record<string, DesignToken> = {},
-    assets: Record<string, DesignAsset> = {}
+    assets: Record<string, DesignAsset> = {},
+    customElements: Record<string, CustomDefinition> = {}
 ): FrontendCodeResult {
     // Build flow map keyed by trigger elementId (IR-first)
     const flowMap = new Map<string, Flow>();
@@ -474,7 +497,11 @@ ${hasResponsive ? "" : '@media (max-width: 640px) { .page { padding: 1rem; displ
         if (!el) return [];
         return [`document.querySelectorAll(${JSON.stringify("." + classNameFor(el))}).forEach(el => el.addEventListener(${JSON.stringify(el.type === "form" ? "submit" : "click")}, ${flowHandler(el, flowMap, "html")}));`];
     }).join("\n");
+    const pageRoutes = JSON.stringify(Object.fromEntries((allPages || []).map(p => [p.id, p.route])));
+    const explicitHandlers = [...safeGlobal, ...allElements].flatMap(el => Object.entries(el.events || {}).filter(([event]) => !flowMap.has(el.id) || event !== (el.type === "form" ? "onSubmit" : "onClick")).map(([event, action]) => `document.querySelectorAll(${JSON.stringify("." + classNameFor(el))}).forEach(el => el.addEventListener(${JSON.stringify(event.slice(2).toLowerCase())}, ${semanticHandler(action)}));`)).join("\n");
     const previewScript = `${widgetRuntime}; setupWidgets(document);
+const navigateToPage = pageId => window.parent.postMessage({type: "levoks:preview:navigate", pageId}, "*");
+${explicitHandlers}
 ${generateAnimationSetup(animJsElements)}
 setupAnimations(document);
 const setStatus = message => { document.querySelector('[role="status"]').textContent = message; };
@@ -504,8 +531,10 @@ document.addEventListener("submit", e => { if (!e.defaultPrevented) { e.preventD
     const appJsx = `
 import React from "react";
 import "./styles.css";
+${Object.keys(customElements).sort().map(id => `import ${customIdentifier(id)} from "./custom/${id}.jsx";`).join("\n")}
 ${apiImport}
 ${widgetRuntime}
+const navigateToPage = pageId => { const route = ${pageRoutes}[pageId]; if (route) window.location.href = route; };
 export default function App() {
   const [status, setStatus] = React.useState("");
   const rootRef = React.useRef(null);
@@ -623,5 +652,6 @@ export async function apiFetch(path, options = {}) {
 `;
     }
 
+    for (const [id, definition] of Object.entries(customElements)) files[`src/custom/${id}.jsx`] = definition.source;
     return { files, previewHtml };
 }

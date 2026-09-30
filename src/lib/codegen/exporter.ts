@@ -17,8 +17,8 @@ export async function exportAsZip(
     const zip = new JSZip();
 
     // Add all files to the ZIP
-    for (const [path, content] of Object.entries(validateFiles(files))) {
-        zip.file(path, content);
+    for (const [path, content] of Object.entries(validateFiles(files)).sort(([a], [b]) => a.localeCompare(b))) {
+        zip.file(path, content, { date: new Date("2000-01-01T00:00:00.000Z"), createFolders: false });
     }
 
     // Generate the ZIP blob

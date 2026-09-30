@@ -1,8 +1,10 @@
 "use client";
 
 import PrimitiveShape from "./design/PrimitiveShape";
+import SemanticElement from "./design/SemanticElement";
+import { canHaveChildren } from "@/lib/elements/registry";
 import { useRef, useEffect, useCallback } from "react";
-import { ElementType, ElementNode, CONTAINER_TYPES } from "@/types";
+import { ElementNode } from "@/types";
 import { useEditorUIStore } from "@/store/editorUIStore";
 import { assetElement } from "@/lib/design-assets";
 import { resolveElement, fontFamily } from "@/lib/design";
@@ -59,7 +61,7 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
     const selectElement = useEditorStore(s => s.selectElement);
     const toggleSelectElement = useEditorStore(s => s.toggleSelectElement);
 
-    const isContainer = element ? CONTAINER_TYPES.includes(element.type) : false;
+    const isContainer = element ? canHaveChildren(element, useEditorStore.getState().customElements) : false;
     const { setNodeRef: setDropRef, isOver: isDropOver } = useDroppable({
         id: `drop-${elementId}`,
         data: { type: "container", parentId: elementId },
@@ -76,14 +78,14 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
     const resolvedPosition = (rawPosition || (isContainer ? "relative" : "static")) as React.CSSProperties["position"];
     const isPositionedChild = resolvedPosition !== "static";
     const positionStyles: React.CSSProperties = isRoot
-        ? { position: "absolute", left: `${layout.x}px`, top: `${layout.y}px`, width: widthPx, minHeight: heightPx, height: isTextLike ? "auto" : heightPx }
+        ? { position: "absolute", left: `${layout.x}px`, top: `${layout.y}px`, width: String(element.styles.width || widthPx), minHeight: heightPx, height: isTextLike ? "auto" : String(element.styles.height || heightPx) }
         : {
             position: resolvedPosition, left: isPositionedChild ? `${layout.x}px` : undefined, top: isPositionedChild ? `${layout.y}px` : undefined,
             width: String(element.styles.width || widthPx), minHeight: heightPx, height: isTextLike ? "auto" : String(element.styles.height || heightPx)
         };
 
     const mergedStyles: React.CSSProperties = {
-        ...element.styles as React.CSSProperties,
+        ...(element.type === "native" ? {} : element.styles as React.CSSProperties),
         ...positionStyles,
         ...(element.type === "shape" && element.props.shapeType && element.props.shapeType !== "rectangle" ? { backgroundColor: "transparent" } : {}),
         fontFamily: fontFamily(element.styles.fontFamily),
@@ -136,6 +138,8 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
 
     const renderContent = () => {
         switch (element.type) {
+            case "native":
+            case "custom": return <SemanticElement key={JSON.stringify(element.props)} element={element} interactive={readOnly}><Renderer elementIds={element.children} isRoot={false} readOnly={readOnly} /></SemanticElement>;
             case "section": return <>{containerPlaceholder("Drop elements into this section")}<Renderer elementIds={element.children} isRoot={false} readOnly={readOnly} /></>;
             case "container": return <Renderer elementIds={element.children} isRoot={false} readOnly={readOnly} />;
             case "columns": return element.children.length === 0 ? (
@@ -167,7 +171,7 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
                 textDecoration: String(element.styles.textDecoration || "none"), textTransform: (element.styles.textTransform as React.CSSProperties["textTransform"]) || "none"
             }}>
                 {String(element.props.content || "Paragraph text...")}</p>;
-            case "button": return <button className="el-button-inner" onClick={handleReadOnlyAction} style={{
+            case "button": return <button className="el-button-inner" disabled={Boolean(element.props.disabled || element.props.loading)} aria-busy={element.props.loading ? true : undefined} onClick={handleReadOnlyAction} style={{
                 background: "inherit", backgroundColor: "inherit", color: "inherit", borderRadius: String(element.styles.borderRadius || "6px"),
                 fontSize: String(element.styles.fontSize || "14px"), fontWeight: String(element.styles.fontWeight || "500"), cursor: "pointer", border: "none",
                 width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center",

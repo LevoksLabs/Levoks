@@ -1,5 +1,24 @@
 # Levoks completion matrix
 
+## Semantic foundation increment — 2026-09-30
+
+See [audit and implementation contract](semantic-architecture.md) for the architecture map, compatibility decisions, verification and precise limitations. This increment does not mark the entire implementation brief complete.
+
+| ID | Requirement | Status | Evidence / remaining work |
+| --- | --- | --- | --- |
+| SEM01 | Central element definitions and searchable catalog | IMPLEMENTED SUBSET | 104 definitions; defaults, semantic IDs, versions, fields, category metadata, child rules, render/generate strategies; registry-wide round-trip/generation checks. Legacy renderer/property switches remain adapters. |
+| SEM02 | Semantic creation and inspector parity | IMPLEMENTED SUBSET | Native/custom instances retain definitions; drag/drop and typed inspector changes persist and reach ZIP. Native markup shares a semantic tree with canvas. Universal legacy property parity remains. |
+| SEM03 | Full application IR | IMPLEMENTED | Validated normalized project plus resolved flows, generator/target versions and used definition/backend strategies; no DOM semantic reconstruction. |
+| SEM04 | Geometry, responsive styles and motion | IMPLEMENTED SUBSET | Existing models/compiler preserved; percentage responsive width fix; semantic tests cover geometry, breakpoint styles and keyframes. Arbitrary breakpoints and transformed-layout parity remain. |
+| SEM05 | Events and routing | IMPLEMENTED SUBSET | Declared navigation/scroll events, target validation/deletion reconciliation, undo, native button/link routing ports and conflict diagnostics. Browser tests exercise generated navigation. Rich typed data bindings remain. |
+| SEM06 | Custom elements and execution boundary | IMPLEMENTED SUBSET | Typed single-module React manifest/source, searchable draggable instances, normal property controls, persistence/history and export imports/dependencies. No source execution in editor. Multi-file imports and isolated custom build/preview remain. |
+| SEM07 | Backend registry | IMPLEMENTED SUBSET | Existing 21 block types have validators/defaults/versions/execution strategies and basic typed ports. Existing program generation retained; unsupported variants visibly experimental. |
+| SEM08 | Full documented backend category execution | OPEN | Category vocabulary exists. Async, real-time, external integrations, storage and caching are not implemented by adding this registry. |
+| SEM09 | Reproducible standalone export | IMPLEMENTED SUBSET | Identical IR produces identical files; sorted ZIP entries/fixed dates; all-definition frontend production build and generated backend module checks passed. Dependency lockfiles still need creation in delivered projects. |
+| SEM10 | Compatibility and source ownership | IMPLEMENTED | Additive version 1 fields, lossless legacy definition resolution, future-version rejection, preserved source fingerprints/regeneration boundary and regression coverage. |
+| SEM11 | Production-grade frontend breadth | PARTIAL | Native controls/compositions, dialogs/carousels/static tables/media/shapes. 9 experimental definitions and explicit explanations for unimplemented Data Grid/raw HTML/CSS/import workflows. |
+| SEM12 | Verification | IMPLEMENTED SUBSET | 73 unit tests, typecheck/lint, 3 Chromium workflows, frontend production export build, generated backend build, desktop/compact screenshot inspection. Live providers/full database acceptance not rerun. |
+
 Sources: `levoks.md` (the user-confirmed conversion of the original PDF), `production-readiness.md`, and the current code. This is an implementation ledger, not a launch declaration. Baseline audit: 2026-09-13.
 
 COMPLETE means UI → persisted state → validated IR → emitted implementation → execution → error handling has evidence where applicable. PARTIAL means some of that chain exists. MISSING means required behavior has no implementation. EXTERNAL DEPENDENCY is reserved for an otherwise implemented, independently verifiable integration awaiting external access; missing internal code never becomes an external blocker. The original audit marked no full product feature COMPLETE. Later entries identify narrowly verified requirements; they do not imply that their containing product area is complete. The original baseline’s 22 tests included substantial mocks and cannot establish full execution coverage.

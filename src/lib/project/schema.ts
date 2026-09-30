@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { definitionFor } from "@/lib/elements/registry";
+import { customDefinitionSchema } from "@/lib/elements/custom";
 import { validateFiles } from "@/lib/codegen/files";
 import { programConfigs, controlSchema } from "@/lib/backend/program-schema";
 import { healthSchema } from "@/lib/backend/health-schema";
@@ -139,7 +141,7 @@ const blockBase = z.object({
   position: z.object({ x: finite, y: finite, placed: z.boolean().optional() }),
   connections: z.array(id).max(1000),
 });
-const block = z.discriminatedUnion("type", [
+export const backendBlockSchema = z.discriminatedUnion("type", [
   blockBase.extend({ type: z.literal("error_handler"), config: errorHandlerSchema }),
   blockBase.extend({ type: z.literal("audit_log"), config: auditLogSchema }),
   blockBase.extend({ type: z.literal("health_check"), config: healthSchema }),
@@ -203,12 +205,17 @@ const responsiveLayout = z.object({ x: finite, y: finite, w: finite.nonnegative(
 const responsiveOverride = z.object({ layout: responsiveLayout.optional(), styles: z.record(z.string(), z.union([text, finite])).optional() });
 const vectorCoordinate = finite.min(-10000).max(10000);
 export const elementSchema = z.object({
+  definitionId: id.optional(),
+  definitionVersion: z.number().int().positive().optional(),
+  events: z.record(z.string().regex(/^on[A-Z][A-Za-z0-9]*$/), z.object({ action: z.enum(["navigate", "scroll"]), target: id })).optional(),
+  accessibility: z.object({ label: text.optional(), description: text.optional(), hidden: z.boolean().optional() }).optional(),
   responsive: z.object({ tablet: responsiveOverride.optional(), mobile: responsiveOverride.optional() }).optional(),
   vector: z.object({ points: z.array(z.object({ x: vectorCoordinate, y: vectorCoordinate, inX: vectorCoordinate.optional(), inY: vectorCoordinate.optional(), outX: vectorCoordinate.optional(), outY: vectorCoordinate.optional() }).refine(point => (point.inX === undefined) === (point.inY === undefined) && (point.outX === undefined) === (point.outY === undefined), "Curve handles require both coordinates")).min(2).max(500), closed: z.boolean(), stroke: text.regex(/^(none|#[0-9a-fA-F]{3,8})$/), strokeWidth: finite.min(0).max(100), fill: text.regex(/^(none|#[0-9a-fA-F]{3,8})$/) }).optional(),
   motion: z.object({ duration: finite.min(0.05).max(120), delay: finite.min(0).max(120), iterations: z.number().int().min(1).max(100), easing: z.enum(["linear", "ease-in", "ease-out", "ease-in-out"]), frames: z.array(z.object({ time: finite.min(0).max(1), x: vectorCoordinate, y: vectorCoordinate, scale: finite.min(0.01).max(20), rotation: finite.min(-3600).max(3600), opacity: finite.min(0).max(1) })).min(2).max(100).refine(frames => new Set(frames.map(f => f.time)).size === frames.length, "Keyframes must have unique times") }).optional(),
   component: z.object({ id, node: id, overrides: z.array(text).max(500) }).optional(),
   id,
   type: z.enum([
+    "native", "custom",
     "section",
     "container",
     "columns",
@@ -299,6 +306,7 @@ export const projectSchema = z.object({
     .object({ basedOn: z.string(), files: z.record(z.string(), z.string()) })
     .optional(),
   editor: z.object({
+    customElements: z.record(id, customDefinitionSchema).optional(),
     assets: z.record(id, z.object({ name: z.string().min(1).max(200), mime: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif", "font/woff", "font/woff2"]), source: z.string().max(1_400_000).regex(/^data:(image\/(png|jpeg|webp|gif)|font\/woff2?);base64,[A-Za-z0-9+/]+={0,2}$/), width: finite.positive().max(100000).optional(), height: finite.positive().max(100000).optional() }).refine(asset => asset.source.startsWith(`data:${asset.mime};base64,`), "Asset type must match its data")).optional(),
     tokens: z.record(id, z.object({ name: z.string().min(1).max(100), value: z.string().min(1).max(200).regex(/^[^;{}<>]+$/).refine(value => !/url\s*\(|expression\s*\(/i.test(value), "Tokens cannot contain URLs or expressions"), kind: z.enum(["color", "dimension", "font"]) })).optional(),
     components: z.record(id, z.object({ name: z.string().min(1).max(100), rootId: id, nodes: z.record(id, elementSchema) })).optional(),
@@ -334,7 +342,7 @@ export const projectSchema = z.object({
           description: text,
           port: z.number().int().min(1024).max(65535),
           color: text,
-          blocks: z.array(block).max(1000),
+          blocks: z.array(backendBlockSchema).max(1000),
           collapsed: z.boolean(),
           position: z.object({x:finite,y:finite}).optional(),
         }),
@@ -386,6 +394,29 @@ export function parseProject(value: unknown): ProjectDocument {
     );
   const project = projectSchema.parse(value);
   const { editor, backend, routing } = project;
+  const validateElement = (node: z.infer<typeof elementSchema>) => {
+    if (node.type === "custom") {
+      const definition = editor.customElements?.[node.definitionId || ""];
+      if (!definition || node.definitionVersion !== definition.version) throw new Error("Unknown or incompatible custom element definition.");
+      for (const [key, value] of Object.entries(node.props)) if (!definition.props[key] || typeof value !== definition.props[key].type) throw new Error(`Invalid custom property: ${key}`);
+      if (!definition.children && node.children.length) throw new Error("This custom component does not accept children.");
+      for (const event of Object.keys(node.events || {})) if (!definition.events.includes(event)) throw new Error(`Undeclared custom event: ${event}`);
+    } else {
+      const definition = definitionFor(node);
+      if (!definition || definition.template.type !== node.type || (node.definitionVersion !== undefined && node.definitionVersion !== definition.version)) throw new Error("Unknown or incompatible element definition.");
+      if (node.type === "native") {
+        if (!definition.children && node.children.length) throw new Error("This element does not accept children.");
+        for (const [key, value] of Object.entries(node.props)) if (!definition.propsSchema[key] || typeof value !== definition.propsSchema[key].type) throw new Error(`Invalid ${definition.name} property: ${key}`);
+        if (definition.tag === "input" && node.props.type !== definition.template.props.type) throw new Error("Input type is defined by the element registry.");
+      }
+      for (const event of Object.keys(node.events || {})) if (!definition.events.includes(event)) throw new Error(`Unsupported event: ${event}`);
+    }
+    for (const event of Object.values(node.events || {})) {
+      if (event.action === "navigate" && !editor.pages.some(page => page.id === event.target)) throw new Error("Event references a missing page.");
+      if (event.action === "scroll" && !editor.elementsById[event.target]) throw new Error("Event references a missing element.");
+    }
+  };
+  Object.values(editor.elementsById).forEach(validateElement);
   if (project.source) validateFiles(project.source.files);
   const fail = (message: string): never => {
     throw new Error(message);
@@ -394,6 +425,7 @@ export function parseProject(value: unknown): ProjectDocument {
     if (new Set(ids).size !== ids.length) fail(`Duplicate ${label}.`);
   };
   for (const definition of Object.values(editor.components || {})) {
+    Object.values(definition.nodes).forEach(validateElement);
     const seen = new Set<string>();
     const walk = (key: string, parent: string | null, depth: number) => {
       const node = definition.nodes[key];

@@ -1,4 +1,6 @@
 import type { ElementNode } from "@/types";
+import { projectIR } from "./ir";
+import { BACKEND_REGISTRY } from "@/lib/backend/registry";
 import type { IRDiagnostic } from "@/types/ir";
 import { programDiagnostics } from "@/lib/backend/program";
 import { resolveGraph } from "@/lib/graphResolver";
@@ -58,7 +60,17 @@ export function compileProject(value: ProjectDocument) {
       nodeId,
       message,
     });
+  for (const flow of graph.flows) {
+    const node = editor.elementsById[flow.trigger.elementId];
+    const event = flow.trigger.event === "submit" ? "onSubmit" : "onClick";
+    if (node?.events?.[event]) problem(node.id, `Choose either a Routing connection or an explicit ${event} action for this element.`);
+  }
   for (const service of backend.services) {
+    for (const block of service.blocks) {
+      const definition = BACKEND_REGISTRY[block.type];
+      definition.propsSchema.parse(block.config);
+      if (definition.generate === "unsupported") problem(block.id, `${block.label}: experimental block has no executable generator.`);
+    }
     diagnostics.push(...programDiagnostics(service));
     for (const type of ["error_handler", "audit_log"])
       if (service.blocks.filter((b) => b.type === type).length > 1)
@@ -348,9 +360,11 @@ export function compileProject(value: ProjectDocument) {
       graph,
       editor.tokens,
       editor.assets,
+      editor.customElements,
     );
     const folder = page.route === "/" ? "" : page.route.slice(1) + "/";
     const app = output.files["src/App.jsx"]
+      .replaceAll('from "./custom/', 'from "@/components/custom/')
       .replace('import "./styles.css";', 'import "./page.css";')
       .replace(
         'import { apiFetch } from "./api.js";',
@@ -358,6 +372,14 @@ export function compileProject(value: ProjectDocument) {
       );
     files[`frontend/app/${folder}page.jsx`] = `"use client";\n${app}`;
     files[`frontend/app/${folder}page.css`] = output.files["src/styles.css"];
+  }
+  const customDependencies: Record<string, string> = {};
+  for (const [id, definition] of Object.entries(editor.customElements || {})) {
+    files[`frontend/components/custom/${id}.jsx`] = definition.source;
+    for (const [name, version] of Object.entries(definition.dependencies)) {
+      if (customDependencies[name] && customDependencies[name] !== version) problem(id, `Custom components require conflicting versions of ${name}.`);
+      customDependencies[name] = version;
+    }
   }
   files["frontend/app/layout.jsx"] =
     `export const metadata = { title: ${JSON.stringify(project.name)}, description: "Created with Levoks" };\nexport default function Layout({ children }) { return <html lang="en"><body style={{margin: 0}}>{children}</body></html>; }`;
@@ -387,6 +409,7 @@ export function compileProject(value: ProjectDocument) {
       private: true,
       scripts: { dev: "next dev", build: "next build", start: "next start" },
       dependencies: {
+        ...customDependencies,
         next: "^16.2.10",
         react: "^19.2.3",
         "react-dom": "^19.2.3",
@@ -422,7 +445,7 @@ export function compileProject(value: ProjectDocument) {
     "node_modules/\n.next/\n.env\n.env.*\n!.env.example\n*.pem\n*.key\n";
   files["levoks.project.json"] = JSON.stringify(project, null, 2);
   files["levoks.ir.json"] = JSON.stringify(
-    { schemaVersion: 1, project, graph },
+    projectIR(project, graph),
     null,
     2,
   );
@@ -444,7 +467,7 @@ export function compileProject(value: ProjectDocument) {
           ...overrides,
           "levoks.project.json": JSON.stringify(snapshot, null, 2),
           "levoks.ir.json": JSON.stringify(
-            { schemaVersion: 1, project: snapshot, graph },
+            projectIR(snapshot, graph),
             null,
             2,
           ),

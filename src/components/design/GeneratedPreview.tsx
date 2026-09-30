@@ -33,7 +33,7 @@ export default function GeneratedPreview({
   }, [
     pageId,
     editor.elementsById,
-    editor.assets,
+    editor.assets, editor.customElements,
     editor.tokens,
     editor.components,
     editor.pages,

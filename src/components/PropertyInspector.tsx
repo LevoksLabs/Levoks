@@ -1,4 +1,5 @@
 "use client";
+import ElementProperties from "./design/ElementProperties";
 
 import { useEditorUIStore } from "@/store/editorUIStore";
 import { canGroup } from "@/lib/grouping";
@@ -1566,6 +1567,7 @@ const PropertyInspector: React.FC = () => {
         {/* ─── CONTENT TAB ─── */}
         {activeTab === "content" && (
           <>
+            <ElementProperties element={el} />
             {/* Text elements */}
             {isTextElement && (
               <Section title="Text Content">

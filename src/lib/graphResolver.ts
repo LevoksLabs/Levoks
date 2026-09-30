@@ -11,7 +11,7 @@
 import {
   RoutingNode,
   RoutingConnection,
-  ACTIONABLE_ELEMENT_TYPES,
+  isActionableElement,
 } from "@/types/routing";
 import { Page, ElementNode } from "@/types";
 import {
@@ -52,7 +52,7 @@ function collectActionableElements(
 ): { id: string; type: string }[] {
   const result: { id: string; type: string }[] = [];
   for (const el of elements) {
-    if (ACTIONABLE_ELEMENT_TYPES.includes(el.type)) {
+    if (isActionableElement(el)) {
       result.push({ id: el.id, type: el.type });
     }
   }

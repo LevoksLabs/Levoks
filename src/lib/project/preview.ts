@@ -4,6 +4,8 @@ import { compileProject, pageElements } from "./compiler";
 /** Opaque-origin iframe: local UI interactions only; never executes backend or edited source. */
 export function generatedPreview(value: unknown, pageId: string) {
   const output = compileProject(value as Parameters<typeof compileProject>[0]);
+  if (Object.values(output.project.editor.elementsById).some(el => el.type === "custom"))
+    throw new Error("This project contains custom source. Build the exported application to preview custom components; the editor does not execute their source.");
   if (output.project.source)
     throw new Error(
       "Source edits require the exported application runtime. Regenerate from the canvas to use this preview.",

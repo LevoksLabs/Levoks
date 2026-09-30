@@ -128,7 +128,7 @@ const FrontendCodePreviewPanel: React.FC = () => {
         } catch (error) {
             return { files: {} as Record<string, string>, error: error instanceof Error ? error.message : "Code generation failed." };
         }
-    }, [editor.elementsById, editor.rootIds, editor.globalRootIds, editor.pageElementMap, editor.pages, editor.activePageId, editor.canvasSettings, editor.tokens, editor.components, editor.assets, backend.services, backend.connections, routing.nodes, routing.connections, source, projectName]);
+    }, [editor.elementsById, editor.rootIds, editor.globalRootIds, editor.pageElementMap, editor.pages, editor.activePageId, editor.canvasSettings, editor.tokens, editor.components, editor.assets, editor.customElements, backend.services, backend.connections, routing.nodes, routing.connections, source, projectName]);
     const allFiles = output.files;
     const frontendFileList = Object.keys(allFiles).filter(file => file.startsWith("frontend/")).map(file => file.slice(9)).sort();
     const backendFileList = Object.keys(allFiles).filter(file => file.startsWith("backend/")).map(file => file.slice(8)).sort();

@@ -20,6 +20,7 @@ export function captureProject(id: string, name: string): ProjectDocument {
     name,
     updatedAt: new Date().toISOString(),
     editor: {
+      customElements: e.customElements,
       assets: e.assets, tokens: e.tokens, components: e.components,
       elementsById: e.elementsById,
       rootIds: e.rootIds,
@@ -42,6 +43,7 @@ export function restoreProject(value: unknown) {
     ...project.editor.pages.map((p) => p.id),
   ]);
   useEditorStore.setState({
+    customElements: project.editor.customElements || {},
     ...project.editor,
     assets: project.editor.assets || {}, tokens: project.editor.tokens || {}, components: (project.editor.components || {}) as Record<string, ComponentDefinition>,
     elementsById: project.editor.elementsById as Record<string, ElementNode>,

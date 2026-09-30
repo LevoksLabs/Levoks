@@ -18,7 +18,8 @@ import {
 } from "@dnd-kit/core";
 import { useEditorStore } from "@/store/editorStore";
 import { templates } from "@/templates";
-import { CONTAINER_TYPES, ElementNode, ElementType } from "@/types";
+import { ElementNode, ElementType } from "@/types";
+import { canHaveChildren } from "@/lib/elements/registry";
 
 interface DndProviderProps {
     children: React.ReactNode;
@@ -83,7 +84,7 @@ const getContainerIdAtPoint = (
         const maybeId = walkNode.getAttribute("data-element-id");
         if (maybeId) {
             const maybeNode = getElement(maybeId);
-            if (maybeNode && CONTAINER_TYPES.includes(maybeNode.type)) {
+            if (maybeNode && canHaveChildren(maybeNode, useEditorStore.getState().customElements)) {
                 return maybeId;
             }
         }
@@ -95,7 +96,7 @@ const getContainerIdAtPoint = (
             const id = node.getAttribute("data-element-id");
             if (!id) return null;
             const element = getElement(id);
-            if (!element || !CONTAINER_TYPES.includes(element.type)) return null;
+            if (!element || !canHaveChildren(element, useEditorStore.getState().customElements)) return null;
             const rect = node.getBoundingClientRect();
             const containsPoint = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
             if (!containsPoint) return null;
@@ -152,7 +153,7 @@ const DndProvider: React.FC<DndProviderProps> = ({ children }) => {
         // Only handle template drops from sidebar
         if (aData?.type === "template") {
             const tType = aData.templateType as ElementType;
-            const tmpl = templates[tType];
+            const tmpl = aData.template || templates[tType];
             if (!tmpl) return;
             const dropPoint = getDropClientPoint(event);
 

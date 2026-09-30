@@ -1,6 +1,7 @@
 import { withProjectHistory } from "./projectHistory";
 import { withoutWorkflowTarget } from "@/lib/backend/workflow-editor";
 import { create } from "zustand";
+import { backendDefaults } from "@/lib/backend/registry";
 import { v4 as uuidv4 } from "uuid";
 import {
     BackendBlock,
@@ -8,7 +9,6 @@ import {
     ServiceContainer,
     ConnectionEdge,
     BlockConfig,
-    DEFAULT_BLOCK_CONFIGS,
     SERVICE_COLORS,
     EndpointConfig,
     DbModelConfig,
@@ -133,7 +133,7 @@ export const useBackendStore = create<BackendStore>(withProjectHistory("backend"
     // ─── Block CRUD ───
 
     addBlock: (serviceId, blockType, label, configOverrides) => {
-        const defaultConfig = structuredClone(DEFAULT_BLOCK_CONFIGS[blockType]);
+        const defaultConfig = backendDefaults(blockType);
         const service = get().services.find(s => s.id === serviceId);
         if (!service) return;
         if (blockType === "rest_endpoint") {

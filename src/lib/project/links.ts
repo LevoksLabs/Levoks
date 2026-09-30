@@ -5,6 +5,14 @@ export function reconcileRouting() {
   const e = useEditorStore.getState();
   const b = useBackendStore.getState();
   const r = useRoutingStore.getState();
+  // Deleting a target removes its semantic event bindings in the same history entry.
+  let changed = false;
+  const elementsById = Object.fromEntries(Object.entries(e.elementsById).map(([id, node]) => {
+    const events = Object.fromEntries(Object.entries(node.events || {}).filter(([, event]) => event.action === "navigate" ? e.pages.some(page => page.id === event.target) : Boolean(e.elementsById[event.target])));
+    if (Object.keys(events).length !== Object.keys(node.events || {}).length) { changed = true; return [id, { ...node, events }]; }
+    return [id, node];
+  }));
+  if (changed) useEditorStore.setState({ elementsById });
   const nodes = r.nodes.filter((n) =>
     (n.type === "page" ? e.pages : b.services).some(
       (item) => item.id === n.refId,

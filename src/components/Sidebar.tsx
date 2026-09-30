@@ -4,8 +4,21 @@ import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
 import { useRoutingStore } from "@/store/routingStore";
 import { templates, sidebarCategories } from "@/templates";
-import { ElementType, CONTAINER_TYPES } from "@/types";
-import { BACKEND_SIDEBAR_CATEGORIES, BackendBlockType } from "@/types/backend";
+import {
+  elementTemplate,
+  ELEMENT_REGISTRY,
+  searchElements,
+  canHaveChildren,
+  EXPERIMENTAL_ELEMENTS,
+} from "@/lib/elements/registry";
+import { customTemplate } from "@/lib/elements/custom";
+import CustomElements from "./design/CustomElements";
+import { ElementType } from "@/types";
+import type { BackendBlockType } from "@/types/backend";
+import {
+  backendSidebarCategories as BACKEND_SIDEBAR_CATEGORIES,
+  backendSupport,
+} from "@/lib/backend/registry";
 import AssetLibrary from "./design/AssetLibrary";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
@@ -16,6 +29,32 @@ import LayersPanel from "./LayersPanel";
 import PagesPanel from "./PagesPanel";
 import TemplatesPanel from "./TemplatesPanel";
 import {
+  CalendarDays,
+  Clock3,
+  CheckSquare2,
+  ListChecks,
+  ToggleLeft,
+  SlidersHorizontal,
+  Upload,
+  Palette,
+  Table2,
+  Volume2,
+  UserRound,
+  GalleryHorizontal,
+  LoaderCircle,
+  Bell,
+  Quote,
+  Mail,
+  Phone,
+  Hash,
+  Search,
+  Link as LinkIcon,
+  PanelLeft,
+  Circle,
+  Triangle,
+  RectangleHorizontal,
+  MessageSquare,
+  CreditCard,
   Plus,
   FileText,
   Layers,
@@ -64,6 +103,67 @@ import {
 
 // Map element type string → Lucide icon for sidebar tiles
 const TILE_ICONS: Record<string, React.ReactNode> = {
+  textInput: <PenLine size={20} />,
+  passwordInput: <KeyRound size={20} />,
+  emailInput: <Mail size={20} />,
+  numberInput: <Hash size={20} />,
+  urlInput: <LinkIcon size={20} />,
+  searchInput: <Search size={20} />,
+  phoneInput: <Phone size={20} />,
+  dateInput: <CalendarDays size={20} />,
+  timeInput: <Clock3 size={20} />,
+  dateTimeInput: <CalendarDays size={20} />,
+  checkbox: <CheckSquare2 size={20} />,
+  radioButton: <Circle size={20} />,
+  radioGroup: <ListChecks size={20} />,
+  switch: <ToggleLeft size={20} />,
+  slider: <SlidersHorizontal size={20} />,
+  range: <SlidersHorizontal size={20} />,
+  fileUpload: <Upload size={20} />,
+  colorPicker: <Palette size={20} />,
+  textarea: <AlignJustify size={20} />,
+  select: <ChevronDown size={20} />,
+  multiSelect: <ListChecks size={20} />,
+  formField: <FileInput size={20} />,
+  table: <Table2 size={20} />,
+  list: <LayoutList size={20} />,
+  audio: <Volume2 size={20} />,
+  avatar: <UserRound size={20} />,
+  carousel: <GalleryHorizontal size={20} />,
+  spinner: <LoaderCircle size={20} />,
+  toast: <Bell size={20} />,
+  alert: <AlertTriangle size={20} />,
+  blockquote: <Quote size={20} />,
+  code: <Code size={20} />,
+  flex: <Columns2 size={20} />,
+  grid: <LayoutGrid size={20} />,
+  layoutFrame: <Square size={20} />,
+  aspectRatio: <Maximize2 size={20} />,
+  navbar: <Menu size={20} />,
+  sidebar: <PanelLeft size={20} />,
+  navigationLink: <LinkIcon size={20} />,
+  linkButton: <Link2 size={20} />,
+  iconButton: <MousePointerClick size={20} />,
+  buttonGroup: <Columns2 size={20} />,
+  card: <RectangleHorizontal size={20} />,
+  modal: <Square size={20} />,
+  dialog: <MessageSquare size={20} />,
+  drawer: <PanelLeft size={20} />,
+  pricingSection: <CreditCard size={20} />,
+  hero: <LayoutGrid size={20} />,
+  featureSection: <LayoutList size={20} />,
+  team: <UserRound size={20} />,
+  testimonial: <Quote size={20} />,
+  faq: <MessageSquare size={20} />,
+  footer: <AlignJustify size={20} />,
+  contactSection: <Mail size={20} />,
+  callToAction: <MousePointerClick size={20} />,
+  polygon: <Triangle size={20} />,
+  rectangle: <Square size={20} />,
+  circle: <Circle size={20} />,
+  vector: <PenLine size={20} />,
+  svg: <Code size={20} />,
+  customShape: <PenLine size={20} />,
   section: <AlignJustify size={20} />,
   container: <Square size={20} />,
   columns: <Columns2 size={20} />,
@@ -94,15 +194,23 @@ const DraggableItem: React.FC<{
   type: ElementType;
   label: string;
   icon: string;
-}> = ({ type, label, icon }) => {
+  definitionId?: string;
+}> = ({ type, label, icon, definitionId }) => {
   const { addElement } = useEditorStore();
+  const custom = useEditorStore((s) => s.customElements[definitionId || ""]);
+  const template =
+    custom && definitionId
+      ? customTemplate(definitionId, custom)
+      : definitionId
+        ? elementTemplate(definitionId)
+        : templates[type];
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
-      id: `template-${type}`,
+      id: `template-${definitionId || type}`,
       data: {
         type: "template",
-        template: templates[type],
+        template,
         templateType: type,
       },
     });
@@ -118,12 +226,15 @@ const DraggableItem: React.FC<{
 
     if (selectedElementId) {
       const sel = getElement(selectedElementId);
-      if (sel && CONTAINER_TYPES.includes(sel.type)) {
+      if (
+        sel &&
+        canHaveChildren(sel, useEditorStore.getState().customElements)
+      ) {
         parentId = selectedElementId;
       }
     }
 
-    addElement({ ...templates[type] }, parentId);
+    addElement(structuredClone(template), parentId);
   };
 
   return (
@@ -142,12 +253,15 @@ const DraggableItem: React.FC<{
         }
       }}
       aria-label={`Add ${label}`}
-      title={`Drag or double-click to add ${label}`}
+      title={`${ELEMENT_REGISTRY[definitionId || type]?.description || label} Drag or double-click to add.`}
     >
       <div className="sidebar-tile-icon">
         {TILE_ICONS[icon] || TILE_ICONS[type] || <Square size={20} />}
       </div>
       <span className="sidebar-tile-label">{label}</span>
+      {ELEMENT_REGISTRY[definitionId || type]?.status === "experimental" && (
+        <small>Experimental</small>
+      )}
     </div>
   );
 };
@@ -189,15 +303,17 @@ const Sidebar: React.FC = () => {
     pages,
   } = useEditorStore();
   const [searchQuery, setSearchQuery] = useState("");
+  const customElements = useEditorStore((s) => s.customElements);
   const ui = useEditorUIStore();
 
   const getFilteredCategories = () => {
     if (!searchQuery) return sidebarCategories;
+    const matches = new Set(searchElements(searchQuery).map((d) => d.id));
     return sidebarCategories
       .map((cat) => ({
         ...cat,
         items: cat.items.filter((item) =>
-          item.label.toLowerCase().includes(searchQuery.toLowerCase()),
+          matches.has(item.definitionId || item.type),
         ),
       }))
       .filter((cat) => cat.items.length > 0);
@@ -224,7 +340,19 @@ const Sidebar: React.FC = () => {
           </span>
           <span className="rail-label">Elements</span>
         </button>
-        <button className={`rail-btn ${sidebarOpen === "library" ? "rail-active" : ""}`} aria-label="Design library" aria-pressed={sidebarOpen === "library"} onClick={() => setSidebarOpen(sidebarOpen === "library" ? null : "library")}><span className="rail-icon"><Diamond size={18} /></span><span className="rail-label">Library</span></button>
+        <button
+          className={`rail-btn ${sidebarOpen === "library" ? "rail-active" : ""}`}
+          aria-label="Design library"
+          aria-pressed={sidebarOpen === "library"}
+          onClick={() =>
+            setSidebarOpen(sidebarOpen === "library" ? null : "library")
+          }
+        >
+          <span className="rail-icon">
+            <Diamond size={18} />
+          </span>
+          <span className="rail-label">Library</span>
+        </button>
         <button
           className={`rail-btn ${sidebarOpen === "assets" ? "rail-active" : ""}`}
           onClick={() =>
@@ -482,11 +610,47 @@ const Sidebar: React.FC = () => {
                       type={item.type}
                       label={item.label}
                       icon={item.icon}
+                      definitionId={item.definitionId}
                     />
                   ))}
                 </div>
               </div>
             ))}
+            <div className="flyout-group">
+              <div className="flyout-group-header">Custom elements</div>
+              <div className="flyout-grid">
+                {Object.entries(customElements)
+                  .filter(([, d]) =>
+                    `${d.name} ${d.description}`
+                      .toLowerCase()
+                      .includes(searchQuery.toLowerCase()),
+                  )
+                  .map(([id, d]) => (
+                    <DraggableItem
+                      key={id}
+                      definitionId={id}
+                      type="custom"
+                      label={d.name}
+                      icon="frame"
+                    />
+                  ))}
+              </div>
+              <CustomElements />
+              <details className="semantic-properties">
+                <summary>Additional capabilities</summary>
+                {EXPERIMENTAL_ELEMENTS.filter((item) =>
+                  `${item.name} ${item.reason}`
+                    .toLowerCase()
+                    .includes(searchQuery.toLowerCase()),
+                ).map((item) => (
+                  <p key={item.name}>
+                    <strong>{item.name} — experimental</strong>
+                    <br />
+                    {item.reason}
+                  </p>
+                ))}
+              </details>
+            </div>
           </div>
 
           <div className="flyout-hint">
@@ -851,6 +1015,9 @@ const BackendDraggableItem: React.FC<{
         {BACKEND_BLOCK_ICONS[icon] || <Zap size={16} />}
       </div>
       <span className="sidebar-tile-label">{label}</span>
+      {backendSupport(blockType, label) === "experimental" && (
+        <small>Experimental</small>
+      )}
     </div>
   );
 };

@@ -229,7 +229,7 @@ export default function WorkspaceHub() {
     editor.pageElementMap,
     editor.activePageId,
     editor.canvasSettings,
-    editor.assets,
+    editor.assets, editor.customElements,
     editor.tokens,
     editor.components,
     backend.services,

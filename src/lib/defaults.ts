@@ -13,6 +13,8 @@ import type { ElementType, ElementLayout } from "@/types";
 // ─── Default Layout ───
 
 export const DEFAULT_LAYOUT: Record<ElementType, ElementLayout> = {
+    native: { x: 0, y: 0, w: 300, h: 44, position: "absolute", opacity: 1, rotation: 0, visible: true, locked: false },
+    custom: { x: 0, y: 0, w: 320, h: 180, position: "absolute", opacity: 1, rotation: 0, visible: true, locked: false },
     section:   { x: 0, y: 0, w: 800, h: 200, position: "relative", opacity: 1, rotation: 0, visible: true, locked: false },
     container: { x: 0, y: 0, w: 400, h: 200, position: "relative", opacity: 1, rotation: 0, visible: true, locked: false },
     columns:   { x: 0, y: 0, w: 600, h: 200, position: "relative", opacity: 1, rotation: 0, visible: true, locked: false },
@@ -41,6 +43,7 @@ export const DEFAULT_LAYOUT: Record<ElementType, ElementLayout> = {
 // ─── Default Styles ───
 
 export const DEFAULT_STYLES: Record<ElementType, Record<string, string | number>> = {
+    native: {}, custom: {},
     section: {
         padding: "40px 20px",
         minHeight: "120px",
@@ -189,6 +192,7 @@ export const DEFAULT_STYLES: Record<ElementType, Record<string, string | number>
 // ─── Default Props ───
 
 export const DEFAULT_PROPS: Record<ElementType, Record<string, string | number | boolean>> = {
+    native: {}, custom: {},
     section: {},
     container: {},
     columns: { columnCount: 2 },
