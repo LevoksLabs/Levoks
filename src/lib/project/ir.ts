@@ -1,3 +1,4 @@
+import { lowerBackend, type BackendIR } from "@/lib/backend/ir";
 import type { ProjectDocument } from "./schema";
 import type { FlowGraph } from "@/types/ir";
 import { ELEMENT_REGISTRY } from "@/lib/elements/registry";
@@ -7,7 +8,7 @@ export const GENERATOR_VERSION = "semantic-1";
 /** Application IR is the validated project plus resolved routing and versioned semantics.
  * The project is already normalized: consumers never reconstruct it from the DOM.
  */
-export function projectIR(project: ProjectDocument, graph: FlowGraph) {
+export function projectIR(project: ProjectDocument, graph: FlowGraph, backendIR: BackendIR = lowerBackend(project.backend)) {
   const definitions = Object.fromEntries(
     Object.values(project.editor.elementsById)
       .map((element) => {
@@ -46,6 +47,7 @@ export function projectIR(project: ProjectDocument, graph: FlowGraph) {
     target: "next-react-express",
     definitions,
     backendDefinitions,
+    backend: backendIR,
     project,
     graph,
   };

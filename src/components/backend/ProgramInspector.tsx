@@ -16,6 +16,7 @@ import {
   type AggregationConfig,
 } from "@/lib/backend/program-schema";
 import { useBackendStore } from "@/store/backendStore";
+import { addLoginWorkflow } from "@/lib/backend/login";
 
 function AggregateFields({
   value,
@@ -442,6 +443,27 @@ export default function ProgramInspector({
     const c = block.config as EndpointConfig;
     content = (
       <>
+        {!block.connections.length &&
+          c.route.endsWith("/login") &&
+          service.blocks.some((b) => b.type === "auth_block") && (
+            <button
+              type="button"
+              className="bi-btn"
+              onClick={() =>
+                useBackendStore
+                  .getState()
+                  .updateService(service.id, {
+                    blocks: addLoginWorkflow(
+                      service,
+                      () => crypto.randomUUID(),
+                      block.id,
+                    ).blocks,
+                  })
+              }
+            >
+              Make login workflow editable
+            </button>
+          )}
         {select(
           "Model for automatic CRUD",
           c.modelId || "",
@@ -505,6 +527,56 @@ export default function ProgramInspector({
     const c = parsed.data;
     content = (
       <>
+        {"identityModelId" in c && (
+          <>
+            {select(
+              "Identity model",
+              c.identityModelId,
+              service.blocks
+                .filter((b) => b.type === "db_model")
+                .map((b) => ({ id: b.id, label: b.label })),
+              (identityModelId) => update({ identityModelId }),
+            )}
+            <Binding
+              label="Email binding"
+              value={c.email}
+              onChange={(email) => update({ email })}
+            />
+          </>
+        )}
+        {"lookupId" in c && (
+          <>
+            {select(
+              "Account lookup",
+              c.lookupId,
+              service.blocks
+                .filter((b) => b.type === "credential_lookup")
+                .map((b) => ({ id: b.id, label: b.label })),
+              (lookupId) => update({ lookupId }),
+            )}
+            <Binding
+              label="Password binding"
+              value={c.password}
+              onChange={(password) => update({ password })}
+            />
+          </>
+        )}
+        {"verificationId" in c && (
+          <>
+            {select(
+              "Password verification",
+              c.verificationId,
+              service.blocks
+                .filter((b) => b.type === "password_verify")
+                .map((b) => ({ id: b.id, label: b.label })),
+              (verificationId) => update({ verificationId }),
+            )}
+            <p className="bi-hint">
+              Uses the service JWT lifetime and revocable sessions. Cookies are
+              HttpOnly; secrets cannot be bound as output values.
+            </p>
+          </>
+        )}
         {"modelId" in c && (
           <>
             {select(

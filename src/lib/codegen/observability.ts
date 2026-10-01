@@ -2,7 +2,7 @@ import {
   auditLogSchema,
   errorHandlerSchema,
 } from "@/lib/backend/observability-schema";
-import type { ServiceContainer, EndpointConfig } from "@/types/backend";
+import type { SemanticBackendService as ServiceContainer, EndpointConfig } from "@/types/backend";
 export function observabilityRuntime(service: ServiceContainer) {
   const error = errorHandlerSchema.parse(
     service.blocks.find((b) => b.type === "error_handler")?.config || {},

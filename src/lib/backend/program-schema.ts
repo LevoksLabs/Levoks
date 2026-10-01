@@ -8,7 +8,22 @@ const ref = z.string().max(120);
 const steps = z.array(ref).max(200);
 // Values beginning with $ bind to a context path; all other values are literals.
 export const binding = z.union([
-  z.string().max(10000),
+  z
+    .string()
+    .max(10000)
+    .refine(
+      (value) =>
+        !value.startsWith("$") ||
+        value
+          .slice(1)
+          .split(".")
+          .every(
+            (part) =>
+              /^[A-Za-z_][A-Za-z0-9_]*$/.test(part) &&
+              !["__proto__", "constructor", "prototype"].includes(part),
+          ),
+      "Use a safe $context.path binding or a literal value",
+    ),
   z.number().finite(),
   z.boolean(),
   z.null(),
@@ -38,6 +53,13 @@ export const aggregationSchema = z.object({
 });
 export type AggregationConfig = z.infer<typeof aggregationSchema>;
 export const programConfigs = {
+  credential_lookup: z.object({
+    identityModelId: ref,
+    email: binding,
+    output: name,
+  }),
+  password_verify: z.object({ lookupId: ref, password: binding }),
+  session_issue: z.object({ verificationId: ref, output: name }),
   query: z.object({
     modelId: ref,
     operation: z.enum([
@@ -80,6 +102,13 @@ export const programConfigs = {
 export type ProgramBlockType = keyof typeof programConfigs;
 export type ProgramConfig = z.infer<(typeof programConfigs)[ProgramBlockType]>;
 export const PROGRAM_DEFAULTS: Record<ProgramBlockType, ProgramConfig> = {
+  credential_lookup: {
+    identityModelId: "",
+    email: "$request.body.email",
+    output: "account",
+  },
+  password_verify: { lookupId: "", password: "$request.body.password" },
+  session_issue: { verificationId: "", output: "result" },
   query: {
     modelId: "",
     operation: "find",

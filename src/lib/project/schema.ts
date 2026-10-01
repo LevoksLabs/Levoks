@@ -136,12 +136,16 @@ const configs = {
   }),
 };
 const blockBase = z.object({
+  definitionVersion: z.literal(1).optional(),
   id,
   label: text,
   position: z.object({ x: finite, y: finite, placed: z.boolean().optional() }),
   connections: z.array(id).max(1000),
 });
 export const backendBlockSchema = z.discriminatedUnion("type", [
+  blockBase.extend({ type: z.literal("credential_lookup"), config: programConfigs.credential_lookup }),
+  blockBase.extend({ type: z.literal("password_verify"), config: programConfigs.password_verify }),
+  blockBase.extend({ type: z.literal("session_issue"), config: programConfigs.session_issue }),
   blockBase.extend({ type: z.literal("error_handler"), config: errorHandlerSchema }),
   blockBase.extend({ type: z.literal("audit_log"), config: auditLogSchema }),
   blockBase.extend({ type: z.literal("health_check"), config: healthSchema }),

@@ -3,8 +3,8 @@
 // ═══════════════════════════════════════════════════
 
 import {
-    ServiceContainer,
-    BackendBlock,
+    SemanticBackendService as ServiceContainer,
+    SemanticBackendBlock as BackendBlock,
     EndpointConfig,
     DbModelConfig,
     MiddlewareConfig,
@@ -29,6 +29,7 @@ import { healthRuntime, healthConfiguration } from "./health";
 import { observabilityRuntime } from "./observability";
 import { programFiles } from "@/lib/backend/program";
 import { rateLimitRuntime } from "./rate-limits";
+import { workflowOutputs } from "@/lib/backend/workflow-editor";
 
 // ─── Field type → Mongoose type ───
 function mongooseType(type: SchemaField["type"]): string {
@@ -72,7 +73,7 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
     const config = block.config as EndpointConfig;
     const method = config.method.toLowerCase();
     const middleware = (authenticate = false) => `...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'ip'), ${authenticate ? "auth, " : ""}...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'identity'), `;
-    if (block.connections.length) return `router.${method}(${JSON.stringify(config.route)}, ${middleware(Boolean(config.authRequired || config.policyIds?.length))}validateBody(${JSON.stringify(config.requestBody)}), async (req, res, next) => { try { const output = await workflow(${JSON.stringify(block.id)}, req); if (output.status === 204) return res.status(204).end(); res.status(output.status).json(output.body ?? null); } catch (error) { next(error); } });`;
+    if (block.connections.length) return `router.${method}(${JSON.stringify(config.route)}, ${middleware(Boolean(config.authRequired || config.policyIds?.length))}${identityModel ? "identity.limit, " : ""}validateBody(${JSON.stringify(config.requestBody)}), async (req, res, next) => { try { const output = await workflow(${JSON.stringify(block.id)}, req${identityModel ? ", res" : ""}); if (output.status === 204) return res.status(204).end(); res.status(output.status).json(output.body ?? null); } catch (error) { next(error); } });`;
     const modelName = models.length > 0 ? models[0] : null;
     if (identityModel) {
         const action = config.route.split("/").pop();
@@ -196,6 +197,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
     const middlewares = service.blocks.filter((b) => b.type === "middleware");
     const authBlocks = service.blocks.filter((b) => b.type === "auth_block");
     const envVars = service.blocks.filter((b) => b.type === "env_var");
+    const workflowTargets = new Set(service.blocks.flatMap(block => workflowOutputs(block).flatMap(output => output.ids)));
     const identityId = (authBlocks.find(b => (b.config as AuthConfig).identityServiceId)?.config as AuthConfig | undefined)?.identityServiceId;
     const remoteIdentity = allServices.find(s => s.id === identityId);
     const introspectionPath = (remoteIdentity?.blocks.find(b => b.type === "rest_endpoint" && (b.config as EndpointConfig).route.endsWith('/introspect'))?.config as EndpointConfig | undefined)?.route;
@@ -229,7 +231,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
             .map((e) => {
                 const bound = models.find(m => m.id === (e.config as EndpointConfig).modelId) || models[0];
                 const boundConfig = bound?.config as DbModelConfig | undefined;
-                const effective = e.connections.length && programAuth ? {...e, config: {...e.config, authRequired: true}} : e;
+                const effective = e.connections.length && programAuth && !identityModel ? {...e, config: {...e.config, authRequired: true}} : e;
                 return generateEndpointHandler(effective, boundConfig ? [boundConfig.tableName] : modelNames, boundConfig?.fields || [], identityModel);
             })
             .join("\n\n");
@@ -306,7 +308,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
   req.body = clean;
   next();
 };
-const validations = ${JSON.stringify(service.blocks.filter(b => b.type === "validation").map(b => b.config))};
+const validations = ${JSON.stringify(service.blocks.filter(b => b.type === "validation" && !workflowTargets.has(b.id)).map(b => b.config))};
 exports.validateRules = (req, res, next) => {
   if (['GET', 'DELETE'].includes(req.method)) return next();
   for (const validation of validations) {

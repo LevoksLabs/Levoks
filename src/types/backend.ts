@@ -163,6 +163,7 @@ export type BlockConfig =
 // ─── Backend Block ───
 
 export interface BackendBlock {
+  definitionVersion?: 1;
   id: string;
   type: BackendBlockType;
   label: string;
@@ -183,6 +184,10 @@ export interface ServiceContainer {
   blocks: BackendBlock[];
   collapsed: boolean;
 }
+
+/** Executable semantics only: no canvas geometry, selection or collapse state. */
+export type SemanticBackendBlock = Omit<BackendBlock, "position">;
+export type SemanticBackendService = Omit<ServiceContainer, "position" | "color" | "collapsed" | "blocks"> & { blocks: SemanticBackendBlock[] };
 
 // ─── Connection Edge ───
 
@@ -334,6 +339,9 @@ export const BACKEND_SIDEBAR_CATEGORIES: BackendSidebarCategory[] = [
     label: "Authentication",
     items: [
       { type: "auth_block", label: "JWT Auth", icon: "jwt" },
+      { type: "credential_lookup", label: "Find account", icon: "model" },
+      { type: "password_verify", label: "Verify password", icon: "validation" },
+      { type: "session_issue", label: "Issue session", icon: "session" },
       { type: "auth_block", label: "OAuth", icon: "oauth" },
       { type: "auth_block", label: "Session", icon: "session" },
       { type: "auth_block", label: "API Key", icon: "apikey" },

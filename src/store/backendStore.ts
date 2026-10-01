@@ -1,3 +1,4 @@
+import { addLoginWorkflow } from "@/lib/backend/login";
 import { withProjectHistory } from "./projectHistory";
 import { withoutWorkflowTarget } from "@/lib/backend/workflow-editor";
 import { create } from "zustand";
@@ -159,6 +160,7 @@ export const useBackendStore = create<BackendStore>(withProjectHistory("backend"
             : defaultConfig;
 
         const block: BackendBlock = {
+            definitionVersion: 1,
             id: uuidv4(),
             type: blockType,
             label: label || blockType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
@@ -442,7 +444,7 @@ export const useBackendStore = create<BackendStore>(withProjectHistory("backend"
                     requestBody: action === "revoke-session" ? [{name: "sessionId", type: "string", required: true}] : action === "change-password" ? [{name: "currentPassword", type: "string", required: true}, {name: "newPassword", type: "string", required: true}] : action === "forgot-password" || action === "request-verification" ? [{name: "email", type: "string", required: true}] : action === "reset-password" ? [{name: "token", type: "string", required: true}, {name: "newPassword", type: "string", required: true}] : action === "verify-email" ? [{name: "token", type: "string", required: true}] : []},
                 position: {x: 0, y: 0}, connections: []});
         }
-        set({ services: [...get().services, service] });
+        set({ services: [...get().services, addLoginWorkflow(service, uuidv4)] });
     },
 
     loadCrudTemplate: () => {

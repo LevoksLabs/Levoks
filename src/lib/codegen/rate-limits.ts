@@ -1,4 +1,4 @@
-import type { MiddlewareConfig, ServiceContainer } from "@/types/backend";
+import type { MiddlewareConfig, SemanticBackendService as ServiceContainer } from "@/types/backend";
 
 export function rateLimitRuntime(
   service: ServiceContainer,

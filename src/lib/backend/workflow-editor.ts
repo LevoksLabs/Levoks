@@ -2,6 +2,7 @@ import type {
   BackendBlock,
   BlockConfig,
   ServiceContainer,
+  SemanticBackendBlock,
 } from "@/types/backend";
 import { controlSchema } from "./program-schema";
 export function withoutWorkflowTarget(
@@ -46,10 +47,10 @@ const configuration = new Set([
   "middleware",
   "auth_block",
 ]);
-export const executableBlock = (block: BackendBlock) =>
+export const executableBlock = (block: SemanticBackendBlock) =>
   !configuration.has(block.type);
 export function workflowOutputs(
-  block: BackendBlock,
+  block: SemanticBackendBlock,
 ): { field: string; label: string; ids: string[] }[] {
   if (!executableBlock(block) && block.type !== "rest_endpoint") return [];
   const result = [

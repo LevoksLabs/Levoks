@@ -52,7 +52,7 @@ test("identity controller hashes passwords, rejects privilege input, and sets Ht
         created.push(value);
         return user;
       },
-      findOne: () => ({ select: async () => user }),
+      findOne: () => ({ select: () => ({ maxTimeMS: async () => user }) }),
     },
     bcryptjs: {
       hashSync: () => "dummy",

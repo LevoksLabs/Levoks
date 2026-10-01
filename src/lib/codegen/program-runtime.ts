@@ -42,7 +42,7 @@ function publicValue(value, depth = 0) {
   if (Array.isArray(value)) return value.map(item => publicValue(item, depth + 1));
   return Object.fromEntries(Object.entries(value).filter(([key]) => safeKey(key) && !/password|secret|token/i.test(key)).map(([key, child]) => [key, publicValue(child, depth + 1)]));
 }
-exports.createWorkflow = (program, models, database, observability) => {
+exports.createWorkflow = (program, models, database, observability, identity) => {
   const blocks = Object.fromEntries(program.blocks.map(block => [block.id, block]));
   function policy(id, principal) {
     const block = blocks[id];
@@ -65,12 +65,16 @@ exports.createWorkflow = (program, models, database, observability) => {
     }
     return scope;
   }
-  return async function execute(endpointId, request) {
+  return async function execute(endpointId, request, httpResponse) {
     const endpoint = blocks[endpointId];
     if (!endpoint || endpoint.type !== 'rest_endpoint') throw new WorkflowError(500, 'Endpoint not found');
     for (const id of endpoint.config.policyIds || []) policy(id, request.user);
     let context = {request: {body: safeValue(request.body || {}), params: safeValue(request.params || {}), query: safeValue(request.query || {})}, principal: request.user || null};
     let response;
+    // Credentials and verification proof never enter the user-bindable context.
+    const accounts = new Map(), verified = new Map();
+    let sessionAccount;
+
     let stepsUsed = 0;
     const deadline = Date.now() + 10000;
     const active = new Set();
@@ -84,7 +88,21 @@ exports.createWorkflow = (program, models, database, observability) => {
         const c = block.config;
         active.add(id);
         try {
-          if (block.type === 'query') {
+          if (block.type === 'credential_lookup') {
+            if (!identity || session) throw new WorkflowError(422, 'Identity lookup is unavailable here');
+            const user = await identity.findAccount(resolve(c.email, context));
+            accounts.set(block.id, user);
+            context[c.output] = user ? identity.publicAccount(user) : null;
+          } else if (block.type === 'password_verify') {
+            if (!identity || !accounts.has(c.lookupId)) throw new WorkflowError(401, 'Account lookup is required');
+            const user = accounts.get(c.lookupId);
+            await identity.verifyPassword(user, resolve(c.password, context));
+            verified.set(block.id, user);
+          } else if (block.type === 'session_issue') {
+            if (!identity || !httpResponse || !verified.has(c.verificationId) || sessionAccount || session) throw new WorkflowError(401, 'Verified credentials are required');
+            sessionAccount = verified.get(c.verificationId);
+            context[c.output] = identity.publicAccount(sessionAccount);
+          } else if (block.type === 'query') {
             const model = models[c.modelId];
             if (!model) throw new WorkflowError(500, 'Query model is not configured');
             const modelBlock = blocks[c.modelId];
@@ -194,7 +212,10 @@ exports.createWorkflow = (program, models, database, observability) => {
       }
     }
     await run(endpoint.connections, null);
-    return response || {status: 200, body: publicValue(context.result ?? null)};
+    const output = response || {status: 200, body: publicValue(context.result ?? null)};
+    // Commit cookies/session only after the entire workflow and response succeed.
+    if (sessionAccount && output.status >= 200 && output.status < 300) await identity.issueSession(sessionAccount, request, httpResponse);
+    return output;
   };
 };
 `;

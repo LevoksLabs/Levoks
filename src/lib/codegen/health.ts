@@ -1,5 +1,5 @@
 import { healthSchema, type HealthConfig } from "@/lib/backend/health-schema";
-import type { ServiceContainer } from "@/types/backend";
+import type { SemanticBackendService as ServiceContainer } from "@/types/backend";
 
 export function healthRuntime(
   service: ServiceContainer,

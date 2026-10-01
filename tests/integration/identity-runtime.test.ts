@@ -208,6 +208,13 @@ test(
       assert.ok(user);
       assert.equal(user.role, "user");
       assert.notEqual(user.password, "correct-password-123");
+      // The template now executes editable validation/database/password/session blocks.
+      for (const [email, password] of [["alice@example.test", "wrong-password"], ["missing@example.test", "correct-password-123"]]) {
+        const denied = await call("login", {email, password});
+        assert.equal(denied.status, 401);
+        assert.equal(denied.headers.getSetCookie().length, 0);
+      }
+      assert.equal(await db.collection("levoksidentitysessions").countDocuments(), 0);
       const original = await login();
       assert.match(original, /levoks_refresh_3001=/);
       assert.match(original, /levoks_session_3001=/);

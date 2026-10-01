@@ -2,11 +2,11 @@
 // Code Generation — Orchestrator
 // ═══════════════════════════════════════════════════
 //
-// Pipeline:  Canvas State → resolveGraph() → validateIR() → codegen
+// Pipeline: Semantic backend state → lowerBackend() → validateBackendIR() → codegen
 //
 
-import { ServiceContainer, ConnectionEdge } from "@/types/backend";
-import { FlowGraph } from "@/types/ir";
+import type { BackendIR } from "@/lib/backend/ir";
+import { validateBackendIR } from "@/lib/backend/validate";
 import { serviceSlug } from "@/lib/project/schema";
 import type { AuthConfig } from "@/types/backend";
 import { generateServiceCode } from "./express";
@@ -17,16 +17,15 @@ import { DOCKER_COMPOSE_TEMPLATE, README_TEMPLATE } from "./templates";
  * Generate all code files for the entire backend project.
  * Returns a flat file map: { "path/to/file.js": "content" }
  *
- * @param services       — backend service containers
- * @param connections    — backend inter-service connections (for docker-compose)
- * @param flowGraph      — optional IR for cross-referencing wired endpoints
+ * @param ir — versioned backend semantics, independent of the editor canvas
  */
 export function generateProject(
-    services: ServiceContainer[],
-    connections: ConnectionEdge[],
-    flowGraph?: FlowGraph
+    ir: BackendIR
 ): Record<string, string> {
-    const allFiles: Record<string, string> = {};
+    const diagnostics = validateBackendIR(ir);
+    if (diagnostics.some(d => d.severity === "error")) throw new Error(diagnostics.map(d => d.message).join("\n"));
+    const { services } = ir;
+    const allFiles: Record<string, string> = {"backend.ir.json": JSON.stringify(ir, null, 2)};
 
     // Generate code for each service
     for (const service of services) {

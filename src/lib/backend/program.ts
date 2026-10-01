@@ -1,6 +1,7 @@
+import { loginDiagnostics } from "./login";
 import type {
-  BackendBlock,
-  ServiceContainer,
+  SemanticBackendBlock as BackendBlock,
+  SemanticBackendService as ServiceContainer,
   EndpointConfig,
   DbModelConfig,
   MiddlewareConfig,
@@ -10,7 +11,7 @@ import { controlSchema, programConfigs } from "./program-schema";
 import { PROGRAM_RUNTIME } from "@/lib/codegen/program-runtime";
 
 export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
-  const diagnostics: IRDiagnostic[] = [];
+  const diagnostics: IRDiagnostic[] = [...loginDiagnostics(service)];
   const byId = new Map(service.blocks.map((block) => [block.id, block]));
   const identityService =
     service.blocks.some(
@@ -339,6 +340,8 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
         const control = c.program as
           { left?: unknown; right?: unknown; source?: unknown } | undefined;
         const inputs: Record<string, unknown> = {
+          credential_lookup: c.email,
+          password_verify: c.password,
           query: [c.filter, c.values],
           transform: c.fields,
           function: [c.inputs, c.result],
@@ -423,7 +426,7 @@ export function programFiles(
 const program = require('./program.json');
 const mongoose = require('mongoose');
 const models = {${models.map((b) => `${JSON.stringify(b.id)}: require('../models/${(b.config as DbModelConfig).tableName}')`).join(",")}};
-module.exports = createWorkflow(program, models, mongoose, require('../observability'));
+module.exports = createWorkflow(program, models, mongoose, require('../observability')${service.blocks.some(b => b.type === 'credential_lookup') ? ", require('../controllers/identity')" : ''});
 `,
   };
 }

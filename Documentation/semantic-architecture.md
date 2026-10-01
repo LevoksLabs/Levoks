@@ -49,7 +49,7 @@ The canvas displays a labelled component boundary with its declared values. It n
 
 ## Backend and routing contracts
 
-`src/lib/backend/registry.ts` exposes the existing 21 backend block types with default configuration, actual Zod validators, version/migration metadata, execution/configuration strategies and typed execution/request/response port metadata. Creation and compilation use this registry. It preserves the Express/Mongoose program compiler, its branch/query/transaction/policy diagnostics and separate routing graph. Relationships and unsupported authentication/middleware variants remain explicitly experimental and export diagnostics still block unsupported configurations.
+`src/lib/backend/registry.ts` exposes the backend block catalog with default configuration, actual Zod validators, version/migration metadata, execution/configuration strategies and typed execution/request/response port metadata. Creation and compilation use this registry. It preserves the Express/Mongoose program compiler, its branch/query/transaction/policy diagnostics and separate routing graph. Relationships and unsupported authentication/middleware variants remain explicitly experimental and export diagnostics still block unsupported configurations.
 
 All documented backend category names are reserved in the registry. This does **not** implement queues, workers, schedules, WebSockets, payments, webhooks, storage or caching; there are no fake executable entries for those categories. Port metadata describes the current executable subset, not a new arbitrary typed-data graph. Provider adapters and richer data bindings need subsequent implementation and runtime tests.
 
@@ -70,3 +70,7 @@ Compilation of an identical project produces identical file content. ZIP entries
 - Desktop (1600×1000) and compact desktop (1024×768) screenshots were inspected; clipped experimental labels and native wrapper styling were corrected. Impeccable's mechanical detector returned no findings on the changed UI targets.
 
 95 definitions are supported within their declared primitive behavior; 9 are visibly experimental (legacy video/frame/social links, embedded frame/map variants, drawer specialization, timeline and rich-text editing). Data Grid, raw HTML/CSS and arbitrary imported-component workflows have explanatory capability entries rather than pretend implementations. `Table` supplies static tabular data; `Custom Element` supplies the controlled single-module React extension path. Full application-builder breadth, universal prop parity, provider-backed backend blocks, typed response bindings and custom preview infrastructure remain open acceptance work.
+
+## Backend compiler extension
+
+The backend now has an explicit layout-independent IR and a dedicated validation boundary before generation. Auth templates expose editable account lookup, password verification, session issuance, and response steps; existing login endpoints can opt into this workflow through their inspector. See [backend-compiler.md](backend-compiler.md) for the compiler contract, supported controls, compatibility, and verification. The frontend semantic architecture is unchanged.

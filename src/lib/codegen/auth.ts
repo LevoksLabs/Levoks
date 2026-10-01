@@ -25,18 +25,27 @@ exports.register = async (req, res) => {
     return res.status(201).json(identity(user));
   } catch (error) { return res.status(error.code === 11000 ? 409 : 500).json({ error: 'Unable to create account' }); }
 };
+const fail = (status, message) => Object.assign(new Error(message), {status});
+exports.findAccount = async email => {
+  if (!ready()) throw fail(503, 'Authentication is not configured');
+  if (typeof email !== 'string' || email.length > 320) throw fail(401, 'Invalid credentials');
+  return User.findOne({email: email.trim().toLowerCase()}).select('+password +authVersion +disabledAt').maxTimeMS(5000);
+};
+exports.verifyPassword = async (user, password) => {
+  if (typeof password !== 'string' || Buffer.byteLength(password, 'utf8') > 72) throw fail(401, 'Invalid credentials');
+  const valid = await bcrypt.compare(password, user?.password || dummyHash);
+  if (!user || !valid || user.disabledAt) throw fail(401, 'Invalid credentials');
+  ${requireVerifiedEmail ? "if (!user.emailVerifiedAt) throw fail(403, 'Verify your email before signing in. You can request a new verification message.');" : ""}
+};
+exports.publicAccount = identity;
+exports.issueSession = async (user, req, res) => {if (!ready()) throw fail(503, 'Authentication is not configured'); await sessions.issue(user, req, res);};
 exports.login = async (req, res) => {
-  if (!ready()) return res.status(503).json({ error: 'Authentication is not configured' });
-  const { email, password } = req.body;
-  if (typeof email !== 'string' || typeof password !== 'string' || Buffer.byteLength(password, 'utf8') > 72) return res.status(401).json({ error: 'Invalid credentials' });
   try {
-    const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+password +authVersion +disabledAt');
-    const valid = await bcrypt.compare(password, user?.password || dummyHash);
-    if (!user || !valid || user.disabledAt) return res.status(401).json({ error: 'Invalid credentials' });
-    ${requireVerifiedEmail ? "if (!user.emailVerifiedAt) return res.status(403).json({error: 'Verify your email before signing in. You can request a new verification message.'});" : ""}
-    await sessions.issue(user, req, res);
+    const user = await exports.findAccount(req.body.email);
+    await exports.verifyPassword(user, req.body.password);
+    await exports.issueSession(user, req, res);
     return res.json(identity(user));
-  } catch { return res.status(500).json({ error: 'Login failed' }); }
+  } catch (error) { res.status(error.status || 500).json({error: error.status ? error.message : 'Login failed'}); }
 };
 exports.profile = async (req, res) => {
   try { const user = await User.findById(req.user.sub); if (!user) return res.status(404).json({ error: 'Account not found' }); return res.json(identity(user)); }
