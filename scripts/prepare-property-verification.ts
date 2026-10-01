@@ -1,15 +1,16 @@
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import JSZip from "jszip";
 import { parseProject } from "../src/lib/project/schema";
 import { compileProject } from "../src/lib/project/compiler";
 
 // Consume the actual projects downloaded by the browser regression, not parallel fixtures.
-const inputs = ["functional", "radio", "embed", "controls"].map((name, index) => {
-  const input = parseProject(
-    JSON.parse(
-      readFileSync(`.verification/${name}-app/levoks.project.json`, "utf8"),
-    ),
-  );
+async function main() {
+const catalog = await JSZip.loadAsync(readFileSync(".verification/element-audit/application.zip"));
+const snapshots = ["functional", "radio", "embed", "controls"].map(name => JSON.parse(readFileSync(`.verification/${name}-app/levoks.project.json`, "utf8")));
+snapshots.push(JSON.parse(await catalog.file("levoks.project.json")!.async("string")));
+const inputs = snapshots.map((snapshot, index) => {
+  const input = parseProject(snapshot);
   const id = (old: string) => `fixture${index}_${old}`;
   input.editor.elementsById = Object.fromEntries(
     Object.values(input.editor.elementsById).map((node) => [
@@ -39,7 +40,7 @@ const pageRoots = inputs.map(
 project.editor.pages = inputs.map((input, index) => ({
   ...input.editor.pages[0],
   id: `acceptance-${index}`,
-  route: ["/", "/radio", "/embed", "/controls"][index],
+  route: ["/", "/radio", "/embed", "/controls", "/catalog"][index],
 }));
 project.editor.elementsById = Object.assign(
   {},
@@ -58,5 +59,8 @@ for (const [name, source] of Object.entries(output.files)) {
   writeFileSync(file, source);
 }
 console.log(
-  "Prepared production application from browser-downloaded Tabs, Radio and Embed projects.",
+  "Prepared production application from browser-downloaded Tabs, Radio, Embed, Controls and full catalog projects.",
 );
+
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });

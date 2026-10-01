@@ -11,7 +11,7 @@ import { resolveElement, fontFamily } from "@/lib/design";
 import { useEditorStore } from "@/store/editorStore";
 import TabsWidget from "./design/TabsWidget";
 import { widgetNumber, choiceCSS } from "@/lib/widgets";
-import { orderedStyles } from "@/lib/property-values";
+import { orderedStyles, semanticStyleParts } from "@/lib/property-values";
 import { embedAttributes } from "@/lib/elements/embed";
 import { safeElementUrl } from "@/lib/elements/native";
 import { ICON_PATHS } from "@/lib/icon-paths";
@@ -81,14 +81,14 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
     const resolvedPosition = (rawPosition || (isContainer ? "relative" : "static")) as React.CSSProperties["position"];
     const isPositionedChild = resolvedPosition !== "static";
     const positionStyles: React.CSSProperties = isRoot
-        ? { position: "absolute", left: `${layout.x}px`, top: `${layout.y}px`, width: String(element.styles.width || widthPx), minHeight: element.styles.height ? undefined : heightPx, height: isTextLike ? "auto" : String(element.styles.height || heightPx) }
+        ? { position: "absolute", left: `${layout.x}px`, top: `${layout.y}px`, width: String(element.styles.width || widthPx), minHeight: element.styles.minHeight || (element.styles.height ? undefined : heightPx), height: isTextLike ? "auto" : String(element.styles.height || heightPx) }
         : {
             position: resolvedPosition, left: isPositionedChild ? `${layout.x}px` : undefined, top: isPositionedChild ? `${layout.y}px` : undefined,
-            width: String(element.styles.width || widthPx), minHeight: element.styles.height ? undefined : heightPx, height: isTextLike ? "auto" : String(element.styles.height || heightPx)
+            width: String(element.styles.width || widthPx), minHeight: element.styles.minHeight || (element.styles.height ? undefined : heightPx), height: isTextLike ? "auto" : String(element.styles.height || heightPx)
         };
 
     const mergedStyles: React.CSSProperties = {
-        ...(["native", "button", "input"].includes(element.type) ? {} : orderedStyles(element.styles) as React.CSSProperties),
+        ...(["native", "button", "input"].includes(element.type) ? semanticStyleParts(element.styles).box : orderedStyles(element.styles) as React.CSSProperties),
         ...positionStyles,
         ...(element.type === "shape" && element.props.shapeType && element.props.shapeType !== "rectangle" ? { backgroundColor: "transparent" } : {}),
         fontFamily: fontFamily(element.styles.fontFamily),

@@ -21,7 +21,6 @@ test("catalog browser census: insertion, inspector, reload and exported state", 
     await search.fill(definition.name);
     await page
       .getByRole("button", { name: `Add ${definition.name}`, exact: true })
-      .filter({ has: page.locator(":scope") })
       .and(
         page.getByTitle(
           `${definition.description} Drag or double-click to add.`,
@@ -76,6 +75,11 @@ test("catalog browser census: insertion, inspector, reload and exported state", 
       ".verification/element-audit/census.json",
       JSON.stringify(rows, null, 2),
     );
+    // Start each catalog entry at page scope instead of inserting the rest of
+    // the catalog inside the previously selected container/repeater.
+    await page.getByRole("button", { name: "Design", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".canvas-page .element-selected")).toHaveCount(0);
   }
   await page.getByRole("button", { name: "Save project", exact: true }).click();
   await page.reload();
@@ -105,6 +109,19 @@ test("catalog browser census: insertion, inspector, reload and exported state", 
     row.generated = (
       await zip.file("frontend/app/page.jsx")!.async("string")
     ).includes(String(row.id));
+    expect(row.persistedFill).toBe("#db0101");
+    expect(row.generated).toBe(true);
+  }
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  const preview = page.frameLocator('iframe[title="Generated frontend preview"]');
+  for (const row of rows) {
+    const exported = preview.locator(`.el-${row.id}`);
+    await expect(exported).toHaveCount(1);
+    row.preview = await exported.evaluate(el => ({
+      tag: el.tagName, background: getComputedStyle(el).backgroundColor,
+      text: el.textContent, html: el.innerHTML,
+      role: el.getAttribute("role"), ariaLabel: el.getAttribute("aria-label"),
+    }));
   }
   await writeFile(
     ".verification/element-audit/census.json",

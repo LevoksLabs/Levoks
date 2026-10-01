@@ -277,6 +277,10 @@ test("Button and Input properties render and execute through the shared semantic
   const button = await add(page, "Button");
   await exact(page, "X", "40");
   await exact(page, "Y", "40");
+  await page.getByRole("button", { name: "Sizing", exact: true }).click();
+  await exact(page, "Min W", "240");
+  await expect(page.locator(`[data-element-id="${button}"]`)).toHaveCSS("width", "240px");
+  await expect(page.locator(`[data-element-id="${button}"] > button`)).toHaveCSS("width", "240px");
   await page.getByRole("button", { name: "Content", exact: true }).click();
   const inspector = page.locator(".inspector");
   await inspector.getByLabel("Label", { exact: true }).fill("Continue");
@@ -329,6 +333,7 @@ test("Button and Input properties render and execute through the shared semantic
   await expect(
     frame.getByRole("link", { name: "Continue", exact: true }),
   ).toHaveAttribute("href", "#field");
+  await expect(frame.getByRole("link", { name: "Continue", exact: true })).toHaveCSS("width", "240px");
   await expect(frame.getByLabel("Email address", { exact: true })).toHaveValue(
     "hello@example.com",
   );

@@ -1,5 +1,24 @@
 # Levoks completion matrix
 
+## Functionality and inspector pass — 2026-10-01
+
+The 104 definitions remain unchanged in count. [Per-element browser audit](element-functionality-audit.md) records historical failures, current conservative classifications, the 12 acceptance dimensions and explicit contracts. Registry presence does not establish completion; no element is newly marked fully functional by the census.
+
+| Requirement | Status | Evidence / remaining work |
+| --- | --- | --- |
+| Inspector → semantic state → IR → renderer/code/export | VERIFIED SUBSET | Store/history remains authoritative. Tabs share CSS; native/Button/Input share a semantic tree. Common style ordering, background conflict handling and explicit dimension reconciliation remove divergent paths. Full property and nested-layout parity for every definition remains open. |
+| Tabs screenshot defect | VERIFIED SUBSET | Red fill is visible in browser; border, radius, linked/unlinked padding, font, active/inactive colors, panel text, switching, keyboard and responsive widths survive saved IR and independently built Next export. Nested tab compositions need wider acceptance. |
+| Real radio control | VERIFIED SUBSET | Visible editable label, name/value/checked, same-group exclusivity, disabled/required, native label click/Space/arrows and generated runtime. Old tiny controls migrate in semantic state. Browser/assistive-technology breadth remains open. |
+| Functional Embed configuration | VERIFIED SUBSET | HTML/Code/URL source, title, invalid-URL feedback, sandbox script/form switches, real isolated canvas iframe, reload/IR and generated runtime. No same-origin capability; provider blocking and full external-provider acceptance remain. |
+| Professional numeric parameters | VERIFIED SUBSET | Value drag over a broad horizontal distance, pointer capture, Shift/Alt sensitivity, exact entry, Enter/Escape/arrows, gesture undo/cancel, units and immediate state/canvas updates. Geometry, typography, spacing, border, shadow and animation use the reusable control. Pointer-lock/unlimited travel and broad input-device acceptance are not claimed. |
+| Contextual inspector | VERIFIED SUBSET | Color picker/text, typed booleans/enums, linked side/corner spacing, dimensions, typography and animation controls. Dense existing graphite/violet tokens and Lucide icons retained. No design-library or registry expansion. |
+| Button/Input/Select | VERIFIED SUBSET | Button label/icon/loading/disabled/link mode; native labeled input with helper/error/constraints; initial Select value agrees across React/HTML output. All variants, actions and multiple selections still need acceptance. |
+| Existing editor interaction | VERIFIED SUBSET | Existing browser workflows cover contextual shortcuts, clipboard, group movement/history, pen/motion, layer controls, canvas navigation and responsive settings. Complete shortcut/trackpad/snapping/accessibility acceptance remains open. |
+| Whole-library production functionality | PARTIAL | Every element inserted/inspected/edited/reloaded/exported in browser census; all 104 roots rendered in generated preview and production with matching sampled fill. Full behavior contracts remain unverified for many elements; named shells and remaining gaps are explicitly recorded in the audit. |
+
+Verification is reproducible with `npm run check`, the browser specs `element-audit`, `functional-properties`, `design-tools`, `editor-quality`, `semantic-elements`, `canvas-export`, then `scripts/prepare-property-verification.ts`, the resulting frontend production build and `tests/generated/property-runtime.test.ts`. Focused export fixtures come from real browser ZIP downloads. Editor and generated production builds, focused browser/runtime workflows, typecheck/lint and project unit checks pass. This pass does not certify every property or all 104 application behaviors.
+
+
 ## Semantic foundation increment — 2026-09-30
 
 See [audit and implementation contract](semantic-architecture.md) for the architecture map, compatibility decisions, verification and precise limitations. This increment does not mark the entire implementation brief complete.

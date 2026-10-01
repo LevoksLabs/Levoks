@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= path.resolve(".verification/browsers");
 
 test(
@@ -114,11 +115,26 @@ test(
       );
       await page.goto("http://127.0.0.1:3229/controls");
       await expect(page.getByRole("link", { name: "Continue", exact: true })).toHaveAttribute("href", "#field");
+      await expect(page.getByRole("link", { name: "Continue", exact: true })).toHaveCSS("width", "240px");
       await expect(page.getByLabel("Email address", { exact: true })).toHaveValue("hello@example.com");
       assert.equal(await page.getByLabel("Email address", { exact: true }).evaluate((el: HTMLInputElement) => el.checkValidity()), true);
       await page.getByLabel("Email address", { exact: true }).fill("invalid");
       assert.equal(await page.getByLabel("Email address", { exact: true }).evaluate((el: HTMLInputElement) => el.checkValidity()), false);
       await expect(page.getByRole("combobox", { name: "Select", exact: true })).toHaveValue("Option two");
+      await page.goto("http://127.0.0.1:3229/catalog", { waitUntil: "domcontentloaded" });
+      const census = JSON.parse(readFileSync(".verification/element-audit/census.json", "utf8"));
+      const runtime = [];
+      for (const row of census) {
+        const element = page.locator(`.el-fixture4_${row.id}`);
+        await expect(element).toHaveCount(1);
+        const rendered = await element.evaluate(el => ({
+          tag: el.tagName, background: getComputedStyle(el).backgroundColor,
+          text: el.textContent, html: el.innerHTML,
+        }));
+        assert.equal(rendered.background, row.preview.background, `${row.definition} fill differs between preview and production`);
+        runtime.push({ definition: row.definition, ...rendered });
+      }
+      writeFileSync(".verification/element-audit/production.json", JSON.stringify(runtime, null, 2));
       assert.deepEqual(errors, []);
     } finally {
       await browser?.close();

@@ -762,9 +762,9 @@ const PropertyInspector: React.FC = () => {
     const nextStyles: Record<string, string | number> = { ...el.styles };
     if (isGradientColor(value)) {
       nextStyles.background = value;
-      nextStyles.backgroundColor = "transparent";
+      nextStyles.backgroundColor = "";
     } else {
-      nextStyles.background = value;
+      nextStyles.background = "";
       nextStyles.backgroundColor = value;
     }
     updateElement(el.id, { styles: nextStyles });

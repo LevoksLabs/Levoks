@@ -145,3 +145,12 @@ The browser workflow exercises configuration, endpoint attachment, undo/redo, sa
 Play now defaults to generated frontend rather than design simulation. Local page links work through a restricted iframe message channel; routing/API configuration participates in preview regeneration. Backend requests show an explicit unavailable message without claiming a save, and compiler/source override errors are visible. Menu/social routing is keyboard-operable in generated pages. Scroll/click/typewriter animation setup is shared with the React export and removes listeners/timers on cleanup.
 
 Normal-flow child dimensions now survive generation. The new browser fixture checks canvas/preview input dimensions and separation of form controls, then downloads the real application ZIP for independent build/runtime verification. Screenshot: `.verification/canvas-preview.png`. Backend/source runtime preview, external assets and broader visual/property acceptance remain open in the completion matrix.
+
+
+## Functional inspector and control parity — 1 October 2026
+
+The inspector retains the incumbent graphite/violet identity and compact control sizes. Numeric values now support horizontal parameter dragging without a slider thumb, exact entry, legal units, keyboard adjustment, modifier sensitivity, cancellation and gesture history. Linked spacing/corner controls persist the actual side values. Colors and typed content controls immediately update semantic state.
+
+Tabs have shared canvas/export CSS with transparent internal surfaces; red fill and configured typography/borders/spacing remain visible. Radio controls have native inputs with visible editable labels. Embed configuration displays actual isolated content and explicit script/form permissions. Native controls, legacy Button and Input share the renderer/generator tree; external geometry belongs to the editor selection wrapper and visual styling belongs to the control. The light application canvas no longer inherits the dark editor's default text color.
+
+Batched desktop and laptop screenshot review confirmed the parameter controls, red Tabs surface and inspector layout. The Impeccable mechanical detector returned no findings for the changed inspector/control/CSS targets. These checks establish the scoped improvements; full catalog accessibility, external-provider, nested-layout and cross-browser acceptance remains open in the completion matrix. No video library was added merely because Remotion/HyperFrames were available.

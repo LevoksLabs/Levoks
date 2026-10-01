@@ -3,7 +3,7 @@ import { createElement, type ReactNode } from "react";
 import type { ElementNode } from "@/types";
 import { nativeTree, type SemanticTree } from "@/lib/elements/native";
 import { useEditorStore } from "@/store/editorStore";
-import { orderedStyles } from "@/lib/property-values";
+import { semanticStyleParts } from "@/lib/property-values";
 
 export default function SemanticElement({
   element,
@@ -69,7 +69,7 @@ export default function SemanticElement({
             style: {
               color: "inherit",
               font: "inherit",
-              ...orderedStyles(element.styles),
+              ...semanticStyleParts(element.styles).surface,
               ...(element.type === "button" && element.props.hoverBg ? { "--button-hover": String(element.props.hoverBg) } : {}),
               width: "100%",
               height: "100%",
