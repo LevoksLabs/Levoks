@@ -1,3 +1,4 @@
+import { integrationBlocks, catalogBlocks } from "@/lib/backend/templates";
 import { addLoginWorkflow } from "@/lib/backend/login";
 import { withProjectHistory } from "./projectHistory";
 import { withoutWorkflowTarget } from "@/lib/backend/workflow-editor";
@@ -70,6 +71,7 @@ interface BackendStore {
     setCodePreviewOpen: (open: boolean) => void;
 
     // Templates
+    loadIntegrationTemplate: (kind: "integration" | "catalog") => void;
     loadAuthTemplate: () => void;
     loadCrudTemplate: () => void;
     loadChatTemplate: () => void;
@@ -325,6 +327,10 @@ export const useBackendStore = create<BackendStore>(withProjectHistory("backend"
 
     // ─── Prebuilt Templates ───
 
+    loadIntegrationTemplate: (kind) => {
+        const service: ServiceContainer = {id: uuidv4(), ...serviceIdentity(get().services, kind === "catalog" ? "Catalog Service" : "Integration Service"), description: "Editable endpoint workflow", color: SERVICE_COLORS[1], collapsed: false, blocks: (kind === "catalog" ? catalogBlocks : integrationBlocks)(uuidv4)};
+        set({services: [...get().services, service]});
+    },
     loadAuthTemplate: () => {
         const serviceId = uuidv4();
         const service: ServiceContainer = {

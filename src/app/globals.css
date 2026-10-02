@@ -5596,6 +5596,25 @@ body {
   margin-bottom: 6px;
 }
 
+/* Contract controls use the existing inspector palette. */
+.routing-rp-field select, .routing-rp-field input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin-top: 5px;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-panel);
+  color: var(--text-1);
+  font-size: 12px;
+  text-transform: none;
+}
+.routing-rp-field select:focus-visible, .routing-rp-field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .routing-rp-ports-list {
   display: flex;
   flex-direction: column;

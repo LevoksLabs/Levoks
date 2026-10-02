@@ -577,6 +577,25 @@ export default function ProgramInspector({
             </p>
           </>
         )}
+        {"originEnv" in c && <>
+          <label>Upstream origin environment variable<input className="bi-input" value={c.originEnv} onChange={e => update({originEnv: e.target.value})} /></label>
+          <label>Fixed request path<input className="bi-input" value={c.path} onChange={e => update({path: e.target.value})} /></label>
+          {select("HTTP method", c.method, ["GET", "POST", "PUT", "PATCH", "DELETE"].map(id => ({id, label: id})), method => update({method: method as typeof c.method}))}
+          <Mapping label="Query parameters" values={c.query} onChange={query => update({query})} />
+          <Mapping label="JSON body" values={c.body} onChange={body => update({body})} />
+          <label>Bearer token environment variable<input className="bi-input" value={c.bearerTokenEnv} onChange={e => update({bearerTokenEnv: e.target.value})} /></label>
+          <label>Timeout (ms)<input className="bi-input" type="number" min={100} max={10000} value={c.timeoutMs} onChange={e => update({timeoutMs: Number(e.target.value)})} /></label>
+          <label>GET retries<input className="bi-input" type="number" min={0} max={2} value={c.retries} onChange={e => update({retries: Number(e.target.value)})} /></label>
+          <p className="bi-hint">JSON REST and GraphQL requests. Configure the origin and credentials on the server. Redirects are rejected; failures enter the workflow error path.</p>
+        </>}
+        {"namespace" in c && <>
+          {select("Cache operation", c.operation, ["get", "set", "delete"].map(id => ({id, label: id})), operation => update({operation: operation as typeof c.operation}))}
+          <label>Cache namespace<input className="bi-input" value={c.namespace} onChange={e => update({namespace: e.target.value})} /></label>
+          <Binding label="Cache key" value={c.key} onChange={key => update({key})} />
+          <Binding label="Cached value" value={c.value} onChange={value => update({value})} />
+          <label>TTL (seconds)<input className="bi-input" type="number" min={1} max={3600} value={c.ttlSeconds} onChange={e => update({ttlSeconds: Number(e.target.value)})} /></label>
+          <p className="bi-hint">Process-local cache, scoped to the current user and tenant. Up to 256 entries of 64 KB, evicted on restart or capacity.</p>
+        </>}
         {"modelId" in c && (
           <>
             {select(
@@ -652,6 +671,7 @@ export default function ProgramInspector({
               (sortDirection) =>
                 update({ sortDirection: sortDirection as "asc" | "desc" }),
             )}
+            <Binding label="Page number" value={c.page ?? 1} onChange={page => update({page})} />
             <label>
               Maximum results
               <input

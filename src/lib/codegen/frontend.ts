@@ -76,7 +76,8 @@ function flowHandler(
 
     // Build handler body from ordered steps
     const bodyLines: string[] = [];
-    if (el.type === "form") bodyLines.push(`const body = Object.fromEntries(new FormData(target).entries());
+    if (steps.some(step => step.type === "api_call")) bodyLines.push("let result;");
+    if (el.type === "form" && steps.some(step => step.type === "api_call" && !step.requestMappings)) bodyLines.push(`const body = Object.fromEntries(new FormData(target).entries());
         for (const input of target.elements) {
             if (!input.name || input.disabled) continue;
             if (input.type === "number" || input.type === "range") {
@@ -93,17 +94,44 @@ function flowHandler(
 
         if (step.type === "api_call") {
             const apiStep = step as ApiCallStep;
-            if (el.type === "form") {
+            bodyLines.push(`failure = ${JSON.stringify(apiStep.failure || {})};`);
+            if (apiStep.requestMappings) {
+                bodyLines.push(`const values${i} = { body: {}, query: {}, path: {} };
+                  for (const mapping of ${JSON.stringify(apiStep.requestMappings)}) {
+                    let value;
+                    if (mapping.source.kind === "literal") value = mapping.source.value;
+                    else if (mapping.source.kind === "response") value = result?.[mapping.responseName];
+                    else {
+                      const input = Array.from(target.elements || []).find(input => input.id === mapping.source.elementId || input.id === mapping.source.elementId + "-control");
+                      if (input && !input.disabled) {
+                        if (input.type === "file") throw new Error("File uploads require a storage endpoint.");
+                        value = input.type === "checkbox" ? input.checked : input.type === "radio" && !input.checked ? undefined : input.value;
+                      }
+                    }
+                    if (value === undefined || value === null || value === "") {
+                      if (mapping.required) throw new Error("Missing " + mapping.name);
+                      continue;
+                    }
+                    if (mapping.type === "number") { value = Number(value); if (!Number.isFinite(value)) throw new Error("Invalid number: " + mapping.name); }
+                    if (mapping.type === "boolean") { if (![true, false, "true", "false"].includes(value)) throw new Error("Invalid boolean: " + mapping.name); value = value === true || value === "true"; }
+                    if (mapping.type === "string" || mapping.type === "objectId" || mapping.type === "date") value = String(value);
+                    values${i}[mapping.location][mapping.name] = value;
+                  }
+                  const path${i} = ${JSON.stringify(apiStep.endpoint)}.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, key) => { const value = values${i}.path[key]; if (value === undefined) throw new Error("Missing " + key); return encodeURIComponent(String(value)); });
+                  const query${i} = new URLSearchParams(values${i}.query).toString();
+                  result = await apiFetch(path${i} + (query${i} ? "?" + query${i} : ""), {method: ${JSON.stringify(apiStep.method)}${apiStep.method === "GET" ? "" : `, body: JSON.stringify(values${i}.body)`}}, ${apiStep.servicePort});`);
+            } else if (el.type === "form") {
                 const isGet = apiStep.method === "GET";
                 bodyLines.push(`const payload${i} = { ...body }; const path${i} = ${JSON.stringify(apiStep.endpoint)}.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, key) => { const value = payload${i}[key]; if (value === undefined || value === "") throw new Error("Missing " + key); delete payload${i}[key]; return encodeURIComponent(String(value)); });`);
                 const path = `path${i}` + (isGet ? ` + "?" + new URLSearchParams(payload${i}).toString()` : "");
-                bodyLines.push(`await apiFetch(${path}, { method: ${JSON.stringify(apiStep.method)}${isGet ? "" : `, body: JSON.stringify(payload${i})`} }, ${apiStep.servicePort});`);
+                bodyLines.push(`result = await apiFetch(${path}, { method: ${JSON.stringify(apiStep.method)}${isGet ? "" : `, body: JSON.stringify(payload${i})`} }, ${apiStep.servicePort});`);
             } else {
                 // Non-form click: send empty body or no body
                 const bodyArg = apiStep.method === "GET" || apiStep.method === "DELETE"
                     ? "" : ", body: JSON.stringify({})";
-                bodyLines.push(`await apiFetch(${JSON.stringify(apiStep.endpoint)}, { method: ${JSON.stringify(apiStep.method)}${bodyArg} }, ${apiStep.servicePort});`);
+                bodyLines.push(`result = await apiFetch(${JSON.stringify(apiStep.endpoint)}, { method: ${JSON.stringify(apiStep.method)}${bodyArg} }, ${apiStep.servicePort});`);
             }
+            if (apiStep.responseMappings?.length) bodyLines.push(`setFlowValues(previous => { const next = {...previous}; for (const mapping of ${JSON.stringify(apiStep.responseMappings)}) { const value = result?.[mapping.name]; next[mapping.elementId] = value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value); } return next; });`);
         } else if (step.type === "navigate") {
             const navStep = step as NavigateStep;
             // If there was a preceding API call, only navigate on success
@@ -117,7 +145,7 @@ function flowHandler(
 
     const handlerBody = bodyLines.join(" ");
 
-    return `async (e) => { e.preventDefault(); const target = e.currentTarget; if (target.dataset.busy) return; target.dataset.busy = "true"; target.setAttribute("aria-busy", "true"); setStatus("Working…"); try { ${handlerBody} setStatus("Done"); } catch (err) { setStatus(err instanceof Error ? err.message : "Request failed. Please try again."); } finally { delete target.dataset.busy; target.removeAttribute("aria-busy"); } }`;
+    return `async (e) => { e.preventDefault(); const target = e.currentTarget; if (target.dataset.busy) return; target.dataset.busy = "true"; target.setAttribute("aria-busy", "true"); setStatus("Working…"); let failure = {}; try { ${handlerBody} setStatus("Done"); } catch (err) { setStatus(failure.message || (err instanceof Error ? err.message : "Request failed. Please try again.")); ${mode === "jsx" ? "if (failure.pageRoute) window.location.href = failure.pageRoute;" : 'if (failure.pageId) window.parent.postMessage({type: "levoks:preview:navigate", pageId: failure.pageId}, "*");'} } finally { delete target.dataset.busy; target.removeAttribute("aria-busy"); } }`;
 }
 
 // Both preview and exported React handlers use the same generated flow body.
@@ -258,7 +286,7 @@ const renderElementBody = (
         case "title":
         case "text":
         case "paragraph":
-            return `<${tag} ${clsAttr}="${className}">${textContent(el, el.type === "title" ? "Heading" : "Text")}</${tag}>`;
+            return `<${tag} ${clsAttr}="${className}">${mode === "jsx" ? `{flowValues[${JSON.stringify(el.id)}] ?? ${JSON.stringify(String(el.props.content ?? el.props.label ?? (el.type === "title" ? "Heading" : "Text"))).replace(/</g, "\\u003c")}}` : textContent(el, el.type === "title" ? "Heading" : "Text")}</${tag}>`;
         case "image":
             return `<img ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" alt="${escapeMarkup(el.props?.alt)}" />`;
         case "video":
@@ -492,6 +520,7 @@ const navigateToPage = pageId => window.parent.postMessage({type: "levoks:previe
 ${explicitHandlers}
 ${generateAnimationSetup(animJsElements)}
 setupAnimations(document);
+const setFlowValues = update => { const values = update({}); for (const [id, value] of Object.entries(values)) { const element = document.querySelector(".el-" + id); if (element) element.textContent = value; } };
 const setStatus = message => { document.querySelector('[role="status"]').textContent = message; };
 const apiFetch = async () => { throw new Error("Backend requests need the exported application runtime. No data was sent or saved."); };
 ${previewHandlers}
@@ -525,6 +554,7 @@ ${widgetRuntime}
 const navigateToPage = pageId => { const route = ${pageRoutes}[pageId]; if (route) window.location.href = route; };
 export default function App() {
   const [status, setStatus] = React.useState("");
+  const [flowValues, setFlowValues] = React.useState({});
   const rootRef = React.useRef(null);
   React.useEffect(() => setupWidgets(rootRef.current), []);
 ${animUseEffect}

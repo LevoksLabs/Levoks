@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { ConnectionContract } from "./ConnectionContract";
 import { useRoutingStore } from "@/store/routingStore";
 import { useBackendStore } from "@/store/backendStore";
 import {
@@ -162,6 +163,7 @@ const RoutingRightPanel: React.FC = () => {
                                 {nodes.find((n) => n.id === selectedConnection.toNodeId)?.type} node
                             </span>
                         </div>
+                        <ConnectionContract connection={selectedConnection} />
                         <button
                             className="routing-rp-delete-btn"
                             onClick={() => removeConnection(selectedConnection.id)}

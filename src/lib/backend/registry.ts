@@ -23,6 +23,7 @@ export const BACKEND_CATEGORIES = [
   "Templates",
 ] as const;
 const steps = new Set([
+  "http_request", "cache",
   "credential_lookup", "password_verify", "session_issue",
   "query",
   "transaction",

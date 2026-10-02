@@ -53,6 +53,22 @@ export const aggregationSchema = z.object({
 });
 export type AggregationConfig = z.infer<typeof aggregationSchema>;
 export const programConfigs = {
+  http_request: z.object({
+    originEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
+    path: z.string().regex(/^\/(?!\/)[A-Za-z0-9/_:.-]*$/),
+    method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
+    query: mapping, body: mapping,
+    bearerTokenEnv: z.string().regex(/^$|^[A-Z][A-Z0-9_]*$/),
+    timeoutMs: z.number().int().min(100).max(10000),
+    retries: z.number().int().min(0).max(2),
+    output: name,
+  }),
+  cache: z.object({
+    operation: z.enum(["get", "set", "delete"]),
+    namespace: name, key: binding, value: binding,
+    ttlSeconds: z.number().int().min(1).max(3600),
+    output: name,
+  }),
   credential_lookup: z.object({
     identityModelId: ref,
     email: binding,
@@ -76,6 +92,7 @@ export const programConfigs = {
     sortField: z.string().max(100),
     sortDirection: z.enum(["asc", "desc"]),
     limit: z.number().int().min(1).max(100),
+    page: binding.optional(),
     output: name,
     policyId: ref,
     aggregation: aggregationSchema.default({
@@ -102,6 +119,8 @@ export const programConfigs = {
 export type ProgramBlockType = keyof typeof programConfigs;
 export type ProgramConfig = z.infer<(typeof programConfigs)[ProgramBlockType]>;
 export const PROGRAM_DEFAULTS: Record<ProgramBlockType, ProgramConfig> = {
+  http_request: {originEnv: "UPSTREAM_ORIGIN", path: "/", method: "GET", query: {}, body: {}, bearerTokenEnv: "", timeoutMs: 5000, retries: 0, output: "result"},
+  cache: {operation: "get", namespace: "default", key: "$request.query.key", value: "$result", ttlSeconds: 60, output: "cached"},
   credential_lookup: {
     identityModelId: "",
     email: "$request.body.email",

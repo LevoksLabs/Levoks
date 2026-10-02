@@ -43,6 +43,8 @@ function publicValue(value, depth = 0) {
   return Object.fromEntries(Object.entries(value).filter(([key]) => safeKey(key) && !/password|secret|token/i.test(key)).map(([key, child]) => [key, publicValue(child, depth + 1)]));
 }
 exports.createWorkflow = (program, models, database, observability, identity) => {
+  // ponytail: bounded process-local cache; use an external adapter for shared durability.
+  const cache = new Map();
   const blocks = Object.fromEntries(program.blocks.map(block => [block.id, block]));
   function policy(id, principal) {
     const block = blocks[id];
@@ -102,6 +104,45 @@ exports.createWorkflow = (program, models, database, observability, identity) =>
             if (!identity || !httpResponse || !verified.has(c.verificationId) || sessionAccount || session) throw new WorkflowError(401, 'Verified credentials are required');
             sessionAccount = verified.get(c.verificationId);
             context[c.output] = identity.publicAccount(sessionAccount);
+          } else if (block.type === 'http_request') {
+            if (session) throw new WorkflowError(422, 'HTTP calls cannot run in retried database transactions');
+            const origin = new URL(process.env[c.originEnv] || 'invalid:');
+            if (!['http:', 'https:'].includes(origin.protocol) || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) throw new WorkflowError(500, 'Configure a valid upstream origin');
+            const url = new URL(c.path, origin);
+            if (url.origin !== origin.origin) throw new WorkflowError(500, 'Invalid upstream path');
+            for (const [key, value] of Object.entries(mapValues(c.query, context))) url.searchParams.set(key, String(value));
+            const headers = {'Content-Type': 'application/json'};
+            if (c.bearerTokenEnv) { const token = process.env[c.bearerTokenEnv]; if (!token) throw new WorkflowError(500, 'Upstream credential is not configured'); headers.Authorization = 'Bearer ' + token; }
+            let result;
+            for (let attempt = 0; attempt <= (c.method === 'GET' ? c.retries : 0); attempt++) {
+              try {
+                const remaining = Math.min(c.timeoutMs, deadline - Date.now());
+                if (remaining <= 0) throw new WorkflowError(504, 'Workflow timed out');
+                const upstream = await fetch(url, {method: c.method, headers, redirect: 'error', signal: AbortSignal.timeout(remaining), ...(c.method === 'GET' ? {} : {body: JSON.stringify(mapValues(c.body, context))})});
+                if (!upstream.ok) { await upstream.body?.cancel(); throw new WorkflowError(upstream.status >= 500 ? 502 : 424, 'Upstream request failed'); }
+                const chunks = []; let bytes = 0;
+                if (upstream.body) for await (const chunk of upstream.body) { bytes += chunk.length; if (bytes > 1048576) throw new WorkflowError(502, 'Upstream response is too large'); chunks.push(chunk); }
+                result = bytes ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : null;
+                break;
+              } catch (error) {
+                if (attempt >= (c.method === 'GET' ? c.retries : 0) || error.status === 424) throw new WorkflowError(error.status || 502, error instanceof WorkflowError ? error.message : 'Upstream request failed');
+              }
+            }
+            context[c.output] = publicValue(safeValue(result));
+          } else if (block.type === 'cache') {
+            if (session) throw new WorkflowError(422, 'Cache operations cannot run in retried database transactions');
+            const rawKey = resolve(c.key, context);
+            if (!['string', 'number', 'boolean'].includes(typeof rawKey) || String(rawKey).length > 500) throw new WorkflowError(400, 'Invalid cache key');
+            const key = JSON.stringify([c.namespace, request.user?.tenantId || '', request.user?.sub || 'anonymous', rawKey]);
+            for (const [id, entry] of cache) if (entry.expires <= Date.now()) cache.delete(id);
+            if (c.operation === 'delete') { cache.delete(key); context[c.output] = null; }
+            else if (c.operation === 'get') context[c.output] = structuredClone(cache.get(key)?.value ?? null);
+            else {
+              const value = publicValue(resolve(c.value, context)) ?? null;
+              if (Buffer.byteLength(JSON.stringify(value)) > 65536) throw new WorkflowError(422, 'Cache value exceeds 64 KB');
+              if (!cache.has(key) && cache.size >= 256) cache.delete(cache.keys().next().value);
+              cache.set(key, {value: structuredClone(value), expires: Date.now() + c.ttlSeconds * 1000}); context[c.output] = value;
+            }
           } else if (block.type === 'query') {
             const model = models[c.modelId];
             if (!model) throw new WorkflowError(500, 'Query model is not configured');
@@ -124,8 +165,10 @@ exports.createWorkflow = (program, models, database, observability, identity) =>
             else for (const key of Object.keys(enforcedScope)) delete values[key];
             if (modelBlock.config.softDelete) filter.deletedAt = null;
             const options = {session, maxTimeMS: Math.max(1, deadline - Date.now())};
+            const page = c.page === undefined ? 1 : Number(resolve(c.page, context) ?? 1);
+            if (!Number.isInteger(page) || page < 1 || page > 10000) throw new WorkflowError(400, 'Page must be between 1 and 10000');
             let value;
-            if (c.operation === 'find') value = await model.find(filter, null, options).sort(c.sortField ? {[c.sortField]: c.sortDirection === 'desc' ? -1 : 1} : {_id: 1}).limit(c.limit).lean();
+            if (c.operation === 'find') value = await model.find(filter, null, options).sort(c.sortField ? {[c.sortField]: c.sortDirection === 'desc' ? -1 : 1} : {_id: 1}).skip((page - 1) * c.limit).limit(c.limit).lean();
             else if (c.operation === 'findOne') value = await model.findOne(filter, null, options).lean();
             else if (c.operation === 'count') value = await model.countDocuments(filter).session(session || null).maxTimeMS(options.maxTimeMS);
             else if (c.operation === 'aggregate') {
@@ -146,7 +189,7 @@ exports.createWorkflow = (program, models, database, observability, identity) =>
               // Mongoose does not cast aggregation stages. Cast the scoped filter
               // with the model before building the bounded, read-only pipeline.
               const match = model.find(filter).cast(model);
-              value = await model.aggregate([{$match: match}, {$group: group}, {$sort: {[sort]: c.sortDirection === 'desc' ? -1 : 1}}, {$limit: c.limit}]).option({...options, allowDiskUse: false});
+              value = await model.aggregate([{$match: match}, {$group: group}, {$sort: {[sort]: c.sortDirection === 'desc' ? -1 : 1}}, {$skip: (page - 1) * c.limit}, {$limit: c.limit}]).option({...options, allowDiskUse: false});
             }
             else if (c.operation === 'create') value = (await model.create([values], options))[0];
             else {
@@ -213,6 +256,15 @@ exports.createWorkflow = (program, models, database, observability, identity) =>
     }
     await run(endpoint.connections, null);
     const output = response || {status: 200, body: publicValue(context.result ?? null)};
+    if (output.status >= 200 && output.status < 300 && endpoint.config.responseBody?.length) {
+      if (!output.body || typeof output.body !== 'object' || Array.isArray(output.body)) throw new WorkflowError(500, 'Response does not match endpoint contract');
+      for (const field of endpoint.config.responseBody) {
+        const value = output.body[field.name];
+        if (value === undefined && !field.required) continue;
+        const valid = field.type === 'array' ? Array.isArray(value) : field.type === 'date' ? typeof value === 'string' && !Number.isNaN(Date.parse(value)) : field.type === 'objectId' ? typeof value === 'string' && /^[a-f0-9]{24}$/i.test(value) : typeof value === field.type && (field.type !== 'object' || !Array.isArray(value));
+        if (!valid || value === null || value === undefined) throw new WorkflowError(500, 'Response does not match endpoint contract');
+      }
+    }
     // Commit cookies/session only after the entire workflow and response succeed.
     if (sessionAccount && output.status >= 200 && output.status < 300) await identity.issueSession(sessionAccount, request, httpResponse);
     return output;

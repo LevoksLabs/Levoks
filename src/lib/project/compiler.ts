@@ -72,7 +72,7 @@ export function compileProject(value: ProjectDocument) {
       if (
         step.type === "api_call" &&
         /:[A-Za-z_]/.test(step.endpoint) &&
-        flow.trigger.elementType !== "form"
+        flow.trigger.elementType !== "form" && !step.requestMappings
       )
         problem(
           step.blockId,

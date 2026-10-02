@@ -50,7 +50,7 @@ test("every registry definition creates, round-trips and emits parseable React d
   assert.match(first.files["frontend/app/page.jsx"], /<dialog/);
   assert.equal(
     JSON.parse(first.files["levoks.ir.json"]).generatorVersion,
-    "semantic-1",
+    "semantic-2",
   );
   for (const term of [
     "checkbox",

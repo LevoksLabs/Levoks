@@ -1,6 +1,6 @@
 # Backend compiler
 
-The frontend element model, rendering, routing, and code generator remain unchanged.
+The existing frontend element model and canvas layout architecture are preserved. Full-stack contract bindings extend the existing routing resolver and frontend event generator; see [Full-stack contracts](fullstack-contracts.md).
 
 Backend blocks persist as versioned configurations and ordered connections in the existing project document. `lowerBackend()` produces a version 1 Express/Mongoose IR containing services, typed block configurations, execution references, model/policy bindings, and service dependencies. It removes canvas positions, colors, and collapsed state and redacts credentials. Array order remains significant: it defines route precedence and execution order.
 

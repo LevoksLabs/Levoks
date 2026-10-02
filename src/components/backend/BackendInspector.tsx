@@ -76,12 +76,12 @@ const SchemaFieldsEditor: React.FC<{
   const addField = () => {
     let name = `field_${fields.length + 1}`;
     while (fields.some((field) => field.name === name)) name += "_new";
-    onChange([...fields, { name, type: "string", required: false }]);
+    onChange([...fields, { id: crypto.randomUUID(), name, type: "string", required: false }]);
   };
 
   const updateField = (index: number, updates: Partial<SchemaField>) => {
     const newFields = fields.map((f, i) =>
-      i === index ? { ...f, ...updates } : f,
+      i === index ? { ...f, id: f.id || f.name, ...updates } : f,
     );
     onChange(newFields);
   };
@@ -452,6 +452,8 @@ const EndpointEditor: React.FC<{
       icon={<ChevronDown size={12} />}
       defaultOpen={false}
     >
+      <SchemaFieldsEditor label="Query Parameters" fields={config.queryParameters || []} onChange={fields => onChange({queryParameters: fields})} />
+      <SchemaFieldsEditor label="Path Parameters" fields={config.pathParameters || []} onChange={fields => onChange({pathParameters: fields})} />
       <SchemaFieldsEditor
         fields={config.responseBody}
         onChange={(fields) => onChange({ responseBody: fields })}

@@ -39,6 +39,8 @@ export interface EndpointConfig {
   description: string;
   requestBody: SchemaField[];
   responseBody: SchemaField[];
+  queryParameters?: SchemaField[];
+  pathParameters?: SchemaField[];
   middlewareIds: string[]; // references to middleware blocks
   authRequired: boolean;
   modelId?: string;
@@ -46,6 +48,7 @@ export interface EndpointConfig {
 }
 
 export interface SchemaField {
+  id?: string;
   name: string;
   type:
     "string" | "number" | "boolean" | "date" | "object" | "array" | "objectId";
@@ -369,6 +372,8 @@ export const BACKEND_SIDEBAR_CATEGORIES: BackendSidebarCategory[] = [
       { type: "response", label: "Response", icon: "get" },
     ],
   },
+  {id: "integrations", label: "Integrations", items: [{type: "http_request", label: "HTTP Request", icon: "get"}]},
+  {id: "caching", label: "Caching", items: [{type: "cache", label: "Cache", icon: "model"}]},
   {
     id: "middleware",
     label: "Middleware",

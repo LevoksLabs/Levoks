@@ -72,7 +72,7 @@ function generateModel(block: BackendBlock, identityModel = false): string {
 function generateEndpointHandler(block: BackendBlock, models: string[], fields: SchemaField[], identityModel: boolean): string {
     const config = block.config as EndpointConfig;
     const method = config.method.toLowerCase();
-    const middleware = (authenticate = false) => `...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'ip'), ${authenticate ? "auth, " : ""}...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'identity'), `;
+    const middleware = (authenticate = false) => `...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'ip'), ${authenticate ? "auth, " : ""}...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'identity'), validateParameters(${JSON.stringify({query: config.queryParameters, path: config.pathParameters})}), `;
     if (block.connections.length) return `router.${method}(${JSON.stringify(config.route)}, ${middleware(Boolean(config.authRequired || config.policyIds?.length))}${identityModel ? "identity.limit, " : ""}validateBody(${JSON.stringify(config.requestBody)}), async (req, res, next) => { try { const output = await workflow(${JSON.stringify(block.id)}, req${identityModel ? ", res" : ""}); if (output.status === 204) return res.status(204).end(); res.status(output.status).json(output.body ?? null); } catch (error) { next(error); } });`;
     const modelName = models.length > 0 ? models[0] : null;
     if (identityModel) {
@@ -236,7 +236,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
             })
             .join("\n\n");
 
-        files[`${servicePath}/routes/index.js`] = `const express = require('express');\nconst router = express.Router();\n${endpoints.some(e => e.connections.length) ? "const workflow = require('../workflow');\n" : ""}const { validateBody, validateRules } = require('../middleware/validate');\n${identityModel ? "const identity = require('../controllers/identity');\n" : ""}${authImport}${modelImports}\n\n${endpointCode}\n\nmodule.exports = router;`;
+        files[`${servicePath}/routes/index.js`] = `const express = require('express');\nconst router = express.Router();\n${endpoints.some(e => e.connections.length) ? "const workflow = require('../workflow');\n" : ""}const { validateBody, validateRules, validateParameters } = require('../middleware/validate');\n${identityModel ? "const identity = require('../controllers/identity');\n" : ""}${authImport}${modelImports}\n\n${endpointCode}\n\nmodule.exports = router;`;
         if (identityModel) {
             const config = authBlocks.find(b => (b.config as AuthConfig).strategy === "jwt")!.config as AuthConfig;
             const identityName = (models.find(m => (m.config as DbModelConfig).fields.some(f => f.name === "password"))!.config as DbModelConfig).tableName;
@@ -282,6 +282,11 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
         envMap.JWT_SECRET = "";
         envMap.JWT_EXPIRY = authConfig?.tokenExpiry || "7d";
     }
+    for (const block of service.blocks) if (block.type === "http_request") {
+        const config = block.config as {originEnv: string; bearerTokenEnv: string};
+        envMap[config.originEnv] = "";
+        if (config.bearerTokenEnv) envMap[config.bearerTokenEnv] = "";
+    }
     envVars.forEach((e) => {
         const cfg = e.config as { key: string; value: string; isSecret: boolean };
         envMap[cfg.key] = cfg.isSecret ? "" : cfg.value.replace(/[\r\n]/g, "");
@@ -289,8 +294,28 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
     files[`${servicePath}/.env.example`] = ENV_TEMPLATE(envMap);
     if (identityModel) files[`${servicePath}/.env.example`] += '\nIDENTITY_PUBLIC_URL=\nIDENTITY_EMAIL_FROM=\nIDENTITY_EMAIL_KEYS=\nIDENTITY_EMAIL_ACTIVE_KEY=\nRESEND_API_KEY=\n';
     files[`${servicePath}/.dockerignore`] = `node_modules\n.env*\n.git\n`;
-    files[`${servicePath}/middleware/validate.js`] = `exports.validateBody = (fields) => (req, res, next) => {
-  if (req.params.id && !/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: 'Invalid resource ID' });
+    files[`${servicePath}/middleware/validate.js`] = `exports.validateParameters = (contracts) => (req, res, next) => {
+  for (const [location, fields] of Object.entries(contracts)) {
+    if (!fields) continue;
+    const source = location === 'path' ? req.params : req.query;
+    const clean = {};
+    for (const field of fields) {
+      let value = source[field.name];
+      if (value === undefined || value === '') { if (field.required) return res.status(400).json({error: field.name + ' is required'}); continue; }
+      if (typeof value !== 'string') return res.status(400).json({error: 'Invalid ' + field.name});
+      if (field.type === 'number') value = Number(value);
+      if (field.type === 'boolean') value = value === 'true' ? true : value === 'false' ? false : null;
+      const valid = field.type === 'objectId' ? /^[a-f0-9]{24}$/i.test(value) : field.type === 'date' ? !Number.isNaN(Date.parse(value)) : typeof value === field.type && (field.type !== 'number' || Number.isFinite(value));
+      if (!valid || value === null) return res.status(400).json({error: 'Invalid ' + field.name});
+      clean[field.name] = value;
+    }
+    if (location === 'path') { req.params = clean; req.levoksExplicitPath = true; }
+    else Object.defineProperty(req, 'query', {value: clean, configurable: true, writable: true});
+  }
+  next();
+};
+exports.validateBody = (fields) => (req, res, next) => {
+  if (!req.levoksExplicitPath && req.params.id && !/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: 'Invalid resource ID' });
   if (['GET', 'DELETE'].includes(req.method)) return next();
   const body = req.body;
   if (!body || typeof body !== 'object' || Array.isArray(body)) return res.status(400).json({ error: 'Expected an object' });

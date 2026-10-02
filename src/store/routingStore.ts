@@ -49,6 +49,7 @@ interface RoutingStore {
 
     // Actions — Connections
     addConnection: (fromPortId: string, toPortId: string, fromNodeId: string, toNodeId: string) => void;
+    updateConnection: (id: string, updates: Partial<Pick<RoutingConnection, "requestMappings" | "responseMappings" | "failure" | "label">>) => void;
     removeConnection: (id: string) => void;
     selectConnection: (id: string | null) => void;
 
@@ -190,6 +191,8 @@ export const useRoutingStore = create<RoutingStore>(withProjectHistory("routing"
         set({ connections: [...state.connections.filter(c => c.fromPortId !== fromPortId), conn] });
     },
 
+    updateConnection: (id, updates) => set({connections: get().connections.map(connection => connection.id === id ? {...connection, ...updates} : connection)}),
+
     removeConnection: (id) => {
         set({
             connections: get().connections.filter((c) => c.id !== id),
@@ -323,7 +326,7 @@ export const useRoutingStore = create<RoutingStore>(withProjectHistory("routing"
             if (!service) return [];
 
             // Each block becomes an input port
-            service.blocks.forEach((block, idx) => {
+            service.blocks.filter(block => block.type === "rest_endpoint").forEach((block, idx) => {
                 ports.push({
                     id: `${nodeId}:in:${block.id}`,
                     nodeId,

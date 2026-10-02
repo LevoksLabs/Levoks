@@ -1,3 +1,4 @@
+import type { RequestMapping, ResponseMapping, FailureBehavior } from "@/lib/contracts";
 // ═══════════════════════════════════════════════════
 // Routing Canvas — Type Definitions
 // ═══════════════════════════════════════════════════
@@ -53,6 +54,9 @@ export interface NodePort {
 // A wire/edge between two ports
 
 export interface RoutingConnection {
+    requestMappings?: RequestMapping[];
+    responseMappings?: ResponseMapping[];
+    failure?: FailureBehavior;
     id: string;
     fromPortId: string;
     toPortId: string;

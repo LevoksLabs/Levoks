@@ -1,3 +1,4 @@
+import { requestMappingSchema, responseMappingSchema, failureSchema } from "@/lib/contracts";
 import { z } from "zod";
 import { definitionFor } from "@/lib/elements/registry";
 import { customDefinitionSchema } from "@/lib/elements/custom";
@@ -16,6 +17,7 @@ const finite = z.number().finite();
 const fields = z
   .array(
     z.object({
+      id: id.optional(),
       name: id,
       type: z.enum([
         "string",
@@ -33,13 +35,18 @@ const fields = z
       indexed: z.boolean().optional(),
     }),
   )
-  .max(200);
+  .max(200)
+  .refine(values => new Set(values.map(field => field.name)).size === values.length, "Field names must be unique")
+  .refine(values => new Set(values.map(field => field.id || field.name)).size === values.length, "Field identities must be unique")
+  .refine(values => values.every(field => !["__proto__", "constructor", "prototype"].includes(field.name)), "Reserved field name");
 const endpoint = z.object({
   route: z.string().regex(/^\/[a-zA-Z0-9/_:.-]*$/),
   method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
   description: text,
   requestBody: fields,
   responseBody: fields,
+  queryParameters: fields.optional(),
+  pathParameters: fields.optional(),
   middlewareIds: z.array(id),
   authRequired: z.boolean(),
   modelId: id.optional(),
@@ -149,6 +156,8 @@ export const backendBlockSchema = z.discriminatedUnion("type", [
   blockBase.extend({ type: z.literal("error_handler"), config: errorHandlerSchema }),
   blockBase.extend({ type: z.literal("audit_log"), config: auditLogSchema }),
   blockBase.extend({ type: z.literal("health_check"), config: healthSchema }),
+  blockBase.extend({ type: z.literal("http_request"), config: programConfigs.http_request }),
+  blockBase.extend({ type: z.literal("cache"), config: programConfigs.cache }),
   blockBase.extend({ type: z.literal("query"), config: programConfigs.query }),
   blockBase.extend({
     type: z.literal("transaction"),
@@ -379,6 +388,9 @@ export const projectSchema = z.object({
           toNodeId: id,
           label: text.optional(),
           animated: z.boolean().optional(),
+          requestMappings: z.array(requestMappingSchema).max(200).optional(),
+          responseMappings: z.array(responseMappingSchema).max(200).optional(),
+          failure: failureSchema.optional(),
         }),
       )
       .max(5000),

@@ -8,6 +8,7 @@
 // Pipeline:  Canvas State → resolveGraph() → FlowGraph
 //
 
+import { resolveContract, formOwner, isSubmitControl } from "./contracts";
 import {
   RoutingNode,
   RoutingConnection,
@@ -136,11 +137,24 @@ export function resolveGraph(input: GraphResolverInput): FlowGraph {
       getPageElements(page, activePageId, activeElements);
     const actionables = collectActionableElements(elements);
 
-    for (const actionable of actionables) {
+    for (const candidate of actionables) {
+      const source = elements.find(el => el.id === candidate.id)!;
+      const owner = isSubmitControl(source) ? formOwner(source, elements) : undefined;
+      const actionable = owner || candidate;
       // Build the output port ID (matches the format in routingStore)
-      const outputPortId = `${pageNode.id}:out:${actionable.id}`;
+      const outputPortId = `${pageNode.id}:out:${candidate.id}`;
       const firstConn = connsByFromPort.get(outputPortId);
       if (!firstConn) continue;
+      if (owner && (connsByFromPort.has(`${pageNode.id}:out:${owner.id}`) || flows.some(flow => flow.trigger.elementId === owner.id))) {
+        diagnostics.push({severity: "error", code: "FORM_ACTION_CONFLICT", message: `Connect form "${owner.id}" once; its submit buttons share that submission.`});
+        continue;
+      }
+      if (actionable.type === "form") {
+        for (const control of elements.filter(el => isSubmitControl(el) && formOwner(el, elements)?.id === actionable.id)) {
+          if (control.events?.onClick) diagnostics.push({severity: "error", code: "FORM_ACTION_CONFLICT", message: `Submit button "${control.id}" has a click action that prevents form submission. Remove it or use a separate button.`});
+        }
+      }
+      let previousConfig: EndpointConfig | undefined;
 
       // Follow the one configured outgoing connection per port.
       const steps: FlowStep[] = [];
@@ -206,7 +220,10 @@ export function resolveGraph(input: GraphResolverInput): FlowGraph {
                 serviceId: service.id,
                 blockId: block.id,
                 authRequired: config.authRequired,
+                connectionId: currentConn.id,
+                ...resolveContract(currentConn, config, previousConfig, elements, actionable.id, pages, diagnostics),
               } satisfies ApiCallStep);
+              previousConfig = config;
             } else if (block.type === "auth_block") {
               const config = block.config as AuthConfig;
               steps.push({

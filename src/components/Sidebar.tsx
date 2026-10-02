@@ -1023,7 +1023,7 @@ const BackendDraggableItem: React.FC<{
 };
 
 const BackendFlyout: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { services, loadAuthTemplate, loadCrudTemplate, loadChatTemplate } =
+  const { services, loadAuthTemplate, loadCrudTemplate, loadChatTemplate, loadIntegrationTemplate } =
     useBackendStore();
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -1120,6 +1120,8 @@ const BackendFlyout: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <span className="bt-desc">Full REST resource endpoints</span>
               </div>
             </button>
+            <button className="backend-template-btn" onClick={() => loadIntegrationTemplate("integration")}><Zap size={14} /><div><span className="bt-name">Integration Service</span><span className="bt-desc">Configured upstream JSON API</span></div></button>
+            <button className="backend-template-btn" onClick={() => loadIntegrationTemplate("catalog")}><Database size={14} /><div><span className="bt-name">Catalog Service</span><span className="bt-desc">Filtering, sorting and pagination</span></div></button>
             <button className="backend-template-btn" onClick={loadChatTemplate}>
               <Zap size={14} />
               <div>

@@ -1,3 +1,4 @@
+import type { ResolvedRequestMapping, FailureBehavior } from "@/lib/contracts";
 // ═══════════════════════════════════════════════════
 // Intermediate Representation (IR) — Type Definitions
 // ═══════════════════════════════════════════════════
@@ -12,6 +13,10 @@
 // Each step in an execution flow (ordered, deterministic)
 
 export interface ApiCallStep {
+    connectionId?: string;
+    requestMappings?: ResolvedRequestMapping[];
+    responseMappings?: {name: string; elementId: string}[];
+    failure?: FailureBehavior & {pageRoute?: string};
     type: "api_call";
     method: string;           // GET, POST, PUT, DELETE, PATCH
     endpoint: string;         // /api/users

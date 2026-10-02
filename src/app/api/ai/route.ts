@@ -1,3 +1,4 @@
+import { projectIR } from "@/lib/project/ir";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -55,10 +56,9 @@ export async function POST(request: Request) {
           : "You are a senior full-stack engineer working in Levoks. Return ONLY a JSON object with keys summary (string) and files (COMPLETE flat map of source path to text content). Implement the user request using the provided project IR and baseline source. Preserve Next.js app router and Express architecture. Never include secret values, .env files, private keys, executable workflows, or absolute paths. Include .env.example placeholders. Do not claim tests or deployment have run. Code changes do not modify the visual IR; retain levoks.project.json as provided.";
     const context =
       body.mode !== "code"
-        ? { project, graph: compilation.graph }
+        ? { ir: projectIR(project, compilation.graph), diagnostics: compilation.diagnostics }
         : {
-            project,
-            graph: compilation.graph,
+            ir: projectIR(project, compilation.graph),
             files: compilation.files,
             diagnostics: compilation.diagnostics,
           };

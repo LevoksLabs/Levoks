@@ -68,6 +68,11 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
             block,
             "Choose an output name that is not a reserved context name.",
           );
+        if (block.type === "http_request") {
+          const http = programConfigs.http_request.parse(c);
+          if (http.retries && http.method !== "GET") fail(block, "Automatic retries are supported for GET only; mutations require application-specific idempotency.");
+          if (http.path.split("/").some(part => part === "." || part === "..") || http.path.includes(":")) fail(block, "Use a fixed upstream path and map dynamic values through query or body fields.");
+        }
         if ("steps" in c) children.push(...c.steps);
         if ("modelId" in c) {
           const model = checkRef(block, c.modelId, "db_model");
@@ -162,6 +167,9 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
       }
       if (block.type === "rest_endpoint") {
         const c = block.config as EndpointConfig;
+        const routeFields = [...c.route.matchAll(/:([A-Za-z_][A-Za-z0-9_]*)/g)].map(match => match[1]);
+        if (c.pathParameters && (c.pathParameters.some(field => !routeFields.includes(field.name) || !field.required) || routeFields.some(name => !c.pathParameters!.some(field => field.name === name)))) fail(block, "Path parameters must declare every route parameter as required.");
+        for (const field of [...(c.pathParameters || []), ...(c.queryParameters || [])]) if (["object", "array"].includes(field.type)) fail(block, "Query and path parameters must use scalar types.");
         if (c.modelId) checkRef(block, c.modelId, "db_model");
         if (new Set(c.middlewareIds).size !== c.middlewareIds.length)
           fail(block, "Attach each middleware block only once.");
@@ -342,7 +350,9 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
         const inputs: Record<string, unknown> = {
           credential_lookup: c.email,
           password_verify: c.password,
-          query: [c.filter, c.values],
+          query: [c.filter, c.values, c.page],
+          http_request: [c.query, c.body],
+          cache: [c.key, c.value],
           transform: c.fields,
           function: [c.inputs, c.result],
           response: c.value,
