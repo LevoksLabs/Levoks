@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef } from "react";
 import {
   X,
   User,
@@ -20,6 +20,17 @@ interface ProfileModalProps {
 
 export default function ProfileModal({ onClose }: ProfileModalProps) {
   const { data: session } = useSession();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const hasUser = Boolean(session?.user);
+
+  useEffect(() => {
+    if (hasUser) dialog.current?.showModal();
+  }, [hasUser]);
+
+  function closeProfile() {
+    dialog.current?.close();
+    onClose();
+  }
 
   if (!session?.user) return null;
 
@@ -35,28 +46,19 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
     : "U";
 
   return (
-    <AnimatePresence>
-      <motion.div
-        className="profile-overlay"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
-      >
-        <motion.div
+        <dialog
+          ref={dialog}
           className="profile-modal"
-          initial={{ opacity: 0, y: 20, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 20, scale: 0.97 }}
-          transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+          aria-labelledby="profile-heading"
+          onCancel={event => { event.preventDefault(); closeProfile(); }}
         >
           {/* Header */}
           <div className="profile-modal-header">
             <div className="profile-modal-title">
               <User size={16} />
-              <h2>Profile</h2>
+              <h2 id="profile-heading">Profile</h2>
             </div>
-            <button className="profile-close-btn" onClick={onClose}>
+            <button className="profile-close-btn" aria-label="Close profile" onClick={closeProfile}>
               <X size={16} />
             </button>
           </div>
@@ -77,7 +79,6 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
                 ) : (
                   <div className="profile-avatar-large-fallback">{initials}</div>
                 )}
-                <div className="profile-avatar-glow" />
               </div>
               <div className="profile-user-details">
                 <h3 className="profile-user-name">{user.name || "User"}</h3>
@@ -143,13 +144,11 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
               <div className="profile-projects-empty">
                 <FolderOpen size={24} strokeWidth={1.5} />
                 <p>Your visual workspace and cloud projects</p>
-                <button className="header-btn" onClick={() => { onClose(); window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "projects" })); }}>Open projects</button>
+                <button className="header-btn" onClick={() => { closeProfile(); window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "projects" })); }}>Open projects</button>
               </div>
             </div>
             <div className="profile-section"><div className="profile-section-header"><Sparkles size={14} /><span>Personal plan · Bring your own key</span></div><p style={{ fontSize: 12, lineHeight: 1.6 }}>Local editing and code export are available without an AI subscription. AI inference is billed directly by your selected provider. Levoks does not provision a paid inference plan.</p></div>
           </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+        </dialog>
   );
 }

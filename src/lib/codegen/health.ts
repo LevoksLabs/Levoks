@@ -12,7 +12,7 @@ export function healthRuntime(
     return target ? [{ id, port: target.port }] : [];
   });
   return `
-const mongoose = require('mongoose');
+${service.database && service.database.engine !== 'mongodb' ? "const database = require('../database');" : "const mongoose = require('mongoose');"}
 const config = ${JSON.stringify(config)};
 const dependencies = ${JSON.stringify(dependencies)};
 let draining = false, cached, cachedAt = 0, flight;
@@ -26,7 +26,7 @@ async function probe() {
   const checks = {};
   await Promise.all([
     ...(config.checkDatabase ? [(async () => {
-      try {if (mongoose.connection.readyState !== 1) throw new Error(); await bounded(() => mongoose.connection.db.admin().command({ping: 1, maxTimeMS: config.timeoutMs})); checks.database = 'up';}
+      try {${service.database && service.database.engine !== 'mongodb' ? "await bounded(() => database.ping());" : "if (mongoose.connection.readyState !== 1) throw new Error(); await bounded(() => mongoose.connection.db.admin().command({ping: 1, maxTimeMS: config.timeoutMs}));"} checks.database = 'up';}
       catch {checks.database = 'down';}
     })()] : []),
     ...dependencies.map(async dependency => {

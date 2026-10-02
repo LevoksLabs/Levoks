@@ -38,7 +38,7 @@ export function rateLimitRuntime(
     };
   });
   return `const rateLimit = require('express-rate-limit');
-const mongoose = require('mongoose');
+const mongoose = ${service.database && service.database.engine !== 'mongodb' ? "null" : "require('mongoose')"};
 const {createHash} = require('node:crypto');
 const configuration = ${JSON.stringify(configuration)};
 const serviceId = ${JSON.stringify(service.id)};

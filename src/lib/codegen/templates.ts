@@ -35,10 +35,10 @@ export const PACKAGE_JSON_TEMPLATE = (name: string, port: number) => `{
 
 export const SERVER_TEMPLATE = (port: number, imports: string, middlewareSetup: string, routeSetup: string, corsOrigins = "http://localhost:3000") => `
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 require('dotenv').config();
+const database = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || ${port};
@@ -69,17 +69,15 @@ ${routeSetup}
 app.use(observability.error);
 
 // ─── Database Connection & Start ───
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/${port === 3001 ? 'auth_db' : 'app_db'}';
-
-mongoose.connect(MONGO_URI)
+database.connect()
   .then(async () => {
     await observability.initialize();
     await require('./middleware/rate-limits').initialize();
-    console.log('✅ Connected to MongoDB');
+    console.log('Connected to configured database');
     const server = app.listen(PORT, () => {
       console.log(\`🚀 Server running on port \${PORT}\`);
     });
-    const shutdown = () => { health.drain(); server.close(() => { observability.flush().finally(() => mongoose.disconnect().finally(() => process.exit(0))); }); setTimeout(() => process.exit(1), 10000).unref(); };
+    const shutdown = () => { health.drain(); server.close(() => { observability.flush().finally(() => database.disconnect().finally(() => process.exit(0))); }); setTimeout(() => process.exit(1), 10000).unref(); };
     process.once('SIGTERM', shutdown);
     process.once('SIGINT', shutdown);
   })

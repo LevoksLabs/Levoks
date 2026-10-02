@@ -22,6 +22,13 @@ export default function UserMenu({ onOpenProfile }: UserMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const focusLast = useRef(false);
+
+  function closeMenu() {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
 
   // Close menu on outside click
   useEffect(() => {
@@ -34,13 +41,10 @@ export default function UserMenu({ onOpenProfile }: UserMenuProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Close on Escape
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    if (open) document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
+    if (!open) return;
+    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
+    items?.[focusLast.current ? items.length - 1 : 0]?.focus();
   }, [open]);
 
   if (status === "loading") {
@@ -75,12 +79,42 @@ export default function UserMenu({ onOpenProfile }: UserMenuProps) {
     : "U";
 
   return (
-    <div className="user-menu-container" ref={menuRef}>
+    <div className="user-menu-container" ref={menuRef}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+      onKeyDown={event => {
+        if (!open) return;
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          closeMenu();
+          return;
+        }
+        if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+        const index = items.indexOf(document.activeElement as HTMLButtonElement);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
+          : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+        items[next]?.focus();
+      }}>
       <button
+        ref={triggerRef}
         className={`user-menu-trigger ${open ? "active" : ""}`}
-        onClick={() => setOpen(!open)}
+        onClick={() => { focusLast.current = false; setOpen(!open); }}
+        onKeyDown={event => {
+          if (open || !["ArrowDown", "ArrowUp"].includes(event.key)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          focusLast.current = event.key === "ArrowUp";
+          setOpen(true);
+        }}
         aria-label="User menu"
         aria-expanded={open}
+        aria-haspopup="menu"
+        aria-controls={open ? "account-actions" : undefined}
       >
         {user?.image ? (
           <img
@@ -140,21 +174,23 @@ export default function UserMenu({ onOpenProfile }: UserMenuProps) {
           <div className="user-menu-divider" />
 
           {/* Menu items */}
+          <div id="account-actions" role="menu" aria-label="Account actions">
           <button
+            role="menuitem" tabIndex={-1}
             className="user-menu-item"
             onClick={() => {
-              setOpen(false);
+              closeMenu();
               onOpenProfile();
             }}
           >
             <Settings size={14} />
             Profile Settings
           </button>
-          <button className="user-menu-item" onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "projects" })); }}>
+          <button role="menuitem" tabIndex={-1} className="user-menu-item" onClick={() => { closeMenu(); window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "projects" })); }}>
             <FolderOpen size={14} />
             My Projects
           </button>
-          <button className="user-menu-item" onClick={() => { setOpen(false); onOpenProfile(); }}>
+          <button role="menuitem" tabIndex={-1} className="user-menu-item" onClick={() => { closeMenu(); onOpenProfile(); }}>
             <Link2 size={14} />
             Linked Accounts
           </button>
@@ -162,12 +198,14 @@ export default function UserMenu({ onOpenProfile }: UserMenuProps) {
           <div className="user-menu-divider" />
 
           <button
+            role="menuitem" tabIndex={-1}
             className="user-menu-item user-menu-signout"
             onClick={() => signOut({ callbackUrl: "/" })}
           >
             <LogOut size={14} />
             Sign Out
           </button>
+          </div>
         </div>
       )}
     </div>

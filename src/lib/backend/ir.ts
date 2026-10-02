@@ -5,12 +5,13 @@ export function lowerBackend(backend: ProjectDocument["backend"]) {
   return {
     schemaVersion: 1 as const,
     generatorVersion: "backend-1" as const,
-    target: "express-mongoose" as const,
+    target: backend.services.some(s => s.database && s.database.engine !== "mongodb") ? "express-database" as const : "express-mongoose" as const,
     services: backend.services.map((service) => ({
       id: service.id,
       name: service.name,
       description: service.description,
       port: service.port,
+      ...(service.database ? {database: structuredClone(service.database)} : {}),
       blocks: service.blocks.map((block) => {
         const { position: _position, ...semantic } = block;
         void _position;

@@ -5,6 +5,8 @@ import ProgramInspector from "./ProgramInspector";
 import HealthInspector from "./HealthInspector";
 import { AuditInspector, ErrorInspector } from "./ObservabilityInspector";
 import { useBackendStore } from "@/store/backendStore";
+import { modelDefault } from "@/lib/backend/model-defaults";
+import { DATABASE_ENGINES, databaseSchema, defaultDatabase, type DatabaseConfig } from "@/lib/backend/database";
 import {
   EndpointConfig,
   HealthConfig,
@@ -72,7 +74,8 @@ const SchemaFieldsEditor: React.FC<{
   fields: SchemaField[];
   onChange: (fields: SchemaField[]) => void;
   label?: string;
-}> = ({ fields, onChange, label = "Fields" }) => {
+  modelFields?: boolean;
+}> = ({ fields, onChange, label = "Fields", modelFields = false }) => {
   const addField = () => {
     let name = `field_${fields.length + 1}`;
     while (fields.some((field) => field.name === name)) name += "_new";
@@ -99,14 +102,17 @@ const SchemaFieldsEditor: React.FC<{
         </button>
       </div>
       {fields.map((field, idx) => (
-        <div key={idx} className="bi-schema-field">
+        <div key={idx}>
+        <div className="bi-schema-field">
           <input
+            aria-label={`Field ${idx + 1} name`}
             className="bi-input bi-input-sm"
             value={field.name}
             onChange={(e) => updateField(idx, { name: e.target.value })}
             placeholder="name"
           />
           <select
+            aria-label={`Field ${idx + 1} type`}
             className="bi-select bi-select-sm"
             value={field.type}
             onChange={(e) =>
@@ -124,6 +130,7 @@ const SchemaFieldsEditor: React.FC<{
           <label className="bi-checkbox-label">
             <input
               type="checkbox"
+              aria-label={`Required field ${field.name}`}
               checked={field.required}
               onChange={(e) => updateField(idx, { required: e.target.checked })}
             />
@@ -132,6 +139,7 @@ const SchemaFieldsEditor: React.FC<{
           <label className="bi-checkbox-label">
             <input
               type="checkbox"
+              aria-label={`Unique field ${field.name}`}
               checked={!!field.unique}
               onChange={(e) => updateField(idx, { unique: e.target.checked })}
             />
@@ -140,22 +148,44 @@ const SchemaFieldsEditor: React.FC<{
           <label className="bi-checkbox-label">
             <input
               type="checkbox"
+              aria-label={`Index field ${field.name}`}
               checked={!!field.indexed}
               onChange={(e) => updateField(idx, { indexed: e.target.checked })}
             />
             Index
           </label>
           <button
+            aria-label={`Remove field ${field.name}`}
             className="bi-remove-field-btn"
             onClick={() => removeField(idx)}
           >
             <X size={10} />
           </button>
         </div>
+        {modelFields && <ModelDefaultEditor field={field} onChange={defaultValue => updateField(idx, {defaultValue})} />}
+        </div>
       ))}
     </div>
   );
 };
+
+function ModelDefaultEditor({field, onChange}: {field: SchemaField; onChange: (value: string | undefined) => void}) {
+  let error = "";
+  const defaults: Partial<Record<SchemaField["type"], string>> = {number: "0", boolean: "false", object: "{}", array: "[]"};
+  try { modelDefault(field); } catch (issue) { error = (issue as Error).message; }
+  return <details className="bi-field-default">
+    <summary>Default for {field.name}: {error ? "invalid" : field.defaultValue === undefined ? "not set" : "configured"}</summary>
+    <label className="bi-checkbox-label">
+      <input type="checkbox" checked={field.defaultValue !== undefined} onChange={event => onChange(event.target.checked ? defaults[field.type] ?? "" : undefined)} />
+      Use default for {field.name}
+    </label>
+    {field.defaultValue !== undefined && <label>Default value for {field.name}
+      <input className="bi-input" value={field.defaultValue} aria-invalid={Boolean(error)} onChange={event => onChange(event.target.value)} />
+    </label>}
+    {error && <p role="alert" className="bi-hint">{error}</p>}
+    <p className="bi-hint">Used when a new record omits this field. Text is literal; objects and arrays use JSON. Dates use ISO format. Defaults are never executed as code.</p>
+  </details>;
+}
 
 // ─── Main Inspector ───
 
@@ -344,6 +374,9 @@ const BackendInspector: React.FC = () => {
             </FieldRow>
           </Section>
 
+          <Section title="Database & storage" icon={<Database size={12} />}>
+            <DatabaseEditor value={selectedService.database || defaultDatabase()} onChange={database => updateService(selectedService.id, {database})} />
+          </Section>
           <Section title="Stats" defaultOpen={false}>
             <div className="bi-stats">
               <div className="bi-stat">
@@ -390,6 +423,33 @@ const BackendInspector: React.FC = () => {
 };
 
 // ─── Endpoint Editor ───
+
+function DatabaseEditor({value, onChange}: {value: DatabaseConfig; onChange: (value: DatabaseConfig) => void}) {
+  const validation = databaseSchema.safeParse(value);
+  return <>
+    <label className="bi-field">Database engine
+      <select aria-label="Database engine" className="bi-select" value={value.engine} onChange={e => onChange(defaultDatabase(e.target.value as DatabaseConfig["engine"]))}>
+        {Object.entries(DATABASE_ENGINES).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+      </select>
+    </label>
+    {value.engine !== "sqlite" && <label className="bi-field">Store application data
+      <select aria-label="Store application data" className="bi-select" value={value.location} onChange={e => onChange({...value, location: e.target.value as DatabaseConfig["location"], tls: e.target.value === "remote"})}>
+        <option value="local">Local / self-hosted database</option>
+        <option value="remote">Remote / managed database</option>
+      </select>
+    </label>}
+    {value.engine === "sqlite" && <label className="bi-field">Database file name
+      <input className="bi-input" value={value.fileName} onChange={e => onChange({...value, fileName: e.target.value})} />
+    </label>}
+    <label className="bi-field">Connection environment variable
+      <input className="bi-input" value={value.connectionEnv} onChange={e => onChange({...value, connectionEnv: e.target.value})} />
+    </label>
+    {value.engine !== "sqlite" && <label className="bi-checkbox-label"><input type="checkbox" checked={value.tls} onChange={e => onChange({...value, tls: e.target.checked})} />Require TLS</label>}
+    <p className="bi-hint">{value.engine === "sqlite" ? `Stores a file in ./data. Set ${value.connectionEnv} at runtime to choose another file path. Container exports use a persistent volume.` : value.location === "remote" ? `Set ${value.connectionEnv} to your provider's connection URL in the exported service's .env or hosting settings. Any compatible managed provider or your own server can be used.` : `Docker Compose includes this database with a persistent volume. For development, set ${value.connectionEnv} to your local server.`}</p>
+    {!validation.success && <p className="bi-hint" role="alert">Use a dedicated uppercase environment variable and a simple filename ending in .sqlite or .db, without folders.</p>}
+    <p className="bi-hint">Credentials stay outside the project. Changing engines does not move existing data. SQL exports include an explicit database setup command. Identity accounts, durable audit logs and MongoDB-backed quotas currently require MongoDB; SQL resources can use a separate identity service.</p>
+  </>;
+}
 
 const EndpointEditor: React.FC<{
   config: EndpointConfig;
@@ -481,6 +541,7 @@ const DbModelEditor: React.FC<{
         <label className="bi-toggle">
           <input
             type="checkbox"
+            aria-label="Model timestamps"
             checked={config.timestamps}
             onChange={(e) => onChange({ timestamps: e.target.checked })}
           />
@@ -491,6 +552,7 @@ const DbModelEditor: React.FC<{
         <label className="bi-toggle">
           <input
             type="checkbox"
+            aria-label="Model soft delete"
             checked={config.softDelete}
             onChange={(e) => onChange({ softDelete: e.target.checked })}
           />
@@ -501,6 +563,7 @@ const DbModelEditor: React.FC<{
     <Section title="Schema Fields" icon={<ChevronDown size={12} />}>
       <SchemaFieldsEditor
         fields={config.fields}
+        modelFields
         onChange={(fields) => onChange({ fields })}
       />
     </Section>

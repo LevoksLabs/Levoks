@@ -22,6 +22,9 @@ import {
     DOCKERFILE_TEMPLATE,
 } from "./templates";
 import { serviceSlug } from "@/lib/project/schema";
+import { modelDefault } from "@/lib/backend/model-defaults";
+import { isSql } from "@/lib/backend/database";
+import { databaseFiles, databaseEnvironment } from "./database";
 import { authController } from "./auth";
 import { authSessionRuntime } from "./auth-session";
 import { authRecoveryRuntime, IDENTITY_EMAIL_WORKER } from "./auth-recovery";
@@ -55,7 +58,8 @@ function generateModel(block: BackendBlock, identityModel = false): string {
         if (f.indexed) fieldDef += `,\n      index: true`;
         if (/password|token|secret/i.test(f.name)) fieldDef += `,\n      select: false`;
         if (identityModel && f.name === "email") fieldDef += `,\n      unique: true, lowercase: true, trim: true`;
-        if (f.defaultValue) fieldDef += `,\n      default: ${JSON.stringify(f.defaultValue)}`;
+        const defaultValue = modelDefault(f);
+        if (defaultValue !== undefined) fieldDef += `,\n      default: ${JSON.stringify(defaultValue)}`;
         if (f.ref) fieldDef += `,\n      ref: ${JSON.stringify(f.ref)}`;
         fieldDef += `\n    }`;
         return fieldDef;
@@ -69,8 +73,9 @@ function generateModel(block: BackendBlock, identityModel = false): string {
 }
 
 // ─── Generate route handler for an endpoint ───
-function generateEndpointHandler(block: BackendBlock, models: string[], fields: SchemaField[], identityModel: boolean): string {
+function generateEndpointHandler(block: BackendBlock, models: string[], fields: SchemaField[], identityModel: boolean, modelConfig?: DbModelConfig): string {
     const config = block.config as EndpointConfig;
+    const softDelete = modelConfig?.softDelete;
     const method = config.method.toLowerCase();
     const middleware = (authenticate = false) => `...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'ip'), ${authenticate ? "auth, " : ""}...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'identity'), validateParameters(${JSON.stringify({query: config.queryParameters, path: config.pathParameters})}), `;
     if (block.connections.length) return `router.${method}(${JSON.stringify(config.route)}, ${middleware(Boolean(config.authRequired || config.policyIds?.length))}${identityModel ? "identity.limit, " : ""}validateBody(${JSON.stringify(config.requestBody)}), async (req, res, next) => { try { const output = await workflow(${JSON.stringify(block.id)}, req${identityModel ? ", res" : ""}); if (output.status === 204) return res.status(204).end(); res.status(output.status).json(output.body ?? null); } catch (error) { next(error); } });`;
@@ -100,7 +105,7 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
             case "GET":
                 if (config.route.includes(":id")) {
                     handlerBody = `  try {
-    const item = await ${modelName}.findById(req.params.id);
+    const item = await ${modelName}.findOne({_id: req.params.id${softDelete ? ", deletedAt: null" : ""}});
     if (!item) return res.status(404).json({ error: '${modelName} not found' });
     res.json(item);
   } catch (error) {
@@ -110,7 +115,7 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
                     handlerBody = `  try {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
     const page = Math.max(1, Number(req.query.page) || 1);
-    const items = await ${modelName}.find({}).limit(limit).skip((page - 1) * limit);
+    const items = await ${modelName}.find({${softDelete ? "deletedAt: null" : ""}}).limit(limit).skip((page - 1) * limit);
     res.json(items);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -119,8 +124,7 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
                 break;
             case "POST":
                 handlerBody = `  try {
-    const item = new ${modelName}(req.body);
-    await item.save();
+    const item = await ${modelName}.create(req.body);
     res.status(201).json(item);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -128,7 +132,7 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
                 break;
             case "PUT":
                 handlerBody = `  try {
-    const item = await ${modelName}.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
+    const item = await ${modelName}.findOneAndUpdate({_id: req.params.id${softDelete ? ", deletedAt: null" : ""}}, { $set: req.body }, { new: true, runValidators: true });
     if (!item) return res.status(404).json({ error: '${modelName} not found' });
     res.json(item);
   } catch (error) {
@@ -137,7 +141,7 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
                 break;
             case "DELETE":
                 handlerBody = `  try {
-    const item = await ${modelName}.findByIdAndDelete(req.params.id);
+    const item = await ${modelName}.${softDelete ? "findOneAndUpdate({_id: req.params.id, deletedAt: null}, {$set: {deletedAt: new Date()}}, {new: true})" : "findByIdAndDelete(req.params.id)"};
     if (!item) return res.status(404).json({ error: '${modelName} not found' });
     res.json({ message: '${modelName} deleted successfully' });
   } catch (error) {
@@ -146,7 +150,7 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
                 break;
             default:
                 handlerBody = `  try {
-    const item = await ${modelName}.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
+    const item = await ${modelName}.findOneAndUpdate({_id: req.params.id${softDelete ? ", deletedAt: null" : ""}}, { $set: req.body }, { new: true, runValidators: true });
     if (!item) return res.status(404).json({ error: '${modelName} not found' });
     res.json(item);
   } catch (error) {
@@ -161,7 +165,7 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
   }`;
     }
 
-    const inputFields = config.requestBody.length ? config.requestBody : fields.filter(f => !/password|token|secret|role/i.test(f.name));
+    const inputFields = (config.requestBody.length ? config.requestBody : fields.filter(f => !/password|token|secret|role/i.test(f.name)).map(f => f.defaultValue === undefined ? f : {...f, required: false})).filter(f => !["_id", "__v", ...(modelConfig?.timestamps ? ["createdAt", "updatedAt"] : []), ...(softDelete ? ["deletedAt"] : [])].includes(f.name));
     return `router.${method}(${JSON.stringify(config.route)}, ${middleware(config.authRequired)}validateBody(${JSON.stringify(inputFields)}), validateRules, async (req, res, next) => {\n${handlerBody.replaceAll(/res.status\((400|500)\).json\(\{ error: error.message \}\)/g, 'next(error)')}\n});`;
 }
 
@@ -190,6 +194,8 @@ function generateMiddlewareSetup(block: BackendBlock): string {
 export function generateServiceCode(service: ServiceContainer, allServices: ServiceContainer[] = []): Record<string, string> {
     const files: Record<string, string> = {};
     const servicePath = serviceSlug(service.name);
+    const sql = isSql(service.database);
+    for (const [name, source] of Object.entries(databaseFiles(service))) files[`${servicePath}/${name}`] = source;
 
     // Separate blocks by type
     const endpoints = service.blocks.filter((b) => b.type === "rest_endpoint");
@@ -208,7 +214,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
     // 1. Generate models
     models.forEach((model) => {
         const config = model.config as DbModelConfig;
-        let generatedModel = generateModel(model, identityModel);
+        let generatedModel = sql ? `module.exports = require('../database').model(${JSON.stringify(config.tableName)});` : generateModel(model, identityModel);
         if (identityModel && config.fields.some(f => f.name === "password")) generatedModel = generatedModel.replace('module.exports =', ['authReset', 'authVerify'].map(prefix => `${config.tableName}Schema.index({"${prefix}Mail.status": 1, "${prefix}Mail.dueAt": 1});\n${config.tableName}Schema.index({"${prefix}Hash": 1}, {sparse: true});`).join('\n') + '\nmodule.exports =');
         files[`${servicePath}/models/${config.tableName}.js`] = generatedModel;
     });
@@ -232,7 +238,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
                 const bound = models.find(m => m.id === (e.config as EndpointConfig).modelId) || models[0];
                 const boundConfig = bound?.config as DbModelConfig | undefined;
                 const effective = e.connections.length && programAuth && !identityModel ? {...e, config: {...e.config, authRequired: true}} : e;
-                return generateEndpointHandler(effective, boundConfig ? [boundConfig.tableName] : modelNames, boundConfig?.fields || [], identityModel);
+                return generateEndpointHandler(effective, boundConfig ? [boundConfig.tableName] : modelNames, boundConfig?.fields || [], identityModel, boundConfig);
             })
             .join("\n\n");
 
@@ -263,6 +269,15 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
 
     // 5. package.json
     files[`${servicePath}/package.json`] = PACKAGE_JSON_TEMPLATE(service.name, service.port);
+    if (sql) {
+        const manifest = JSON.parse(files[`${servicePath}/package.json`]);
+        delete manifest.dependencies.mongoose;
+        manifest.dependencies.knex = "^3.1.0";
+        const driver = service.database!.engine === "sqlite" ? "better-sqlite3" : service.database!.engine === "postgresql" ? "pg" : "mysql2";
+        manifest.dependencies[driver] = driver === "better-sqlite3" ? "^12.0.0" : driver === "pg" ? "^8.16.0" : "^3.14.0";
+        manifest.scripts['db:migrate'] = 'node scripts/migrate.js';
+        files[`${servicePath}/package.json`] = JSON.stringify(manifest, null, 2);
+    }
     if (identityModel) {
         const manifest = JSON.parse(files[`${servicePath}/package.json`]);
         manifest.scripts['worker:email'] = 'node workers/identity-email.js';
@@ -272,7 +287,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
     // 6. .env
     const envMap: Record<string, string> = {
         PORT: String(service.port),
-        MONGO_URI: `mongodb://localhost:27017/${servicePath.replace(/-/g, "_")}_db`,
+        ...databaseEnvironment(service),
         NODE_ENV: "development",
         CORS_ORIGINS: (middlewares.find(m => (m.config as MiddlewareConfig).middlewareType === "cors")?.config as MiddlewareConfig | undefined)?.corsOrigins || "http://localhost:3000",
     };
@@ -293,7 +308,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
     });
     files[`${servicePath}/.env.example`] = ENV_TEMPLATE(envMap);
     if (identityModel) files[`${servicePath}/.env.example`] += '\nIDENTITY_PUBLIC_URL=\nIDENTITY_EMAIL_FROM=\nIDENTITY_EMAIL_KEYS=\nIDENTITY_EMAIL_ACTIVE_KEY=\nRESEND_API_KEY=\n';
-    files[`${servicePath}/.dockerignore`] = `node_modules\n.env*\n.git\n`;
+    files[`${servicePath}/.dockerignore`] = `node_modules\n.env*\n.git\ndata\n*.sqlite*\n*.db*\n`;
     files[`${servicePath}/middleware/validate.js`] = `exports.validateParameters = (contracts) => (req, res, next) => {
   for (const [location, fields] of Object.entries(contracts)) {
     if (!fields) continue;
@@ -348,7 +363,7 @@ exports.validateRules = (req, res, next) => {
 };`;
 
     // 7. .gitignore
-    files[`${servicePath}/.gitignore`] = `node_modules/\n.env\n.DS_Store`;
+    files[`${servicePath}/.gitignore`] = `node_modules/\n.env\n.DS_Store\ndata/\n*.sqlite*\n*.db*`;
 
     files[`${servicePath}/observability/health.js`] = healthRuntime(service, allServices);
     files[`${servicePath}/observability/index.js`] = observabilityRuntime(service);
@@ -375,6 +390,7 @@ check(path.resolve(__dirname, '..')); console.log('Validated ' + count + ' JavaS
     }
     // 8. Dockerfile
     files[`${servicePath}/Dockerfile`] = DOCKERFILE_TEMPLATE(service.port);
+    if (service.database?.engine === "sqlite") files[`${servicePath}/Dockerfile`] = files[`${servicePath}/Dockerfile`].replace('USER node', 'RUN mkdir -p /data && chown node:node /data\nUSER node');
 
     return files;
 }

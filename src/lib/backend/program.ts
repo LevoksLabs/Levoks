@@ -76,6 +76,15 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
         if ("steps" in c) children.push(...c.steps);
         if ("modelId" in c) {
           const model = checkRef(block, c.modelId, "db_model");
+          if ((["restore", "purge"].includes(c.operation) || (c.deleted && c.deleted !== "exclude")) && model && !(model.config as DbModelConfig).softDelete)
+            fail(block, "Restore, purge and deleted-record queries require a soft-delete model.");
+          if (c.deleted && c.deleted !== "exclude" && !["find", "findOne", "count", "aggregate"].includes(c.operation))
+            fail(block, "Deleted-record selection applies only to reads; restore and purge always target deleted records.");
+          if (model) {
+            const config = model.config as DbModelConfig;
+            const managed = ["_id", "__v", ...(config.timestamps ? ["createdAt", "updatedAt"] : []), ...(config.softDelete ? ["deletedAt"] : [])];
+            if (Object.keys(c.values).some(field => managed.includes(field))) fail(block, "Model-managed fields cannot be assigned by a query.");
+          }
           if (c.policyId) {
             const policy = checkRef(block, c.policyId, "access_policy");
             if (policy && model) {
@@ -134,10 +143,10 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
               );
           }
           if (
-            ["update", "delete"].includes(c.operation) &&
+            ["update", "delete", "restore", "purge"].includes(c.operation) &&
             !Object.keys(c.filter).length
           )
-            fail(block, "An explicit filter is required for update/delete.");
+            fail(block, "An explicit filter is required for update/delete/restore/purge.");
         }
         if (block.type === "role") {
           const role = programConfigs.role.parse(c);
@@ -434,7 +443,7 @@ export function programFiles(
     ),
     "workflow/index.js": `const { createWorkflow } = require('./runtime');
 const program = require('./program.json');
-const mongoose = require('mongoose');
+const mongoose = require(${JSON.stringify(service.database && service.database.engine !== 'mongodb' ? '../database' : 'mongoose')});
 const models = {${models.map((b) => `${JSON.stringify(b.id)}: require('../models/${(b.config as DbModelConfig).tableName}')`).join(",")}};
 module.exports = createWorkflow(program, models, mongoose, require('../observability')${service.blocks.some(b => b.type === 'credential_lookup') ? ", require('../controllers/identity')" : ''});
 `,

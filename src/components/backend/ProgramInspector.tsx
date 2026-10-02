@@ -615,12 +615,20 @@ export default function ProgramInspector({
                 "create",
                 "update",
                 "delete",
+                "restore",
+                "purge",
                 "count",
                 "aggregate",
               ].map((id) => ({ id, label: id })),
               (operation) =>
-                update({ operation: operation as typeof c.operation }),
+                update({ operation: operation as typeof c.operation, ...(!["find", "findOne", "count", "aggregate"].includes(operation) ? {deleted: "exclude"} : {}) }),
             )}
+            {["find", "findOne", "count", "aggregate"].includes(c.operation) && select(
+              "Deleted records", c.deleted || "exclude",
+              [{id: "exclude", label: "Hide deleted"}, {id: "only", label: "Only deleted"}, {id: "include", label: "Include deleted"}],
+              deleted => update({deleted: deleted as typeof c.deleted}),
+            )}
+            {["restore", "purge"].includes(c.operation) && <p className="bi-hint">{c.operation === "purge" ? "Permanently removes one deleted record. This cannot be undone after the transaction commits." : "Restores one deleted record."} Requires a soft-delete model and an explicit filter. Access policies still apply.</p>}
             {select(
               "Query access policy",
               c.policyId,

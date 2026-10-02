@@ -84,17 +84,17 @@ exports.processOne = async () => {
 
 export const IDENTITY_EMAIL_WORKER = `
 require('dotenv').config();
-const mongoose = require('mongoose');
+const database = require('../database');
 const recovery = require('../identity/recovery');
 let stopping = false;
 process.on('SIGTERM', () => {stopping = true;}); process.on('SIGINT', () => {stopping = true;});
 (async () => {
-  await mongoose.connect(process.env.MONGO_URI); recovery.ready();
+  await database.connect(); recovery.ready();
   if (!process.env.RESEND_API_KEY) throw new Error('Email provider is not configured');
   while (!stopping) {
     try {if (!await recovery.processOne()) await new Promise(r => setTimeout(r, 2000));}
     catch {console.error('Identity email worker unavailable; check server configuration.'); await new Promise(r => setTimeout(r, 10000));}
   }
-  await mongoose.disconnect();
-})().catch(() => {console.error('Identity email worker startup failed.'); mongoose.disconnect().finally(() => {process.exitCode = 1;});});
+  await database.disconnect();
+})().catch(() => {console.error('Identity email worker startup failed.'); database.disconnect().finally(() => {process.exitCode = 1;});});
 `.trim();

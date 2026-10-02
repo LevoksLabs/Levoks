@@ -1,5 +1,9 @@
 # Levoks 🚀
 
+Current work follows the [documented product completion plan](Documentation/product-completion-plan.md). The priority is completing the full product and verifying its behavior; launch work is deferred.
+
+Generated resource services can select MongoDB, PostgreSQL, MySQL, MariaDB or SQLite, with local or remote storage. Configure **Service Settings → Database & storage**; see [database setup and current boundaries](Documentation/databases.md).
+
 **Implementation status:** The editor now includes local autosave and recovery, project checkpoints, reviewed AI proposals, complete multi-page source export, GitHub commits, and Vercel frontend deployment. The larger product vision in `Documentation/levoks.md` is still in development. See [production readiness and setup](Documentation/production-readiness.md) for supported behavior, verification, and release blockers.
 
 **The Database-Ready Visual Website Builder**

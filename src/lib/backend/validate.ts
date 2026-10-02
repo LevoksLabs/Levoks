@@ -2,6 +2,9 @@ import type { BackendIR } from "./ir";
 import type { IRDiagnostic } from "@/types/ir";
 import { BACKEND_REGISTRY } from "./registry";
 import { programDiagnostics } from "./program";
+import { modelDefault } from "./model-defaults";
+import { databaseSchema, isSql, defaultDatabase } from "./database";
+import { serviceSlug } from "@/lib/project/schema";
 
 export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
   const diagnostics: IRDiagnostic[] = [];
@@ -15,12 +18,32 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
   if (
     backend.schemaVersion !== 1 ||
     backend.generatorVersion !== "backend-1" ||
-    backend.target !== "express-mongoose"
+    !["express-mongoose", "express-database"].includes(backend.target)
   ) {
     problem("backend", "Unsupported backend IR version or generation target.");
     return diagnostics;
   }
   for (const service of backend.services) {
+    if (backend.services.some(s => !s.database) && serviceSlug(service.name) === "mongodb") problem(service.id, "The service name MongoDB is reserved by legacy database storage. Rename this service before export.");
+    const database = service.database || defaultDatabase();
+    const parsedDatabase = databaseSchema.safeParse(database);
+    if (!parsedDatabase.success) problem(service.id, "Choose a valid database engine, storage location, filename and dedicated environment variable.");
+    if (service.blocks.some(b => b.type === "env_var" && b.config.key === database.connectionEnv)) problem(service.id, "Database connection values belong in the exported runtime environment, not an Environment Variable block.");
+    if (isSql(database)) {
+      const tables = service.blocks.filter(b => b.type === "db_model").map(b => b.config.tableName.toLowerCase());
+      if (new Set(tables).size !== tables.length) problem(service.id, "SQL table names must be distinct without relying on letter case.");
+      const incompatible = service.blocks.filter(b => b.type === "audit_log" || ["credential_lookup", "password_verify", "session_issue"].includes(b.type) || (b.type === "db_model" && b.config.fields.some(f => f.name === "password")));
+      for (const block of incompatible) problem(block.id, "Identity accounts and durable audit logs currently require a MongoDB service. Use a separate MongoDB identity service for SQL resources.");
+      for (const owner of backend.services) for (const block of owner.blocks) if (block.type === "middleware" && block.config.middlewareType === "rateLimit" && block.config.rateLimitStore === "mongodb" && (owner.id === service.id || block.config.scope === "backend")) problem(block.id, `${service.name}: database-backed rate limits require MongoDB; choose memory counters for SQL services.`);
+      for (const block of service.blocks) if (block.type === "db_model") {
+        if (new Set(block.config.fields.map(f => f.name.toLowerCase())).size !== block.config.fields.length) problem(block.id, "SQL field names must be distinct without relying on letter case.");
+        if (block.config.tableName.length > 50 || block.config.fields.some(f => f.name.length > 50)) problem(block.id, "SQL table and field names must be at most 50 characters.");
+        for (const field of block.config.fields) {
+          if (["object", "array"].includes(field.type) && (field.unique || field.indexed)) problem(block.id, "SQL indexes require scalar fields; remove the JSON field index or uniqueness option.");
+          if (field.type === "string" && (field.unique || field.indexed) && (field.defaultValue?.length || 0) > 191) problem(block.id, "Indexed SQL text defaults must be at most 191 characters.");
+        }
+      }
+    }
     for (const block of service.blocks) {
       const definition = BACKEND_REGISTRY[block.type];
       if (!definition || block.definitionVersion !== definition.version) {
@@ -28,6 +51,14 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
         continue;
       }
       definition.propsSchema.parse(block.config);
+      if (block.type === "db_model") {
+        const reserved = ["_id", "__v", ...(block.config.timestamps ? ["createdAt", "updatedAt"] : []), ...(block.config.softDelete ? ["deletedAt"] : [])];
+        for (const field of block.config.fields) {
+          if (reserved.includes(field.name)) problem(block.id, `${block.label}: ${field.name} is managed by the model.`);
+          try { modelDefault(field); }
+          catch (error) { problem(block.id, `${block.label}.${field.name}: ${(error as Error).message}`); }
+        }
+      }
       if (definition.generate === "unsupported")
         problem(
           block.id,
@@ -206,11 +237,9 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
       if (
         block.type === "db_model" &&
         block.config.softDelete &&
-        service.blocks.some(
-          (b) => b.type === "rest_endpoint" && !b.connections.length,
-        )
+        jwt && identityModel
       )
-        problem(block.id, `${block.label}: soft deletion is not yet compiled.`);
+        problem(block.id, `${block.label}: identity accounts use session revocation and disabledAt, not resource soft deletion.`);
       if (
         jwt &&
         identityModel &&

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import {
   FolderOpen,
   Save,
@@ -105,6 +106,8 @@ function projectSignature() {
 }
 
 export default function WorkspaceHub() {
+  const { data: session } = useSession();
+  const ownerId = session?.user?.id;
   const workspace = useWorkspaceStore();
   const editor = useEditorStore();
   const backend = useBackendStore();
@@ -115,9 +118,17 @@ export default function WorkspaceHub() {
   const [error, setError] = useState("");
   const [projects, setProjects] = useState<SavedProject[]>([]);
   const [history, setHistory] = useState<Checkpoint[]>([]);
-  const [cloudProjects, setCloudProjects] = useState<
-    { projectId: string; name: string; updatedAt: string }[]
-  >([]);
+  const [cloudList, setCloudList] = useState<{
+    ownerId: string;
+    projects: { projectId: string; name: string; updatedAt: string }[];
+  }>({ ownerId: "", projects: [] });
+  const cloudProjects = cloudList.ownerId === ownerId ? cloudList.projects : [];
+  function cloudRevisionKey(projectId: string) {
+    if (!ownerId) throw new Error("Sign in to use cloud projects.");
+    // A different tab's save must never advance this tab's expected revision.
+    // Legacy shared localStorage revisions are deliberately not adopted.
+    return `levoks-cloud-revision:${JSON.stringify([ownerId, projectId])}`;
+  }
   const [provider, setProvider] = useState("huggingface");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -809,23 +820,25 @@ export default function WorkspaceHub() {
                   </h2>
                   <p>
                     Sign in using your profile menu. Cloud saves use revision
-                    checks to prevent overwriting changes from another device.
+                    checks to prevent overwriting changes from another tab or
+                    device. Open the cloud version in each new tab before editing it.
                   </p>
                   <button
                     disabled={busy}
                     onClick={() =>
                       void run(async () => {
                         const project = redactProject(currentProject());
-                        const key = `levoks-cloud-revision:${project.id}`;
+                        const key = cloudRevisionKey(project.id);
                         const result = await api(
                           "/api/projects",
                           {
                             project,
-                            revision: Number(localStorage.getItem(key) || 0),
+                            ownerId,
+                            revision: Number(sessionStorage.getItem(key) || 0),
                           },
                           "PUT",
                         );
-                        localStorage.setItem(key, String(result.revision));
+                        sessionStorage.setItem(key, String(result.revision));
                         setMessage("Saved to your account.");
                       })
                     }
@@ -836,9 +849,9 @@ export default function WorkspaceHub() {
                     disabled={busy}
                     onClick={() =>
                       void run(async () => {
-                        setCloudProjects(
-                          await api("/api/projects", undefined, "GET"),
-                        );
+                        if (!ownerId) throw new Error("Sign in to use cloud projects.");
+                        const projects = await api("/api/projects", undefined, "GET");
+                        setCloudList({ ownerId, projects });
                       })
                     }
                   >
@@ -851,11 +864,14 @@ export default function WorkspaceHub() {
                       disabled={busy}
                       onClick={() =>
                         void run(async () => {
+                          const key = cloudRevisionKey(project.projectId);
                           const remote = await api(
                             `/api/projects?id=${encodeURIComponent(project.projectId)}`,
                             undefined,
                             "GET",
                           );
+                          if (remote.ownerId !== ownerId)
+                            throw new Error("Your account changed. Reload cloud projects before opening one.");
                           await flushWorkspace("Before cloud restore");
                           const local = await getProject(project.projectId);
                           await openWorkspace(
@@ -864,10 +880,7 @@ export default function WorkspaceHub() {
                           );
                           useWorkspaceStore.setState({ dirty: true });
                           await flushWorkspace("Cloud restore");
-                          localStorage.setItem(
-                            `levoks-cloud-revision:${project.projectId}`,
-                            String(remote.revision),
-                          );
+                          sessionStorage.setItem(key, String(remote.revision));
                           await refreshProjects();
                         })
                       }

@@ -1,0 +1,55 @@
+# Documented product completion plan
+
+Updated 2 October 2026. The user's direction is to **complete the documented product**, not to narrow it to a beta or prioritize launching. Product implementation and acceptance come first. Marketing, launch videos and publication are deferred.
+
+## Sources and completion rule
+
+- `levoks.md` defines the requested product. Its descriptions of intended capabilities are not proof that those capabilities exist.
+- `completion-matrix.md` tracks individual requirements; `element-functionality-audit.md` adds per-element acceptance contracts.
+- `fullstack-contracts.md`, `backend-compiler.md`, `semantic-architecture.md` and the operational documents describe later implementations and their boundaries. When older rows disagree, inspect the implementation and tests before updating the row.
+- `DESIGN.md` and `ui-quality.md` govern the existing editor. Preserve its graphite/violet visual system and working workflows.
+
+A feature is complete only when its actual UI configuration persists, enters validated IR, changes generated output, executes correctly, and handles invalid input, authorization, failure and recovery where applicable. Registry entries, diagrams, disabled controls, mocks and a successful build alone are insufficient. Each increment updates the relevant matrix rows with precise evidence and remaining work.
+
+## Initial findings
+
+The fresh local baseline passes TypeScript, ESLint with existing warnings, and all 88 unit tests (`.verification/launch-baseline-check.log`; the filename predates the scope clarification). This is not whole-product acceptance. The historical ledger's 125 requirements / 2 COMPLETE / 91 PARTIAL / 32 MISSING needs reconciliation with later work, rather than reuse as a current feature inventory.
+
+Confirmed stale descriptions include BE03 (query/path/response contracts now exist), BE34 (HTTP Request now executes), BE43–44 (bounded process-local cache operations exist), RT02–03 (explicit request/response mappings exist), AI conversation persistence and generator version `semantic-2`. Their remaining semantics still need acceptance; none become COMPLETE solely from this reconciliation.
+
+A current cloud-saving defect takes priority: the browser shares the expected cloud revision in localStorage, allowing a stale tab to adopt another tab's latest revision without loading its document. Expected revisions must belong to the document editing session and account. Test the actual browser race and MongoDB compare-and-save behavior.
+
+First increment implemented: tab/account-scoped revision tracking, server-side account-change rejection and correct same-origin validation when Next normalizes loopback URLs. All 89 unit tests, typecheck/lint, real Next/MongoDB concurrency/ownership testing and the two-tab Chromium regression pass. See the 2 October entry in `completion-matrix.md` for evidence and boundaries. The rest of the workstreams below remain open.
+
+Second increment implemented: typed model defaults and resource soft-delete lifecycle through inspector, persistence, compiler, downloaded application and real MongoDB/Express execution. Restore/purge preserve owner/tenant policy and transaction rollback; inferred CRUD now honors soft deletion. All 91 unit and 13 integration tests pass, as do the lifecycle/login browser checks and editor production build. BE04–05 remain partial for the explicit boundaries recorded in the matrix. The next backend gap is BE06: relation cardinality, foreign-key mapping and referential actions; the existing relation block still has no executable semantics.
+
+## Implementation sequence
+
+User-requested addition: generated applications can now choose MongoDB, PostgreSQL, MySQL, MariaDB or SQLite per service, and local or remote storage. Levoks's own project database remains unchanged. [Database choices](databases.md) records usage, real engine verification and remaining adapter/migration/container/provider boundaries. This work precedes returning to BE06 relations.
+
+| Order | Workstream / matrix references | Required result and acceptance |
+| --- | --- | --- |
+| 1 | Persistence and account ownership — PS01–05 | Fix cloud revision races and account changes; exercise real database ownership/concurrent saves. Add durable hosted assets with quotas/access/deletion, offline/background synchronization, explicit conflicts, recoverable project history, then team permissions and collaboration. Verify interrupted saves, duplicate requests, two tabs/devices, offline recovery and restore without silent overwrite. |
+| 2 | Existing backend semantics — BE02–23, BE45–54 | Complete endpoint headers/status/error contracts, model defaults and relation cardinality/referential actions, soft-delete restore/purge, validation, CORS/scoping, control-flow retry/loop/function scopes, policies and tenant coverage. Keep existing transaction, identity, health and audit guarantees. Verify generated applications against real MongoDB with negative authorization and rollback cases. |
+| 3 | Backend capability families — BE24–44, BE55–58 | Add durable event/queue/job/worker/scheduler execution, authenticated real-time channels/SSE/WebSockets, signed replay-safe webhooks, general notifications, payments, storage/upload/download and distributed cache/invalidation. Reuse existing encrypted vault, worker leases, bounded interpreter and provider boundaries. Each block needs inspector, schema, compiler, runtime, errors and execution evidence. Complete ordinary editable templates using these blocks; the Chat starter must become an actual chat application. |
+| 4 | Identity and provider lifecycle — BE09–17, BE51, GH01–06 | Complete generated OAuth/session/API-key strategies, administrative account/tenant/role management, cloud secret-manager adapter and injection; finish GitHub App/OAuth authorization, renewal and remote conflict/review workflows. Cover revocation, expiry, cross-tenant denial, retry/restart and credential redaction. Local transports prove adapter behavior; live provider acceptance stays explicit. |
+| 5 | Frontend authoring and parity — UX01–24, SEM01–12, element audit | Complete all element-specific behavior contracts and remaining inspector/export parity, arbitrary breakpoints, nested reusable components/structural overrides, transformed geometry/vector tools, responsive live-data widgets and durable history. Extend the existing semantic renderer/compiler instead of introducing a second implementation. Verify actual editing → save/reload → preview → downloaded standalone runtime, keyboard behavior and representative desktop/compact/mobile outputs. |
+| 6 | Routing, IR, IDE and AI — IR01–06, RT01–03, AI01–07, SB01 | Complete typed data flow and response-to-view behavior, dependency-aware compilation, source reconciliation, isolated full-stack/custom-code build and preview, semantic/dependency analysis, specialized IR agent orchestration and durable usage/budget controls. Keep review/checkpoint/stale-output protection. Never execute untrusted generated code inside the editor server. Fine-tuning requires an explicit dataset/evaluation/model artifact; prompting alone does not satisfy it. |
+| 7 | Product deployment and account plans — DP01–10, AI08 | Implement the documented full-stack deployment interface, provider capability model, environments/secrets, worker/database orchestration, domains/TLS, durable status/logs, health gates, release history/rollback, monitoring and backup restoration. Implement real plan entitlements, metering and billing. These remain product functionality even though launching Levoks is deferred. Verify on disposable infrastructure/provider sandboxes when available. |
+| 8 | Whole-product acceptance — QA01–04 | Finish browser/accessibility coverage, generated-project builds/runtime, container execution, concurrency/load, recovery and provider scenarios. Reconcile every remaining row and per-element contract. Passing a subset never silently removes a documented requirement. |
+
+Dependencies guide ordering: ownership/policies precede collaborative and real-time access; durable worker execution precedes queued notifications and schedules; object storage precedes hosted asset lifecycle; isolated execution precedes arbitrary source preview. Implementation can move to other internal work while a particular provider check lacks access.
+
+## How each increment is delivered
+
+1. Select concrete matrix rows and inspect their entire existing path before changing code.
+2. Implement the smallest complete behavior using current libraries and native platform capabilities. Add no placeholder feature registrations.
+3. Keep compatibility with saved projects and explicit diagnostics for unsupported configurations.
+4. Add focused behavioral regression coverage. Use real browser/database/runtime execution for the changed boundary; run the appropriate existing regression and production build checks.
+5. Record files, commands, results, limitations and the next unfinished requirement in the ledger. Keep credentials and temporary artifacts outside Git.
+
+Ponytail guides minimal implementations; Impeccable guides editor quality and error/recovery states. HyperFrames and Remotion are available for a documented video capability if one is established; neither is added as a dependency merely because the plugin is available. Website motion continues through the existing animation model/compiler.
+
+## External access
+
+OAuth, live GitHub/AI/hosting, cloud storage/secrets, payments and message delivery eventually require disposable test accounts and runtime credentials. Docker needs a working container runtime. Those requirements do not block implementing unrelated internal capabilities, and missing code is never classified as a credentials blocker. Record local, simulated-provider and live-provider evidence separately. No production publication or launch announcement is part of this plan.

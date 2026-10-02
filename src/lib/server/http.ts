@@ -16,7 +16,12 @@ export async function readJSON(
   maxBytes = MAX_PROJECT_BYTES,
 ): Promise<unknown> {
   const origin = request.headers.get("origin");
-  if (!origin || origin !== new URL(request.url).origin)
+  const target = new URL(request.url);
+  // NextURL normalizes loopback addresses to localhost. The HTTP Host retains
+  // the actual browser destination; forwarded host headers are not trusted here.
+  const host = request.headers.get("host");
+  if (host) target.host = host;
+  if (!origin || origin !== target.origin)
     throw new HttpError(403, "A same-origin request is required.");
   if (!request.headers.get("content-type")?.includes("application/json"))
     throw new HttpError(415, "Expected application/json.");

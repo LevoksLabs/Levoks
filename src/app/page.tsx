@@ -151,14 +151,17 @@ export default function Home() {
         {/* Top Header */}
         <header className="editor-header">
           <div className="header-left">
+            <button className="header-home" aria-label="Projects home" title="Projects home"
+              onClick={() => window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "projects" }))}>
             <img
               src="/levoks_logo.svg"
-              alt="Levoks"
+              alt=""
               className="header-logo-img"
               width={28}
               height={28}
             />
             <span className="header-title">levoks</span>
+            </button>
             {isBackendMode && (
               <span className="header-mode-badge">Backend</span>
             )}

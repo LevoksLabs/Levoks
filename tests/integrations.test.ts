@@ -36,6 +36,34 @@ test("API rejects cross-origin and oversized requests", async () => {
   assert.deepEqual(await readJSON(request({ ok: true })), { ok: true });
 });
 
+test("API origin checks preserve the incoming host when Next normalizes loopback URLs", async () => {
+  const incoming = (origin: string, forwardedHost = "127.0.0.1:3200") =>
+    new Request("http://localhost:3200/api/projects", {
+      method: "PUT",
+      headers: {
+        Host: "127.0.0.1:3200",
+        Origin: origin,
+        "X-Forwarded-Host": forwardedHost,
+        "Content-Type": "application/json",
+      },
+      body: '{"ok":true}',
+    });
+  assert.deepEqual(await readJSON(incoming("http://127.0.0.1:3200")), {
+    ok: true,
+  });
+  for (const origin of [
+    "http://localhost:3200",
+    "http://127.0.0.1:3201",
+    "https://127.0.0.1:3200",
+    "https://evil.test",
+    "null",
+  ])
+    await assert.rejects(
+      readJSON(incoming(origin, "evil.test")),
+      /same-origin/,
+    );
+});
+
 test("GitHub never writes if the branch head changed", async (t) => {
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => {

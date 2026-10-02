@@ -72,10 +72,16 @@ export async function PUT(request: Request) {
     const ownerId = await owner();
     const body = z
       .object({
+        ownerId: z.string().min(1),
         project: z.unknown(),
         revision: z.number().int().nonnegative(),
       })
       .parse(await readJSON(request));
+    if (body.ownerId !== ownerId)
+      throw new HttpError(
+        409,
+        "Your account changed. Reload cloud projects before saving.",
+      );
     let project;
     try {
       project = redactProject(parseProject(body.project));

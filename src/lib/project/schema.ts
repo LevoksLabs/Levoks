@@ -1,5 +1,6 @@
 import { requestMappingSchema, responseMappingSchema, failureSchema } from "@/lib/contracts";
 import { z } from "zod";
+import { databaseSchema } from "@/lib/backend/database";
 import { definitionFor } from "@/lib/elements/registry";
 import { customDefinitionSchema } from "@/lib/elements/custom";
 import { validateFiles } from "@/lib/codegen/files";
@@ -357,6 +358,7 @@ export const projectSchema = z.object({
           color: text,
           blocks: z.array(backendBlockSchema).max(1000),
           collapsed: z.boolean(),
+          database: databaseSchema.optional(),
           position: z.object({x:finite,y:finite}).optional(),
         }),
       )

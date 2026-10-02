@@ -15,7 +15,7 @@ export function observabilityRuntime(service: ServiceContainer) {
     .map(({ id, route, method }) => ({ id, route, method }));
   return `
 const crypto = require('node:crypto');
-const mongoose = require('mongoose');
+const mongoose = ${service.database && service.database.engine !== 'mongodb' ? "null" : "require('mongoose')"};
 const errors = ${JSON.stringify(error)}, audit = ${JSON.stringify(audit)}, endpoints = ${JSON.stringify(endpoints)};
 const requestLogging = ${JSON.stringify(service.blocks.some(b => b.type === 'middleware' && 'middlewareType' in b.config && b.config.middlewareType === 'logger'))};
 const pending = new Set();

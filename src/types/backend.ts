@@ -11,6 +11,7 @@ import {
   type ProgramConfig,
   type ControlConfig,
 } from "@/lib/backend/program-schema";
+import type { DatabaseConfig } from "@/lib/backend/database";
 import { healthSchema, type HealthConfig } from "@/lib/backend/health-schema";
 import { errorHandlerSchema, auditLogSchema, type ErrorHandlerConfig, type AuditLogConfig } from "@/lib/backend/observability-schema";
 export type { ErrorHandlerConfig, AuditLogConfig } from "@/lib/backend/observability-schema";
@@ -178,6 +179,7 @@ export interface BackendBlock {
 // ─── Service Container ───
 
 export interface ServiceContainer {
+  database?: DatabaseConfig;
   position?: {x:number;y:number};
   id: string;
   name: string;

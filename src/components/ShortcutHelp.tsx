@@ -52,8 +52,8 @@ export default function ShortcutHelp() {
         ))}
       </div>
       <footer>
-        Element editing and undo apply to the UI canvas. Backend and Routing use
-        their own selection and navigation.
+        Undo and redo restore shared project history across all canvases.
+        Selection and navigation follow the active canvas.
       </footer>
     </dialog>
   );

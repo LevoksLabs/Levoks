@@ -150,6 +150,13 @@ exports.createWorkflow = (program, models, database, observability, identity) =>
             const fields = new Set(modelBlock.config.fields.map(f => f.name).concat('_id'));
             const filter = mapValues(c.filter, context);
             const values = mapValues(c.values, context);
+            const mutation = ['update', 'delete', 'restore', 'purge'].includes(c.operation);
+            if (mutation && (!Object.keys(c.filter).length || Object.keys(filter).length !== Object.keys(c.filter).length)) throw new WorkflowError(400, 'Every mutation filter must resolve to a value');
+            const managed = ['_id', '__v', ...(modelBlock.config.timestamps ? ['createdAt', 'updatedAt'] : []), ...(modelBlock.config.softDelete ? ['deletedAt'] : [])];
+            if (Object.keys(values).some(field => managed.includes(field))) throw new WorkflowError(422, 'Model-managed fields cannot be assigned');
+            const lifecycle = ['restore', 'purge'].includes(c.operation);
+            if ((lifecycle || (c.deleted && c.deleted !== 'exclude')) && !modelBlock.config.softDelete) throw new WorkflowError(422, 'This operation requires a soft-delete model');
+            if (c.deleted && c.deleted !== 'exclude' && !['find', 'findOne', 'count', 'aggregate'].includes(c.operation)) throw new WorkflowError(422, 'Deleted-record selection applies only to reads');
             for (const field of [...Object.keys(filter), ...Object.keys(values), ...(c.sortField && c.operation !== 'aggregate' ? [c.sortField] : [])]) if (!fields.has(field)) throw new WorkflowError(422, 'Unknown model field: ' + field);
             const enforcedScope = Object.create(null);
             for (const policyId of new Set([...(endpoint.config.policyIds || []), ...(c.policyId ? [c.policyId] : [])])) {
@@ -163,7 +170,10 @@ exports.createWorkflow = (program, models, database, observability, identity) =>
             Object.assign(filter, enforcedScope);
             if (c.operation === 'create') Object.assign(values, enforcedScope);
             else for (const key of Object.keys(enforcedScope)) delete values[key];
-            if (modelBlock.config.softDelete) filter.deletedAt = null;
+            if (modelBlock.config.softDelete) {
+              if (lifecycle || c.deleted === 'only') filter.deletedAt = {$ne: null};
+              else if (c.deleted !== 'include') filter.deletedAt = null;
+            }
             const options = {session, maxTimeMS: Math.max(1, deadline - Date.now())};
             const page = c.page === undefined ? 1 : Number(resolve(c.page, context) ?? 1);
             if (!Number.isInteger(page) || page < 1 || page > 10000) throw new WorkflowError(400, 'Page must be between 1 and 10000');
@@ -196,6 +206,8 @@ exports.createWorkflow = (program, models, database, observability, identity) =>
               if (!Object.keys(c.filter).length) throw new WorkflowError(422, 'Update and delete require an explicit filter');
               if (c.operation === 'update') value = await model.findOneAndUpdate(filter, {$set: values}, {...options, new: true, runValidators: true}).lean();
               else if (c.operation === 'delete') value = modelBlock.config.softDelete ? await model.findOneAndUpdate(filter, {$set: {deletedAt: new Date()}}, {...options, new: true}).lean() : await model.findOneAndDelete(filter, options).lean();
+              else if (c.operation === 'restore') value = await model.findOneAndUpdate(filter, {$set: {deletedAt: null}}, {...options, new: true, runValidators: true}).lean();
+              else if (c.operation === 'purge') value = await model.findOneAndDelete(filter, options).lean();
               else throw new WorkflowError(422, 'Unsupported query operation');
               if (!value) throw new WorkflowError(404, 'Resource not found');
             }

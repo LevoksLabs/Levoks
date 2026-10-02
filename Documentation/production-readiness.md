@@ -1,5 +1,7 @@
 # Levoks implementation and release readiness
 
+**Current priority (2 October 2026):** complete the documented product; launching is deferred at the user's direction. Follow [the product completion plan](product-completion-plan.md). This document retains operational setup and verification history, not a claim of completion.
+
 The active requirement ledger is [completion-matrix.md](completion-matrix.md). The user confirmed `levoks.md` is the original PDF converted to Markdown. Prior passing checks establish only their tested subsets; every documented feature is tracked separately with execution and error-handling acceptance criteria. Implementation continues through the internal gaps; credentials block only the corresponding live integration.
 
 Stage 1 adds explicit generated backend workflows and the Property Inspector controls for queries, transactions, policies, roles/permissions, conditions, bounded collection loops, error branches, transforms, functions and responses. `npm run test:integration` runs generated workflow/model code against a real temporary MongoDB replica set; tenant/owner isolation and transaction rollback passed. Full feature status remains PARTIAL pending the remaining semantics and UI/execution coverage recorded in the matrix.
@@ -44,6 +46,8 @@ npm run dev
 ```
 
 Local editing, saving, JSON backup, and ZIP export work without provider credentials. Copy `.env.example` to `.env.local` when enabling OAuth or cloud storage. Configure `NEXTAUTH_URL`, a randomly generated `NEXTAUTH_SECRET`, and the selected OAuth provider's client ID and secret. Register `/api/auth/callback/github` or `/api/auth/callback/google` as the callback on the Levoks origin. Set `MONGODB_URI` with a database name to enable cloud projects.
+
+Cloud save revisions are scoped to the signed-in account and browser tab. Open an existing cloud project in each new tab before saving it; revisions shared by older versions through localStorage are intentionally ignored. A conflict preserves the current editor document: download a JSON backup before opening the newer cloud version. Tab reload retains its own cloud revision, and switching accounts starts an independent baseline. The server rejects saves when the request's account differs from the active session.
 
 AI and Vercel tokens currently remain in component memory for the current tab. GitHub Connections encrypts repository credentials on the server, and clears the input after connecting. GitHub login does not grant repository write access. Use a separate fine-grained token scoped to the intended repository with Contents read/write permission. Connections can create a private repository or branch, and initialize an empty repository. Run `npm run worker:github` with the same database and vault keyring as the web server; see [worker configuration and recovery](github-operations.md). Queued snapshots and saved cloud revisions persist after the tab closes; unsent local edits do not.
 
