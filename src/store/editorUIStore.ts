@@ -1,10 +1,15 @@
 import { create } from "zustand";
+import type { Breakpoint } from "@/lib/design";
 
 // Session-only editor chrome. These preferences are never application IR.
 export const useEditorUIStore = create<{
   tool: "select" | "hand" | "marquee" | "pen";
   canvasMode: "ui" | "backend" | "routes";
   breakpoint: "base" | "tablet" | "mobile";
+  responsiveEditing: boolean;
+  viewportSize: { width: number; height: number } | null;
+  setResponsiveEditing: (enabled: boolean) => void;
+  setBreakpoint: (breakpoint: Breakpoint) => void;
   motionOpen: boolean;
   trayWidth: number;
   inspectorWidth: number;
@@ -30,6 +35,10 @@ export const useEditorUIStore = create<{
   tool: "select",
   canvasMode: "ui",
   breakpoint: "base",
+  responsiveEditing: false,
+  viewportSize: null,
+  setResponsiveEditing: (enabled) => set({ responsiveEditing: enabled, ...(!enabled ? { breakpoint: "base", viewportSize: null } : {}) }),
+  setBreakpoint: (breakpoint) => set(state => ({ breakpoint, viewportSize: null, responsiveEditing: state.responsiveEditing || breakpoint !== "base" })),
   motionOpen: false,
   trayWidth: 252,
   inspectorWidth: 284,

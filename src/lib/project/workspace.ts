@@ -37,7 +37,7 @@ export function captureProject(id: string, name: string): ProjectDocument {
 
 export function restoreProject(value: unknown) {
   const project = parseProject(value);
-  useEditorUIStore.setState({ breakpoint: "base", tool: "select", motionOpen: false });
+  useEditorUIStore.setState({ breakpoint: "base", responsiveEditing: false, viewportSize: null, tool: "select", motionOpen: false });
   syncCounters([
     ...Object.keys(project.editor.elementsById),
     ...project.editor.pages.map((p) => p.id),

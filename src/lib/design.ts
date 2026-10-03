@@ -1,6 +1,19 @@
 import type { ElementNode, ElementLayout } from "@/types";
 export type Breakpoint = "base" | "tablet" | "mobile";
 export const BREAKPOINTS = { base: 1920, tablet: 1024, mobile: 600 } as const;
+export function breakpointForWidth(width: number): Breakpoint {
+  return width <= BREAKPOINTS.mobile ? "mobile" : width <= BREAKPOINTS.tablet ? "tablet" : "base";
+}
+export function canvasSize(
+  base: { width: number; height: number },
+  breakpoint: Breakpoint,
+  viewport: { width: number; height: number } | null,
+) {
+  return viewport ?? {
+    width: breakpoint === "mobile" ? 390 : breakpoint === "tablet" ? 820 : Math.max(320, base.width || 1920),
+    height: Math.max(200, base.height || 900),
+  };
+}
 export function resolveElement(
   element: ElementNode,
   breakpoint: Breakpoint,

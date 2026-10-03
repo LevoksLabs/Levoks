@@ -30,6 +30,7 @@ import {
 import { useEditorUIStore } from "@/store/editorUIStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { useCanvasNavigation } from "./useCanvasNavigation";
+import { canvasSize } from "@/lib/design";
 
 const MIN_ZOOM = 10;
 const MAX_ZOOM = 200;
@@ -114,8 +115,7 @@ const Canvas: React.FC = () => {
   const activePageTitle = activePage?.title || "Home";
   const activePageRoute = activePage?.route || "/";
 
-  const canvasWidth = ui.breakpoint === "mobile" ? 390 : ui.breakpoint === "tablet" ? 820 : Math.max(320, Number(canvasSettings.width) || 1920);
-  const canvasHeight = Math.max(200, Number(canvasSettings.height) || 900);
+  const { width: canvasWidth, height: canvasHeight } = canvasSize(canvasSettings, ui.breakpoint, ui.viewportSize);
   const activeRes = RESOLUTION_PRESETS.find((r) => r.width === canvasWidth);
   const canvasBackground = String(canvasSettings.backgroundColor || "#ffffff");
   const canvasHasGradient = /gradient\(/i.test(canvasBackground);
@@ -865,7 +865,7 @@ const Canvas: React.FC = () => {
         return;
       }
       if (!ds || e.pointerId !== ds.pointerId) return;
-      if (e.type === "pointercancel")
+      if (e.type === "pointercancel" || (!latestPointRef.current && e.clientX === ds.startX && e.clientY === ds.startY))
         useEditorStore.getState().endInteraction(true);
       else {
         latestPointRef.current = {
@@ -1440,7 +1440,7 @@ const Canvas: React.FC = () => {
             aria-label="Screen dimensions"
           >
             <strong>Screen dimensions</strong>
-            <span>Resize the artboard. Elements keep their positions.</span>
+            <span>{ui.responsiveEditing ? "Tablet and phone edits are saved separately from the desktop layout." : "Resize the artboard. Elements keep their positions."}</span>
             {[
               ["Desktop HD", 1920, 1080],
               ["Laptop", 1366, 768],
@@ -1454,7 +1454,6 @@ const Canvas: React.FC = () => {
                 key={String(label)}
                 aria-pressed={canvasWidth === width && canvasHeight === height}
                 onClick={(event) => {
-                  useEditorUIStore.setState({ breakpoint: "base" });
                   updateCanvasSettings({
                     width: Number(width),
                     height: Number(height),
@@ -1498,7 +1497,11 @@ const Canvas: React.FC = () => {
           </button>
         </div>
         <div className="resolution-controls">
-          <select aria-label="Editing breakpoint" value={ui.breakpoint} onChange={event => useEditorUIStore.setState({ breakpoint: event.target.value as "base" | "tablet" | "mobile" })}>
+          <label className="responsive-editing-toggle" title="Save tablet and phone layout changes separately. Desktop edits update the base layout.">
+            <input type="checkbox" checked={ui.responsiveEditing} onChange={event => ui.setResponsiveEditing(event.target.checked)} />
+            Responsive
+          </label>
+          <select aria-label="Editing breakpoint" value={ui.breakpoint} onChange={event => ui.setBreakpoint(event.target.value as "base" | "tablet" | "mobile")}>
             <option value="base">Desktop · base</option><option value="tablet">Tablet · ≤1024px</option><option value="mobile">Mobile · ≤600px</option>
           </select>
           <span className="resolution-label">

@@ -11,7 +11,7 @@ import {
 } from "./editorHelpers";
 
 import { useEditorUIStore } from "./editorUIStore";
-import { patchElement, patchLayout, resolveElement } from "@/lib/design";
+import { breakpointForWidth, canvasSize, patchElement, patchLayout, resolveElement } from "@/lib/design";
 import { groupElements, ungroupElements } from "@/lib/grouping";
 import { componentDefinition, componentInstance } from "@/lib/design-components";
 import { projectHistory, withProjectHistory } from "./projectHistory";
@@ -346,7 +346,7 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
         set(state => {
             const el = state.elementsById[id];
             if (!el) return state;
-            return { elementsById: { ...state.elementsById, [id]: updateLayout(el, { visible: !el.layout.visible }) } };
+            return { elementsById: { ...state.elementsById, [id]: updateLayout(el, { visible: !get().getElement(id)!.layout.visible }) } };
         });
     },
 
@@ -354,7 +354,7 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
         set(state => {
             const el = state.elementsById[id];
             if (!el) return state;
-            return { elementsById: { ...state.elementsById, [id]: updateLayout(el, { locked: !el.layout.locked }) } };
+            return { elementsById: { ...state.elementsById, [id]: updateLayout(el, { locked: !get().getElement(id)!.layout.locked }) } };
         });
     },
 
@@ -686,6 +686,17 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
     },
 
     updateCanvasSettings: (settings) => {
+        const ui = useEditorUIStore.getState();
+        if (settings.width !== undefined || settings.height !== undefined) {
+            if (ui.responsiveEditing) {
+                const current = canvasSize(get().canvasSettings, ui.breakpoint, ui.viewportSize);
+                const viewportSize = { width: settings.width ?? current.width, height: settings.height ?? current.height };
+                useEditorUIStore.setState({ viewportSize, breakpoint: breakpointForWidth(viewportSize.width) });
+                if (settings.backgroundColor !== undefined) set(state => ({ canvasSettings: { ...state.canvasSettings, backgroundColor: settings.backgroundColor! } }));
+                return;
+            }
+            useEditorUIStore.setState({ breakpoint: "base", viewportSize: null });
+        }
         set(state => ({ canvasSettings: { ...state.canvasSettings, ...settings } }));
     },
     setFrontendGeneratedCode: (code) => set({ frontendGeneratedCode: code }),

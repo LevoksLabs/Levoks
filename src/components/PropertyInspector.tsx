@@ -1,4 +1,5 @@
 "use client";
+import { canvasSize } from "@/lib/design";
 import ElementProperties from "./design/ElementProperties";
 import { ParameterControl, DimensionControl, LENGTH_UNITS } from "./design/ParameterControl";
 import SpacingControl from "./design/SpacingControl";
@@ -572,7 +573,7 @@ const ShadowControl: React.FC<{
 };
 
 const PropertyInspector: React.FC = () => {
-  useEditorUIStore(s => s.breakpoint);
+  const ui = useEditorUIStore();
   const {
     selectedElementIds,
     selectedElementId,
@@ -724,7 +725,7 @@ const PropertyInspector: React.FC = () => {
               <Field label="Width">
                 <input
                   type="number"
-                  value={canvasSettings.width}
+                  value={canvasSize(canvasSettings, ui.breakpoint, ui.viewportSize).width}
                   onChange={(e) => {
                     const parsed = parseNumericInput(e.target.value);
                     if (parsed === null) return;
@@ -735,7 +736,7 @@ const PropertyInspector: React.FC = () => {
               <Field label="Height">
                 <input
                   type="number"
-                  value={canvasSettings.height}
+                  value={canvasSize(canvasSettings, ui.breakpoint, ui.viewportSize).height}
                   onChange={(e) => {
                     const parsed = parseNumericInput(e.target.value);
                     if (parsed === null) return;

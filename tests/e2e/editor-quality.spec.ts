@@ -9,6 +9,8 @@ import { useEditorStore } from "../../src/store/editorStore";
 import { templates } from "../../src/templates";
 import { programFixture } from "../helpers/program-fixture";
 import { parseProject } from "../../src/lib/project/schema";
+import { generatedPreview } from "../../src/lib/project/preview";
+import { useEditorUIStore } from "../../src/store/editorUIStore";
 
 async function ready(page: Page) {
   await openEditor(page);
@@ -124,6 +126,66 @@ const shot = (page: Page, name: string) =>
     path: `.verification/ui-after-${name}.png`,
     animations: "disabled",
   });
+
+test("responsive checkbox saves screen-size edits while preserving desktop", async ({ page }) => {
+  await ready(page);
+  const data = await importProject(page);
+  const heading = page.locator(`[data-element-id="${data.heading}"]`);
+  await heading.click();
+  const x = page.locator(".inspector").getByLabel("X", { exact: true });
+  await expect(x).toHaveValue("96");
+  await page.getByRole("checkbox", { name: "Responsive", exact: true }).check();
+  await page.getByLabel("Screen size", { exact: true }).click();
+  await page.getByRole("button", { name: "Tablet portrait" }).click();
+  await expect(page.getByLabel("Editing breakpoint")).toHaveValue("tablet");
+  await expect(page.locator(".canvas-page")).toHaveCSS("width", "768px");
+  await x.fill("24");
+  await x.press("Enter");
+  await page.getByLabel("Screen size", { exact: true }).click();
+  await page.getByRole("button", { name: "Phone small" }).click();
+  await expect(page.getByLabel("Editing breakpoint")).toHaveValue("mobile");
+  await expect(page.locator(".canvas-page")).toHaveCSS("width", "375px");
+  await x.fill("12");
+  await x.press("Enter");
+  await page.getByLabel("Editing breakpoint").selectOption("base");
+  await expect(x).toHaveValue("96");
+  await expect(page.locator(".canvas-page")).toHaveCSS("width", "1280px");
+  await page.getByLabel("Editing breakpoint").selectOption("tablet");
+  await expect(x).toHaveValue("24");
+  await page.getByLabel("Editing breakpoint").selectOption("mobile");
+  await expect(x).toHaveValue("12");
+  await page.getByRole("checkbox", { name: "Responsive", exact: true }).uncheck();
+  await expect(x).toHaveValue("96");
+  await page.getByRole("button", { name: "Save project", exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Save project", exact: true })).toBeEnabled();
+  await page.getByLabel("Editing breakpoint").selectOption("mobile");
+  await heading.click();
+  await expect(x).toHaveValue("12");
+});
+
+test("generated website switches saved layouts with viewport width", async ({ page }) => {
+  const project = emptyProject();
+  restoreProject(project);
+  const store = useEditorStore.getState();
+  const id = store.addElement(templates.button, undefined, 96, 90);
+  useEditorUIStore.getState().setResponsiveEditing(true);
+  store.updateCanvasSettings({ width: 768, height: 1024 });
+  store.updateElementPosition(id, 24, 30);
+  store.updateElementSize(id, 200, 60);
+  store.updateCanvasSettings({ width: 375, height: 812 });
+  store.updateElementPosition(id, 12, 18);
+  store.updateElementSize(id, 160, 50);
+  const saved = parseProject(captureProject(project.id, project.name));
+  await page.setContent(generatedPreview(saved, saved.editor.activePageId));
+  const button = page.getByRole("button");
+  for (const [width, left] of [[1440, 96], [1024, 24], [768, 24], [600, 12], [320, 12], [1440, 96]]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(button).toHaveCSS("left", `${left}px`);
+    if (width <= 600) await expect(button).toHaveCSS("width", "160px");
+    else if (width <= 1024) await expect(button).toHaveCSS("width", "200px");
+  }
+});
 
 test("editor navigation, group movement, undo and inspector fields respect the interaction context", async ({
   page,

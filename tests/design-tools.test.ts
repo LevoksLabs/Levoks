@@ -9,9 +9,56 @@ import {
 } from "../src/lib/project/workspace";
 import { compileProject } from "../src/lib/project/compiler";
 import { parseProject } from "../src/lib/project/schema";
-import { resolveElement, vectorPath } from "../src/lib/design";
+import { breakpointForWidth, canvasSize, resolveElement, vectorPath } from "../src/lib/design";
 import { templates } from "../src/templates";
 import { groupElements, ungroupElements } from "../src/lib/grouping";
+
+test("responsive canvas sizes preserve the base, save overrides, undo and restore", () => {
+  const project = emptyProject();
+  restoreProject(project);
+  const store = useEditorStore.getState(), ui = useEditorUIStore.getState();
+  const id = store.addElement(templates.button, undefined, 80, 90);
+  const original = useEditorStore.getState().elementsById[id];
+  const baseSize = useEditorStore.getState().canvasSettings;
+  ui.setResponsiveEditing(true);
+  store.updateCanvasSettings({ width: 768, height: 1024 });
+  assert.equal(useEditorUIStore.getState().breakpoint, "tablet");
+  store.updateElementPosition(id, 24, 30);
+  store.updateElementSize(id, 250, 60);
+  store.updateElement(id, { styles: { color: "#123456" } });
+  store.updateCanvasSettings({ width: 375, height: 812 });
+  assert.equal(useEditorUIStore.getState().breakpoint, "mobile");
+  assert.equal(store.getElement(id)!.layout.w, 250);
+  store.updateElementPosition(id, 12, 18);
+  store.undo();
+  assert.equal(store.getElement(id)!.layout.x, 24);
+  store.redo();
+  assert.equal(store.getElement(id)!.layout.x, 12);
+  store.toggleVisibility(id);
+  store.toggleVisibility(id);
+  assert.equal(store.getElement(id)!.layout.visible, true);
+  store.updateCanvasSettings({ width: 430 });
+  assert.deepEqual(useEditorUIStore.getState().viewportSize, { width: 430, height: 812 });
+  assert.equal(store.getElement(id)!.layout.x, 12);
+  assert.deepEqual(useEditorStore.getState().canvasSettings, baseSize);
+  assert.deepEqual(useEditorStore.getState().elementsById[id].layout, original.layout);
+  ui.setBreakpoint("base");
+  assert.deepEqual(canvasSize(baseSize, "base", useEditorUIStore.getState().viewportSize), { width: baseSize.width, height: baseSize.height });
+  assert.equal(store.getElement(id)!.layout.x, 80);
+  const saved = parseProject(captureProject(project.id, project.name));
+  restoreProject(saved);
+  ui.setBreakpoint("mobile");
+  assert.equal(store.getElement(id)!.layout.x, 12);
+  assert.equal(store.getElement(id)!.styles.color, "#123456");
+  const css = compileProject(saved).files["frontend/app/page.css"];
+  assert.match(css, /max-width: 600px/);
+  assert.match(css, /left: 0\.750rem/);
+  ui.setResponsiveEditing(false);
+  assert.equal(store.getElement(id)!.layout.x, 80);
+  store.updateCanvasSettings({ width: 1280, height: 900 });
+  assert.equal(useEditorStore.getState().canvasSettings.width, 1280);
+  assert.deepEqual([600, 601, 1024, 1025].map(breakpointForWidth), ["mobile", "tablet", "tablet", "base"]);
+});
 
 test("ungrouping preserves wrappers with compositing effects instead of silently losing appearance", () => {
   restoreProject(emptyProject()); const store = useEditorStore.getState();

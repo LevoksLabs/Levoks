@@ -8,7 +8,7 @@ import { ICON_PATHS } from "@/lib/icon-paths";
 import GeneratedPreview from "./design/GeneratedPreview";
 import VectorShape from "./design/VectorShape";
 import { assetElement } from "@/lib/design-assets";
-import { resolveElement, fontFamily } from "@/lib/design";
+import { canvasSize, resolveElement, fontFamily } from "@/lib/design";
 import { useEditorUIStore } from "@/store/editorUIStore";
 import { useEditorStore } from "@/store/editorStore";
 import { resolveAllRoutes, simulateServiceBlock, ResolvedRoute } from "@/lib/routingEngine";
@@ -325,6 +325,7 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
 
     const [generated, setGenerated] = useState(true);
     const breakpoint = useEditorUIStore(s => s.breakpoint);
+    const viewportSize = useEditorUIStore(s => s.viewportSize);
 
     // Current page being viewed
     const [currentPageId, setCurrentPageId] = useState(activePageId || pages[0]?.id || "");
@@ -339,8 +340,7 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
     const currentPage = pages.find((p) => p.id === currentPageId);
     const pageRootIds = currentPageId === activePageId ? rootIds : (pageElementMap?.[currentPageId] || []);
 
-    const canvasWidth = breakpoint === "mobile" ? 390 : breakpoint === "tablet" ? 820 : Math.max(320, Number(canvasSettings.width) || 1280);
-    const canvasHeight = Math.max(200, Number(canvasSettings.height) || 900);
+    const { width: canvasWidth, height: canvasHeight } = canvasSize(canvasSettings, breakpoint, viewportSize);
     const canvasBackground = String(canvasSettings.backgroundColor || "#ffffff");
     const canvasHasGradient = /gradient\(/i.test(canvasBackground);
 
@@ -436,7 +436,7 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
                 </div>
 
                 <select aria-label="Preview mode" value={generated ? "generated" : "design"} onChange={event => setGenerated(event.target.value === "generated")}><option value="design">Design simulation</option><option value="generated">Generated frontend</option></select>
-                <select aria-label="Preview breakpoint" value={breakpoint} onChange={event => useEditorUIStore.setState({ breakpoint: event.target.value as "base" | "tablet" | "mobile" })}><option value="base">Desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select>
+                <select aria-label="Preview breakpoint" value={breakpoint} onChange={event => useEditorUIStore.getState().setBreakpoint(event.target.value as "base" | "tablet" | "mobile")}><option value="base">Desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select>
                 {/* Page tabs */}
                 <div className="live-preview-tabs">
                     {pages.map((page) => (
