@@ -18,6 +18,9 @@ import { projectHistory, withProjectHistory } from "./projectHistory";
 type NewElement = Omit<ElementNode, "id" | "parentId" | "children" | "layout"> & { layout?: Partial<ElementNode["layout"]>; children?: NewElement[] };
 
 interface EditorStore {
+    responsiveBaseline: Record<string, ElementNode> | null;
+    beginResponsiveEdit: () => void;
+    finishResponsiveEdit: (cancel?: boolean) => void;
     customElements: Record<string, CustomDefinition>;
     setCustomElement: (id: string, value: CustomDefinition) => void;
     assets: Record<string, DesignAsset>;
@@ -155,6 +158,17 @@ function buildTemplateElements(
 const defaultPageId = generatePageId();
 
 export const useEditorStore = create<EditorStore>(withProjectHistory("editor", ["customElements", "assets", "tokens", "components", "elementsById", "rootIds", "globalRootIds", "pages", "activePageId", "pageElementMap", "canvasSettings"], (set, get) => ({
+    responsiveBaseline: null,
+    beginResponsiveEdit: () => {
+        if (get().responsiveBaseline) return;
+        projectHistory.beginBatch();
+        set({ responsiveBaseline: get().elementsById });
+    },
+    finishResponsiveEdit: (cancel = false) => {
+        if (!get().responsiveBaseline) return;
+        projectHistory.endBatch(cancel);
+        set({ responsiveBaseline: null });
+    },
     customElements: {},
     setCustomElement: (id, value) => {
         const definition = customDefinitionSchema.parse(value);
@@ -625,6 +639,7 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
     },
 
     switchPage: (id) => {
+        get().finishResponsiveEdit(true);
         const state = get();
         if (id === state.activePageId) return;
         if (!state.pages.find(p => p.id === id)) return;
@@ -688,14 +703,14 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
     updateCanvasSettings: (settings) => {
         const ui = useEditorUIStore.getState();
         if (settings.width !== undefined || settings.height !== undefined) {
-            if (ui.responsiveEditing) {
+            if (settings.width !== undefined || ui.viewportSize || ui.breakpoint !== "base") {
+                if (settings.width !== undefined) get().finishResponsiveEdit(true);
                 const current = canvasSize(get().canvasSettings, ui.breakpoint, ui.viewportSize);
                 const viewportSize = { width: settings.width ?? current.width, height: settings.height ?? current.height };
                 useEditorUIStore.setState({ viewportSize, breakpoint: breakpointForWidth(viewportSize.width) });
                 if (settings.backgroundColor !== undefined) set(state => ({ canvasSettings: { ...state.canvasSettings, backgroundColor: settings.backgroundColor! } }));
                 return;
             }
-            useEditorUIStore.setState({ breakpoint: "base", viewportSize: null });
         }
         set(state => ({ canvasSettings: { ...state.canvasSettings, ...settings } }));
     },
@@ -709,4 +724,7 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
 projectHistory.subscribe(scope => {
     useEditorStore.setState({ canUndo: projectHistory.canUndo, canRedo: projectHistory.canRedo });
     if (scope) useEditorUIStore.setState({ canvasMode: scope === "backend" ? "backend" : scope === "routing" ? "routes" : "ui" });
+});
+useEditorUIStore.subscribe((next, previous) => {
+    if (next.breakpoint !== previous.breakpoint) useEditorStore.getState().finishResponsiveEdit(true);
 });

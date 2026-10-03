@@ -32,7 +32,6 @@ import {
   Undo2,
   Redo2,
   Play,
-  ScanEye,
   Keyboard,
   PanelRightClose,
   PanelRightOpen,
@@ -187,17 +186,6 @@ export default function ProjectEditor() {
             >
               <Play size={14} /> Preview
             </button>
-            {!isBackendMode && !isRoutingMode && (
-              <button
-                className="header-icon-btn"
-                aria-label="Hide off-screen elements"
-                aria-pressed={ui.hideOverflow}
-                title="Hide elements outside the screen"
-                onClick={() => ui.toggle("hideOverflow")}
-              >
-                <ScanEye size={16} />
-              </button>
-            )}
             <UserMenu onOpenProfile={() => setProfileModalOpen(true)} />
           </div>
         </header>

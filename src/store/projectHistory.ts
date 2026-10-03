@@ -14,6 +14,7 @@ let depth = 0,
   suspended = 0,
   restoring = false;
 let gesture: { before: Snapshot; scope: string } | undefined;
+let batch: { before: Snapshot; past: Entry[]; future: Entry[] } | undefined;
 let settle = () => {};
 const capture = (): Snapshot =>
   new Map(
@@ -67,7 +68,31 @@ export const projectHistory = {
     past = [];
     future = [];
     gesture = undefined;
+    batch = undefined;
     notify();
+  },
+  // Responsive editing spans several ordinary drag/inspector gestures.
+  beginBatch() {
+    if (batch) return;
+    this.end();
+    batch = { before: capture(), past, future };
+    past = [];
+    future = [];
+    notify();
+  },
+  endBatch(cancel = false) {
+    if (!batch) return;
+    this.end();
+    const active = batch;
+    batch = undefined;
+    past = active.past;
+    future = active.future;
+    if (cancel) apply(active.before);
+    else commit(active.before, "editor");
+    notify();
+  },
+  savedSlice(scope: string) {
+    return batch?.before.get(scope);
   },
   without<T>(action: () => T): T {
     suspended++;

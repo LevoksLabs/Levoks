@@ -8,9 +8,6 @@ import ContextMenu from "./ContextMenu";
 import { useDroppable } from "@dnd-kit/core";
 import { useRef, useState, useCallback, useEffect } from "react";
 import {
-  Monitor,
-  Tablet,
-  Smartphone,
   Globe,
   Lock,
   Unlock,
@@ -26,6 +23,7 @@ import {
   PenTool,
   Film,
   Scan,
+  ScanEye,
 } from "lucide-react";
 import { useEditorUIStore } from "@/store/editorUIStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
@@ -39,11 +37,6 @@ const ZOOM_LEVELS = [25, 50, 75, 100, 125, 150, 200];
 const GRID_SIZE = 8;
 const SNAP_THRESHOLD = 6;
 
-const RESOLUTION_PRESETS = [
-  { label: "Desktop", width: 1280, icon: <Monitor size={14} /> },
-  { label: "Tablet", width: 768, icon: <Tablet size={14} /> },
-  { label: "Mobile", width: 375, icon: <Smartphone size={14} /> },
-];
 
 // findParentId is no longer needed — elements have explicit parentId
 
@@ -67,6 +60,10 @@ const Canvas: React.FC = () => {
     canvasSettings,
     tokens,
     updateCanvasSettings,
+    elementsById,
+    responsiveBaseline,
+    beginResponsiveEdit,
+    finishResponsiveEdit,
   } = useEditorStore();
   // ─── Transform matrix state (Figma-style) ───
   const [panX, setPanX] = useState(0);
@@ -116,7 +113,8 @@ const Canvas: React.FC = () => {
   const activePageRoute = activePage?.route || "/";
 
   const { width: canvasWidth, height: canvasHeight } = canvasSize(canvasSettings, ui.breakpoint, ui.viewportSize);
-  const activeRes = RESOLUTION_PRESETS.find((r) => r.width === canvasWidth);
+  const responsiveChanged = responsiveBaseline !== null && JSON.stringify(elementsById) !== JSON.stringify(responsiveBaseline);
+  useEffect(() => () => useEditorStore.getState().finishResponsiveEdit(true), []);
   const canvasBackground = String(canvasSettings.backgroundColor || "#ffffff");
   const canvasHasGradient = /gradient\(/i.test(canvasBackground);
   const visibleCanvasHeight = pendingHeight ?? canvasHeight;
@@ -1225,6 +1223,20 @@ const Canvas: React.FC = () => {
           </button>
         </div>
         <div className="canvas-topbar-right">
+          {(ui.viewportSize || ui.breakpoint !== "base") && (
+            <div className="canvas-responsive-actions">
+              <button
+                className="canvas-responsive-toggle"
+                aria-pressed={responsiveBaseline !== null}
+                onClick={() => responsiveBaseline ? finishResponsiveEdit(true) : beginResponsiveEdit()}
+                title="Adjust this screen's layout, then save or cancel your changes"
+              >Responsive</button>
+              {responsiveChanged && <>
+                <button className="canvas-resize-save" aria-label="Save responsive changes" onClick={() => finishResponsiveEdit()}>Save</button>
+                <button className="canvas-resize-cancel" aria-label="Cancel responsive changes" onClick={() => finishResponsiveEdit(true)}>Cancel</button>
+              </>}
+            </div>
+          )}
           <span className="page-label">
             {canvasWidth} × {canvasHeight}
           </span>
@@ -1440,7 +1452,7 @@ const Canvas: React.FC = () => {
             aria-label="Screen dimensions"
           >
             <strong>Screen dimensions</strong>
-            <span>{ui.responsiveEditing ? "Tablet and phone edits are saved separately from the desktop layout." : "Resize the artboard. Elements keep their positions."}</span>
+            <span>Choose a screen, then click Responsive above the canvas to adjust its layout.</span>
             {[
               ["Desktop HD", 1920, 1080],
               ["Laptop", 1366, 768],
@@ -1478,6 +1490,7 @@ const Canvas: React.FC = () => {
           </button>
           <button title="Pen (P)" aria-label="Pen tool" aria-pressed={ui.tool === "pen"} onClick={() => ui.setTool("pen")}><PenTool size={16} /></button>
           <button title="Motion timeline" aria-label="Motion timeline" aria-pressed={ui.motionOpen} onClick={() => useEditorUIStore.setState({ motionOpen: !ui.motionOpen })}><Film size={16} /></button>
+          <button title="Hide elements outside the screen" aria-label="Hide off-screen elements" aria-pressed={ui.hideOverflow} onClick={() => ui.toggle("hideOverflow")}><ScanEye size={16} /></button>
           <span className="dock-divider" />
           <button
             title="Snap to guides"
@@ -1495,18 +1508,6 @@ const Canvas: React.FC = () => {
           >
             {ui.viewportLocked ? <Lock size={15} /> : <Unlock size={15} />}
           </button>
-        </div>
-        <div className="resolution-controls">
-          <label className="responsive-editing-toggle" title="Save tablet and phone layout changes separately. Desktop edits update the base layout.">
-            <input type="checkbox" checked={ui.responsiveEditing} onChange={event => ui.setResponsiveEditing(event.target.checked)} />
-            Responsive
-          </label>
-          <select aria-label="Editing breakpoint" value={ui.breakpoint} onChange={event => ui.setBreakpoint(event.target.value as "base" | "tablet" | "mobile")}>
-            <option value="base">Desktop · base</option><option value="tablet">Tablet · ≤1024px</option><option value="mobile">Mobile · ≤600px</option>
-          </select>
-          <span className="resolution-label">
-            {activeRes?.label || "Custom"} • {canvasWidth}px
-          </span>
         </div>
         <div className="zoom-controls">
           <button

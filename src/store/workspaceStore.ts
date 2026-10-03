@@ -254,6 +254,7 @@ export function initializeWorkspace(projectId?: string): Promise<void> {
           "tokens",
           "components",
           "elementsById",
+          "responsiveBaseline",
           "rootIds",
           "globalRootIds",
           "pages",

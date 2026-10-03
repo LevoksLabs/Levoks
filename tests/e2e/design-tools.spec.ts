@@ -256,11 +256,15 @@ test("responsive overrides, token bindings and component instances survive save 
   const element = page.locator(`.canvas-page [data-element-id="${button}"]`),
     inspector = page.locator(".inspector");
   await element.click();
-  await page.getByLabel("Editing breakpoint").selectOption("mobile");
+  await page.getByLabel("Screen size", { exact: true }).click();
+  await page.getByRole("button", { name: "Phone small" }).click();
+  await page.getByRole("button", { name: "Responsive", exact: true }).click();
   await inspector.getByLabel("X", { exact: true }).fill("24");
   await inspector.getByLabel("W", { exact: true }).fill("280");
   await expect(element).toHaveCSS("left", "24px");
-  await page.getByLabel("Editing breakpoint").selectOption("base");
+  await page.getByRole("button", { name: "Save responsive changes" }).click();
+  await page.getByLabel("Screen size", { exact: true }).click();
+  await page.getByRole("button", { name: "Desktop compact" }).click();
   await expect(element).toHaveCSS("left", "80px");
   await page
     .getByRole("button", { name: "Design library", exact: true })
@@ -291,7 +295,8 @@ test("responsive overrides, token bindings and component instances survive save 
   await expect(
     page.getByRole("button", { name: "Save project", exact: true }),
   ).toBeEnabled();
-  await page.getByLabel("Editing breakpoint").selectOption("mobile");
+  await page.getByLabel("Screen size", { exact: true }).click();
+  await page.getByRole("button", { name: "Phone small" }).click();
   await expect(element).toHaveCSS("width", "280px");
   await page.getByRole("button", { name: "Preview", exact: true }).click();
   await page.getByLabel("Preview mode").selectOption("generated");

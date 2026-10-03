@@ -10,7 +10,6 @@ import { templates } from "../../src/templates";
 import { programFixture } from "../helpers/program-fixture";
 import { parseProject } from "../../src/lib/project/schema";
 import { generatedPreview } from "../../src/lib/project/preview";
-import { useEditorUIStore } from "../../src/store/editorUIStore";
 
 async function ready(page: Page) {
   await openEditor(page);
@@ -127,39 +126,62 @@ const shot = (page: Page, name: string) =>
     animations: "disabled",
   });
 
-test("responsive checkbox saves screen-size edits while preserving desktop", async ({ page }) => {
+test("responsive top bar saves or cancels adjustments and keeps the dock clean", async ({ page }) => {
   await ready(page);
   const data = await importProject(page);
   const heading = page.locator(`[data-element-id="${data.heading}"]`);
   await heading.click();
   const x = page.locator(".inspector").getByLabel("X", { exact: true });
   await expect(x).toHaveValue("96");
-  await page.getByRole("checkbox", { name: "Responsive", exact: true }).check();
+  const responsive = page.getByRole("button", { name: "Responsive", exact: true });
+  const save = page.getByRole("button", { name: "Save responsive changes" });
+  const cancel = page.getByRole("button", { name: "Cancel responsive changes" });
+  await expect(page.getByRole("checkbox", { name: "Responsive" })).toHaveCount(0);
+  await expect(page.locator(".canvas-zoom-bar").getByText("Responsive", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".canvas-zoom-bar").getByRole("button", { name: "Hide off-screen elements" })).toBeVisible();
   await page.getByLabel("Screen size", { exact: true }).click();
   await page.getByRole("button", { name: "Tablet portrait" }).click();
-  await expect(page.getByLabel("Editing breakpoint")).toHaveValue("tablet");
   await expect(page.locator(".canvas-page")).toHaveCSS("width", "768px");
+  await expect(responsive).toHaveCSS("opacity", "0.8");
+  await responsive.click();
+  await expect(responsive).toHaveCSS("opacity", "1");
+  await expect(save).toHaveCount(0);
   await x.fill("24");
   await x.press("Enter");
+  await expect(save).toBeVisible();
+  await cancel.click();
+  await expect(x).toHaveValue("96");
+  await expect(responsive).toHaveCSS("opacity", "0.8");
+  await expect(save).toHaveCount(0);
+  await responsive.click();
+  await x.fill("24");
+  await x.press("Enter");
+  await save.click();
+  await expect(responsive).toHaveCSS("opacity", "0.8");
   await page.getByLabel("Screen size", { exact: true }).click();
   await page.getByRole("button", { name: "Phone small" }).click();
-  await expect(page.getByLabel("Editing breakpoint")).toHaveValue("mobile");
   await expect(page.locator(".canvas-page")).toHaveCSS("width", "375px");
+  await responsive.click();
   await x.fill("12");
   await x.press("Enter");
-  await page.getByLabel("Editing breakpoint").selectOption("base");
+  await shot(page, "responsive-pending");
+  await save.click();
+  await expect(cancel).toHaveCount(0);
+  await page.getByLabel("Screen size", { exact: true }).click();
+  await page.getByRole("button", { name: "Desktop compact" }).click();
   await expect(x).toHaveValue("96");
   await expect(page.locator(".canvas-page")).toHaveCSS("width", "1280px");
-  await page.getByLabel("Editing breakpoint").selectOption("tablet");
+  await page.getByLabel("Screen size", { exact: true }).click();
+  await page.getByRole("button", { name: "Tablet portrait" }).click();
   await expect(x).toHaveValue("24");
-  await page.getByLabel("Editing breakpoint").selectOption("mobile");
+  await page.getByLabel("Screen size", { exact: true }).click();
+  await page.getByRole("button", { name: "Phone small" }).click();
   await expect(x).toHaveValue("12");
-  await page.getByRole("checkbox", { name: "Responsive", exact: true }).uncheck();
-  await expect(x).toHaveValue("96");
   await page.getByRole("button", { name: "Save project", exact: true }).click();
   await page.reload();
   await expect(page.getByRole("button", { name: "Save project", exact: true })).toBeEnabled();
-  await page.getByLabel("Editing breakpoint").selectOption("mobile");
+  await page.getByLabel("Screen size", { exact: true }).click();
+  await page.getByRole("button", { name: "Phone small" }).click();
   await heading.click();
   await expect(x).toHaveValue("12");
 });
@@ -169,7 +191,6 @@ test("generated website switches saved layouts with viewport width", async ({ pa
   restoreProject(project);
   const store = useEditorStore.getState();
   const id = store.addElement(templates.button, undefined, 96, 90);
-  useEditorUIStore.getState().setResponsiveEditing(true);
   store.updateCanvasSettings({ width: 768, height: 1024 });
   store.updateElementPosition(id, 24, 30);
   store.updateElementSize(id, 200, 60);
@@ -455,7 +476,7 @@ test("context menus, group clipboard, page controls and the floating assistant w
   await shot(page, "pages");
 });
 
-test("screen presets persist and off-screen visibility stays an editor-only control", async ({
+test("screen presets preserve the base and off-screen visibility stays an editor-only control", async ({
   page,
 }) => {
   await ready(page);
@@ -483,7 +504,7 @@ test("screen presets persist and off-screen visibility stays an editor-only cont
   ).toBeEnabled();
   await expect(
     page.locator(".inspector").getByLabel("Width", { exact: true }),
-  ).toHaveValue("768");
+  ).toHaveValue("1920");
   await expect(page.locator(".canvas-page")).toHaveCSS("overflow", "visible");
   await expect
     .poll(async () => {

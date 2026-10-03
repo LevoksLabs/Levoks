@@ -89,12 +89,19 @@ test("Tabs inspector changes reach canvas, history, saved IR, preview and export
     "background-color",
     "rgba(0, 0, 0, 0)",
   );
-  await page.getByLabel("Editing breakpoint").selectOption("tablet");
+  await page.getByLabel("Screen size", { exact: true }).click();
+  await page.getByRole("button", { name: "Tablet portrait" }).click();
+  await page.getByRole("button", { name: "Responsive", exact: true }).click();
   await exact(page, "W", "500");
-  await page.getByLabel("Editing breakpoint").selectOption("mobile");
+  await page.getByRole("button", { name: "Save responsive changes" }).click();
+  await page.getByLabel("Screen size", { exact: true }).click();
+  await page.getByRole("button", { name: "Phone small" }).click();
+  await page.getByRole("button", { name: "Responsive", exact: true }).click();
   await exact(page, "X", "12");
   await exact(page, "W", "350");
-  await page.getByLabel("Editing breakpoint").selectOption("base");
+  await page.getByRole("button", { name: "Save responsive changes" }).click();
+  await page.getByLabel("Screen size", { exact: true }).click();
+  await page.getByRole("button", { name: "Desktop compact" }).click();
   await expect(tab).toHaveCSS("width", "600px");
   await mkdir(".verification/functional", { recursive: true });
   await page.screenshot({

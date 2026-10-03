@@ -11,9 +11,9 @@ import type { ElementNode, ComponentDefinition } from "@/types";
 projectHistory.reconcile(reconcileRouting);
 
 export function captureProject(id: string, name: string): ProjectDocument {
-  const e = useEditorStore.getState();
-  const b = useBackendStore.getState();
-  const r = useRoutingStore.getState();
+  const e = { ...useEditorStore.getState(), ...projectHistory.savedSlice("editor") };
+  const b = { ...useBackendStore.getState(), ...projectHistory.savedSlice("backend") };
+  const r = { ...useRoutingStore.getState(), ...projectHistory.savedSlice("routing") };
   return {
     schemaVersion: 1,
     id,
@@ -37,12 +37,13 @@ export function captureProject(id: string, name: string): ProjectDocument {
 
 export function restoreProject(value: unknown) {
   const project = parseProject(value);
-  useEditorUIStore.setState({ breakpoint: "base", responsiveEditing: false, viewportSize: null, tool: "select", motionOpen: false });
+  useEditorUIStore.setState({ breakpoint: "base", viewportSize: null, tool: "select", motionOpen: false });
   syncCounters([
     ...Object.keys(project.editor.elementsById),
     ...project.editor.pages.map((p) => p.id),
   ]);
   useEditorStore.setState({
+    responsiveBaseline: null,
     customElements: project.editor.customElements || {},
     ...project.editor,
     assets: project.editor.assets || {}, tokens: project.editor.tokens || {}, components: (project.editor.components || {}) as Record<string, ComponentDefinition>,

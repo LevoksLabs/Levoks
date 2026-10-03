@@ -20,7 +20,6 @@ test("responsive canvas sizes preserve the base, save overrides, undo and restor
   const id = store.addElement(templates.button, undefined, 80, 90);
   const original = useEditorStore.getState().elementsById[id];
   const baseSize = useEditorStore.getState().canvasSettings;
-  ui.setResponsiveEditing(true);
   store.updateCanvasSettings({ width: 768, height: 1024 });
   assert.equal(useEditorUIStore.getState().breakpoint, "tablet");
   store.updateElementPosition(id, 24, 30);
@@ -53,11 +52,45 @@ test("responsive canvas sizes preserve the base, save overrides, undo and restor
   const css = compileProject(saved).files["frontend/app/page.css"];
   assert.match(css, /max-width: 600px/);
   assert.match(css, /left: 0\.750rem/);
-  ui.setResponsiveEditing(false);
+  ui.setBreakpoint("base");
   assert.equal(store.getElement(id)!.layout.x, 80);
   store.updateCanvasSettings({ width: 1280, height: 900 });
-  assert.equal(useEditorStore.getState().canvasSettings.width, 1280);
+  assert.deepEqual(useEditorStore.getState().canvasSettings, baseSize);
   assert.deepEqual([600, 601, 1024, 1025].map(breakpointForWidth), ["mobile", "tablet", "tablet", "base"]);
+});
+
+test("responsive adjustments are provisional, cancel restores positions, and save is one undo step", () => {
+  const project = emptyProject();
+  restoreProject(project);
+  const store = useEditorStore.getState();
+  const id = store.addElement(templates.button, undefined, 80, 90);
+  store.updateCanvasSettings({ width: 375, height: 812 });
+  store.beginResponsiveEdit();
+  store.beginInteraction();
+  store.updateElementPosition(id, 12, 18);
+  store.endInteraction();
+  store.updateElementSize(id, 160, 50);
+  assert.equal(store.getElement(id)!.layout.x, 12);
+  assert.equal(captureProject(project.id, project.name).editor.elementsById[id].responsive, undefined);
+  store.finishResponsiveEdit(true);
+  assert.equal(store.getElement(id)!.layout.x, 80);
+  assert.equal(useEditorStore.getState().canRedo, false);
+  store.beginResponsiveEdit();
+  assert.equal(useEditorStore.getState().canUndo, false);
+  store.updateElementPosition(id, 24, 30);
+  store.updateElementSize(id, 170, 55);
+  store.finishResponsiveEdit();
+  const saved = captureProject(project.id, project.name);
+  assert.equal(saved.editor.elementsById[id].responsive!.mobile!.layout!.x, 24);
+  store.undo();
+  assert.equal(store.getElement(id)!.layout.x, 80);
+  store.redo();
+  assert.equal(store.getElement(id)!.layout.x, 24);
+  store.beginResponsiveEdit();
+  store.updateElementPosition(id, 40, 50);
+  store.updateCanvasSettings({ width: 768, height: 1024 });
+  assert.equal(useEditorStore.getState().responsiveBaseline, null);
+  assert.equal(resolveElement(useEditorStore.getState().elementsById[id], "mobile").layout.x, 24);
 });
 
 test("ungrouping preserves wrappers with compositing effects instead of silently losing appearance", () => {
