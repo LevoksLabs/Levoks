@@ -1,8 +1,9 @@
+import { accountStorageKey } from "./account-scope";
 export interface ConversationEntry { id: string; projectId: string; createdAt: string; prompt: string; summary: string; outcome: "review" | "applied" | "discarded"; tokens: number | null }
 let pending: Promise<IDBDatabase> | undefined;
 function database() {
   if (!pending) pending = new Promise((resolve, reject) => {
-    const request = indexedDB.open("levoks-conversations", 1);
+    const request = indexedDB.open(accountStorageKey("levoks-conversations"), 1);
     request.onupgradeneeded = () => { request.result.createObjectStore("messages", { keyPath: "id" }).createIndex("projectId", "projectId"); };
     request.onerror = () => { pending = undefined; reject(request.error); };
     request.onblocked = () => { pending = undefined; reject(new Error("Close older Levoks tabs to open conversation storage.")); };

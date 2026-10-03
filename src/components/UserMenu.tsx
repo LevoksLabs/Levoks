@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { flushWorkspace } from "@/store/workspaceStore";
 import {
   User,
   LogOut,
@@ -200,7 +201,9 @@ export default function UserMenu({ onOpenProfile }: UserMenuProps) {
           <button
             role="menuitem" tabIndex={-1}
             className="user-menu-item user-menu-signout"
-            onClick={() => signOut({ callbackUrl: "/" })}
+            onClick={() => void flushWorkspace().then(() => signOut({ callbackUrl: "/" })).catch(() => {
+              window.alert("Your edits could not be saved. Download a project backup before signing out.");
+            })}
           >
             <LogOut size={14} />
             Sign Out

@@ -1,4 +1,5 @@
 import { projectHistory } from "./projectHistory";
+import { accountStorageKey } from "@/lib/project/account-scope";
 import { reconcileRouting } from "@/lib/project/links";
 import { create } from "zustand";
 import { useEditorStore } from "./editorStore";
@@ -96,7 +97,7 @@ export async function flushWorkspace(label?: string): Promise<void> {
             : "Unsaved changes",
         error: "",
       });
-      localStorage.setItem("levoks-active-project", state.id);
+      localStorage.setItem(accountStorageKey("levoks-active-project"), state.id);
     } catch (error) {
       const message =
         error instanceof Error
@@ -135,7 +136,7 @@ export async function openWorkspace(document: ProjectDocument, revision = 0) {
       status: revision ? "Saved on this device" : "Unsaved changes",
     });
     version++;
-    localStorage.setItem("levoks-active-project", parsed.id);
+    localStorage.setItem(accountStorageKey("levoks-active-project"), parsed.id);
   } finally {
     switching = false;
   }
@@ -203,7 +204,7 @@ export function initializeWorkspace(projectId?: string): Promise<void> {
     return projectId ? init.then(() => reopenSavedWorkspace(projectId)) : init;
   init = (async () => {
     try {
-      const active = projectId || localStorage.getItem("levoks-active-project");
+      const active = projectId || localStorage.getItem(accountStorageKey("levoks-active-project"));
       const saved = active ? await getProject(active) : undefined;
       if (projectId && !saved)
         throw new Error(

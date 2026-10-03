@@ -34,6 +34,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env
+.env.local
 .env.*
 !.env.example
 typecheck.log
@@ -47,3 +48,27 @@ lint-results.json
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+*.generated.config.ts
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# archives / exports
+*.zip
+
+# docker
+.env.docker

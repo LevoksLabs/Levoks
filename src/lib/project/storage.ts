@@ -1,4 +1,5 @@
 import { parseProject, redactProject, type ProjectDocument } from "./schema";
+import { accountStorageKey } from "./account-scope";
 
 export interface SavedProject {
   id: string;
@@ -18,7 +19,7 @@ let connection: Promise<IDBDatabase> | undefined;
 export function workspaceDatabase() {
   if (!connection)
     connection = new Promise((resolve, reject) => {
-      const request = indexedDB.open("levoks-workspace", 2);
+      const request = indexedDB.open(accountStorageKey("levoks-workspace"), 2);
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains("projects"))

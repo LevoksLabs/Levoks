@@ -15,8 +15,10 @@ import {
 } from "../src/store/workspaceStore";
 import { getProject, saveProject } from "../src/lib/project/storage";
 import { compileProject } from "../src/lib/project/compiler";
+import { bindWorkspaceAccount } from "../src/lib/project/account-scope";
 
 test("workspace saves, reopens latest edits, and recovers a conflicting tab without overwriting it", async () => {
+  bindWorkspaceAccount(null);
   const memory = new Map<string, string>();
   Object.defineProperty(globalThis, "localStorage", {
     configurable: true,

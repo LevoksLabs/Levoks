@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
+import { flushWorkspace } from "@/store/workspaceStore";
 import {
   ArrowUpRight,
   Check,
@@ -176,10 +177,12 @@ export default function ProfileSettings() {
       {session && (
         <section className={styles.profileSection}>
           <h2>Sign out</h2>
-          <p>Local projects remain on this device after you sign out.</p>
+          <p>Your local projects remain on this device and return when you sign in to this account again.</p>
           <button
             className={styles.secondary}
-            onClick={() => void signOut({ callbackUrl: "/" })}
+            onClick={() => void flushWorkspace().then(() => signOut({ callbackUrl: "/" })).catch(() => {
+              setError("Your edits could not be saved. Download a project backup before signing out.");
+            })}
           >
             <LogOut size={16} /> Sign out of Levoks
           </button>

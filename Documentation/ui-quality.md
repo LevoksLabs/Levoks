@@ -1,5 +1,13 @@
 # Editor quality audit and verification
 
+## Header and account refinements — 4 October 2026
+
+The logo now opens the existing project workspace without navigating away from current edits. The account dropdown has named menu semantics, Arrow/Home/End navigation, Escape dismissal with focus return, and closes when focus leaves. Its bounded width truncates long account details and its opaque background keeps underlying canvas controls from showing through.
+
+Profile now uses the same native modal approach as the other editor dialogs: an accessible name, labelled close button, initial focus, Escape dismissal, focus return, and an inert editor behind it. Long names and email addresses wrap inside the panel. Project navigation remains available from both the menu and Profile. Shortcut help now correctly describes shared undo/redo across canvases.
+
+Verification: `tests/e2e/account-ui.spec.ts` exercises keyboard and pointer paths at 1600, 1366 and 1024 pixels, including attempted background focus and canvas shortcuts while Profile is open. It passes alongside the four existing editor-quality workflows (`.verification/minor-ui-browser-final.log`). TypeScript passes; targeted lint has no errors and four existing image warnings. One detector scan returned no findings. Two bounded visual review rounds confirmed layout and the dropdown background correction; screenshots use the `minor-ui-menu-*` and `minor-ui-profile-*` names in `.verification/`. Session data is controlled for these UI checks; account management and live OAuth acceptance remain separate unfinished work.
+
 Updated 2026-09-20. Scope: the user's dedicated UI/UX brief, `levoks.md`, `production-readiness.md` and the existing implementation. This document separates a verified improvement from completion of the full product requirement. No backend feature is promoted to complete because its panel looks finished.
 
 ## Direction and scope

@@ -121,9 +121,9 @@ test("cloud saves retain each tab's revision and isolate account changes", async
   await other.screenshot({ path: ".verification/cloud-save-conflict.png" });
   await other.close();
 
-  // Reloading a tab retains its own baseline; switching accounts starts at zero.
+  // A different account has a separate local workspace and cloud baseline.
   account = "google:bob";
-  await page.reload();
+  await openEditor(page);
   await page
     .getByRole("button", {
       name: /^(Untitled project|Stale edits to preserve)$/,
