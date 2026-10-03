@@ -1,3 +1,4 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect, type Page } from "@playwright/test";
 import {
   emptyProject,
@@ -10,7 +11,7 @@ import { programFixture } from "../helpers/program-fixture";
 import { parseProject } from "../../src/lib/project/schema";
 
 async function ready(page: Page) {
-  await page.goto("/");
+  await openEditor(page);
   await expect(
     page.getByRole("button", { name: "Save project", exact: true }),
   ).toBeEnabled();

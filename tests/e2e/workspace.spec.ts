@@ -1,3 +1,4 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import JSZip from "jszip";
@@ -9,7 +10,7 @@ import { programFixture, block } from "../helpers/program-fixture";
 test("Connections shows authentication errors without falsely reporting a connected provider", async ({
   page,
 }) => {
-  await page.goto("/");
+  await openEditor(page);
   await page
     .getByRole("button", { name: "Untitled project", exact: true })
     .click();
@@ -43,7 +44,7 @@ test("incremental AI review requires explicit application and rejects overwritin
     ]);
     await route.fulfill({ json: { summary: "Review this rename", ...result } });
   });
-  await page.goto("/");
+  await openEditor(page);
   await page
     .getByRole("button", { name: "Untitled project", exact: true })
     .click();
@@ -157,7 +158,7 @@ test("streamed AI output remains a preview until validation and cancellation dis
         ),
       event,
     );
-  await page.goto("/");
+  await openEditor(page);
   await page
     .getByRole("button", { name: "Untitled project", exact: true })
     .click();
@@ -226,7 +227,7 @@ test("streamed AI output remains a preview until validation and cancellation dis
 test("observability inspector settings survive reload and affect the exported readiness, audit and error implementation", async ({
   page,
 }) => {
-  await page.goto("/");
+  await openEditor(page);
   await page
     .getByRole("button", { name: "Untitled project", exact: true })
     .click();
@@ -328,7 +329,7 @@ test("project autosave survives reload and ZIP contains all imported backend ope
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
+  await openEditor(page);
   await page
     .getByRole("button", { name: "Untitled project", exact: true })
     .click();
@@ -388,7 +389,7 @@ test("project autosave survives reload and ZIP contains all imported backend ope
 test("backend query inspector changes persisted IR and emitted source", async ({
   page,
 }) => {
-  await page.goto("/");
+  await openEditor(page);
   await page
     .getByRole("button", { name: "Untitled project", exact: true })
     .click();

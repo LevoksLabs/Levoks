@@ -59,7 +59,7 @@ export default function UserMenu({ onOpenProfile }: UserMenuProps) {
     return (
       <button
         className="header-btn signin-btn"
-        onClick={() => router.push("/auth/signin")}
+        onClick={() => router.push(`/auth/signin?callbackUrl=${encodeURIComponent(window.location.pathname)}`)}
       >
         <User size={14} />
         <span>Sign In</span>
@@ -186,7 +186,7 @@ export default function UserMenu({ onOpenProfile }: UserMenuProps) {
             <Settings size={14} />
             Profile Settings
           </button>
-          <button role="menuitem" tabIndex={-1} className="user-menu-item" onClick={() => { closeMenu(); window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "projects" })); }}>
+          <button role="menuitem" tabIndex={-1} className="user-menu-item" onClick={() => { closeMenu(); window.dispatchEvent(new Event("levoks:home")); }}>
             <FolderOpen size={14} />
             My Projects
           </button>

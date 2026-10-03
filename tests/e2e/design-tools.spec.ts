@@ -1,3 +1,4 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect, type Page } from "@playwright/test";
 import {
   emptyProject,
@@ -223,7 +224,7 @@ async function open(page: Page) {
   useEditorStore
     .getState()
     .pages.forEach((page) => routing.addNode("page", page.id));
-  await page.goto("/");
+  await openEditor(page);
   await expect(
     page.getByRole("button", { name: "Save project", exact: true }),
   ).toBeEnabled();

@@ -1,10 +1,11 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect, type Page } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
 
 async function open(page: Page) {
-  await page.goto("/");
+  await openEditor(page);
   await expect(
     page.getByRole("button", { name: "Save project", exact: true }),
   ).toBeEnabled();

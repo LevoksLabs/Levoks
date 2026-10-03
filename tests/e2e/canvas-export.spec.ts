@@ -1,3 +1,4 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect } from "@playwright/test";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -9,7 +10,7 @@ test("canvas preview follows real routes, blocks backend simulation, and downloa
   page,
 }) => {
   const fixture = canvasAppFixture();
-  await page.goto("/");
+  await openEditor(page);
   await expect(
     page.getByRole("button", { name: "Save project", exact: true }),
   ).toBeEnabled();

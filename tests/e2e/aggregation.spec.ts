@@ -1,3 +1,4 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect } from "@playwright/test";
 import { emptyProject } from "../../src/lib/project/workspace";
 import { programFixture } from "../helpers/program-fixture";
@@ -5,7 +6,7 @@ import { programFixture } from "../helpers/program-fixture";
 test("aggregate inspector configuration survives undo, reload and generated source", async ({
   page,
 }) => {
-  await page.goto("/");
+  await openEditor(page);
   await expect(
     page.getByRole("button", { name: "Save project", exact: true }),
   ).toBeEnabled();

@@ -144,7 +144,7 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
               <div className="profile-projects-empty">
                 <FolderOpen size={24} strokeWidth={1.5} />
                 <p>Your visual workspace and cloud projects</p>
-                <button className="header-btn" onClick={() => { closeProfile(); window.dispatchEvent(new CustomEvent("levoks:panel", { detail: "projects" })); }}>Open projects</button>
+                <button className="header-btn" onClick={() => { closeProfile(); window.dispatchEvent(new Event("levoks:home")); }}>Open projects</button>
               </div>
             </div>
             <div className="profile-section"><div className="profile-section-header"><Sparkles size={14} /><span>Personal plan · Bring your own key</span></div><p style={{ fontSize: 12, lineHeight: 1.6 }}>Local editing and code export are available without an AI subscription. AI inference is billed directly by your selected provider. Levoks does not provision a paid inference plan.</p></div>

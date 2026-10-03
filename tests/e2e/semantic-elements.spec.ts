@@ -1,3 +1,4 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect } from "@playwright/test";
 import { readFile, mkdir } from "node:fs/promises";
 import JSZip from "jszip";
@@ -12,7 +13,7 @@ import { elementTemplate } from "../../src/lib/elements/registry";
 test("registry search, drag, typed inspector, custom library, persistence and ZIP preserve semantics", async ({
   page,
 }) => {
-  await page.goto("/");
+  await openEditor(page);
   await expect(
     page.getByRole("button", { name: "Save project", exact: true }),
   ).toBeEnabled();
@@ -118,7 +119,7 @@ test("generated preview executes registry controls, dialog, carousel and semanti
     events: { onClick: { action: "navigate", target: destination } },
   });
   const saved = captureProject(project.id, project.name);
-  await page.goto("/");
+  await openEditor(page);
   await expect(
     page.getByRole("button", { name: "Save project", exact: true }),
   ).toBeEnabled();

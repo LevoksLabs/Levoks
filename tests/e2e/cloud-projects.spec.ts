@@ -1,3 +1,4 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect } from "@playwright/test";
 import type { ProjectDocument } from "../../src/lib/project/schema";
 
@@ -63,7 +64,7 @@ test("cloud saves retain each tab's revision and isolate account changes", async
         : [...records.values()].filter((record) => record.ownerId === account),
     });
   });
-  await page.goto("/");
+  await openEditor(page);
   await page
     .getByRole("button", { name: "Untitled project", exact: true })
     .click();
@@ -76,7 +77,7 @@ test("cloud saves retain each tab's revision and isolate account changes", async
   ).toBeVisible();
 
   const other = await context.newPage();
-  await other.goto("/");
+  await openEditor(other);
   await other
     .getByRole("button", { name: "Untitled project", exact: true })
     .click();

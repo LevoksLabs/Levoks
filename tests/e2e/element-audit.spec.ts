@@ -1,3 +1,4 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect } from "@playwright/test";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import JSZip from "jszip";
@@ -8,7 +9,7 @@ test("catalog browser census: insertion, inspector, reload and exported state", 
   page,
 }) => {
   test.setTimeout(300000);
-  await page.goto("/");
+  await openEditor(page);
   await expect(
     page.getByRole("button", { name: "Save project", exact: true }),
   ).toBeEnabled();

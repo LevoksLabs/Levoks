@@ -1,3 +1,4 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect } from "@playwright/test";
 
 test("header and account controls support keyboard navigation and compact layouts", async ({ page }) => {
@@ -11,7 +12,7 @@ test("header and account controls support keyboard navigation and compact layout
     expires: "2099-01-01T00:00:00.000Z",
   } }));
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
+  await openEditor(page);
   await expect(page.getByRole("button", { name: "Save project", exact: true })).toBeEnabled();
   const trigger = page.getByRole("button", { name: "User menu", exact: true });
   const menu = page.getByRole("menu", { name: "Account actions" });
@@ -64,13 +65,11 @@ test("header and account controls support keyboard navigation and compact layout
   await expect(menu).toBeHidden();
 
   await page.getByRole("button", { name: "Projects home" }).click();
-  const workspace = page.getByRole("dialog", { name: "Levoks project workspace" });
-  await expect(workspace).toBeVisible();
-  await expect(workspace.getByLabel("Project name", { exact: true })).toHaveValue("Untitled project");
-  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { name: "All projects", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Open Untitled project", exact: true }).click();
   await trigger.click();
   await profileItem.click();
   await profile.getByRole("button", { name: "Open projects" }).click();
   await expect(profile).toBeHidden();
-  await expect(workspace).toBeVisible();
+  await expect(page.getByRole("heading", { name: "All projects", exact: true })).toBeVisible();
 });

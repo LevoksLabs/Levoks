@@ -1,0 +1,1066 @@
+.shell {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  height: 100dvh;
+  color: var(--text-1);
+  background: var(--bg-root);
+  font-size: 14px;
+}
+.shell a,
+.dialog a {
+  color: inherit;
+  text-decoration: none;
+}
+.shell button,
+.dialog button {
+  font: inherit;
+  cursor: pointer;
+}
+.shell button:disabled,
+.dialog button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.shell svg,
+.dialog svg {
+  flex-shrink: 0;
+  stroke-width: 1.75;
+}
+.shell :is(a, button, summary, input, select):focus-visible,
+.dialog :is(button, input, select):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.shell ::selection,
+.dialog ::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.shell input,
+.dialog input {
+  caret-color: var(--accent);
+}
+.shell input::placeholder {
+  color: var(--text-3);
+}
+.sidebar {
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 28px 16px 16px;
+  min-height: 0;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  padding: 0 12px;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.workspaceLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 8px 24px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.workspaceLabel > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.workspaceLabel small {
+  display: block;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 2px;
+}
+.avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  font-size: 12px;
+  font-weight: 600;
+}
+.navigation,
+.groupNavigation {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.navigation > :is(button, a),
+.groupNavigation > :is(button, a) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--text-2);
+  background: transparent;
+  font-weight: 500;
+  font-size: 13px;
+}
+.navigation > :hover,
+.groupNavigation > :is(button, a):hover,
+.profileLink:hover {
+  background: var(--bg-hover);
+  color: var(--text-1);
+}
+.navigation [aria-current],
+.groupNavigation [aria-current],
+.profileLink[aria-current] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.count {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.groupHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32px 8px 12px 12px;
+}
+.groupHeading h2 {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.groupHeading button,
+.dialogHeading button,
+.notice button,
+.error button,
+.search button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  border: 0;
+  color: var(--text-2);
+  background: transparent;
+  border-radius: var(--radius);
+}
+.groupHeading button:hover,
+.dialogHeading button:hover {
+  background: var(--bg-hover);
+  color: var(--text-1);
+}
+.groupNavigation {
+  overflow-y: auto;
+  min-height: 72px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-hover) transparent;
+}
+.groupNavigation > p {
+  color: var(--text-3);
+  padding: 0 12px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.groupNavigation span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.groupNavigation small {
+  color: var(--text-3);
+}
+.sidebarBottom {
+  margin-top: auto;
+  padding-top: 24px;
+}
+.storageNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px 12px 24px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.storageNote svg {
+  margin-top: 2px;
+}
+.storageNote small {
+  display: block;
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.6;
+  margin-top: 5px;
+}
+.profileLink {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.profileLink > svg:last-child {
+  margin-left: auto;
+}
+.main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  min-height: 76px;
+  padding: 16px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.topbar > div,
+.account {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.topbar > div > span:first-of-type,
+.slash,
+.muted {
+  color: var(--text-3);
+}
+.topbar strong {
+  font-weight: 500;
+}
+.account {
+  max-width: 45%;
+}
+.account > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.content {
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+  padding: 48px 40px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-hover) var(--bg-root);
+}
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 36px;
+}
+.heading > div:first-child {
+  min-width: 0;
+}
+.heading h1 {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+.heading p {
+  font-size: 13px;
+  color: var(--text-3);
+  margin-top: 10px;
+  max-width: 65ch;
+  line-height: 1.65;
+}
+.headingActions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.primary,
+.secondary {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1.4;
+  white-space: nowrap;
+  transition:
+    background var(--transition),
+    border-color var(--transition);
+}
+.shell .primary,
+.dialog .primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 1px solid var(--accent);
+}
+.primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.secondary {
+  background: transparent;
+  color: var(--text-1);
+  border: 1px solid var(--border);
+}
+.secondary:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-hover);
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 28px;
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  width: min(100%, 340px);
+  min-height: 38px;
+  color: var(--text-3);
+}
+.search:focus-within {
+  border-color: var(--accent);
+}
+.search input {
+  color: var(--text-1);
+  background: transparent;
+  border: 0;
+  min-width: 0;
+  width: 100%;
+  font: inherit;
+  font-size: 12px;
+  outline: none !important;
+  padding: 9px 0;
+}
+.viewControls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.viewControls select {
+  background: var(--bg-root);
+  color: var(--text-2);
+  border: 0;
+  border-radius: var(--radius);
+  min-height: 36px;
+  padding: 4px;
+  font: inherit;
+  font-size: 12px;
+}
+.layoutToggle {
+  display: flex;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  gap: 2px;
+}
+.layoutToggle button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  width: 30px;
+  height: 28px;
+  background: transparent;
+  color: var(--text-3);
+  border-radius: 3px;
+}
+.layoutToggle [aria-pressed="true"] {
+  background: var(--bg-hover);
+  color: var(--text-1);
+}
+.collectionHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.collectionHeading h2 {
+  font-size: 14px;
+  font-weight: 500;
+}
+.collectionHeading > span {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.projectGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  gap: 28px 24px;
+}
+.projectCard {
+  min-width: 0;
+  position: relative;
+}
+.projectCover,
+.cloudCover {
+  aspect-ratio: 1.65;
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--bg-panel);
+  color: var(--text-3);
+  transition: border-color var(--transition);
+}
+.cloudCover {
+  flex-direction: column;
+  gap: 12px;
+  font-size: 12px;
+}
+.projectCover:hover {
+  border-color: var(--border-hover);
+}
+.documentPreview {
+  width: 74%;
+  background: var(--bg-root);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  transform: translateY(0);
+  transition: transform var(--transition);
+}
+.projectCover:hover .documentPreview {
+  transform: translateY(-3px);
+}
+.previewBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+}
+.previewBar span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.previewBar > svg:last-child {
+  margin-left: auto;
+}
+.previewPages {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+}
+.previewPages > div {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-elevated);
+  padding: 12px 8px;
+  border-radius: 3px;
+}
+.previewPages span {
+  max-width: 100%;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 10px;
+}
+.previewPages small {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 9px;
+}
+.previewFooter {
+  padding: 0 12px 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 9px;
+}
+.openHint {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  color: var(--text-1);
+  font-size: 10px;
+  opacity: 0;
+}
+.projectCover:hover .openHint,
+.projectCover:focus-visible .openHint {
+  opacity: 1;
+}
+.cardInfo {
+  padding: 12px 0 0;
+}
+.cardInfo h2 {
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cardTitle h2 {
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cardTitle h2 a:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.cardInfo p {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 11px;
+  color: var(--text-3);
+  margin: 4px 0 0;
+}
+.cardInfo > .secondary {
+  margin-top: 12px;
+}
+.groupTag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.starButton,
+.cardMenu summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+.starButton:hover,
+.cardMenu summary:hover {
+  background: var(--bg-hover);
+  color: var(--text-1);
+}
+.starButton[aria-pressed="true"] {
+  color: var(--accent);
+}
+.cardMenu summary {
+  list-style: none;
+}
+.cardMenu summary::-webkit-details-marker {
+  display: none;
+}
+.cardMenu {
+  position: relative;
+}
+.cardMenu[open] {
+  z-index: 5;
+}
+.menuItems {
+  position: absolute;
+  right: 0;
+  top: 34px;
+  z-index: 6;
+  width: 190px;
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  padding: 5px;
+}
+.menuItems button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  gap: 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  color: var(--text-2);
+  padding: 10px;
+  font-size: 12px;
+}
+.menuItems button:hover {
+  background: var(--bg-hover);
+  color: var(--text-1);
+}
+.projectList {
+  display: flex;
+  flex-direction: column;
+}
+.projectList .projectCard {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border-bottom: 1px solid var(--border);
+  padding: 16px 0;
+}
+.projectList .projectCover,
+.projectList .cloudCover {
+  width: 100px;
+  flex-shrink: 0;
+  border-radius: var(--radius);
+}
+.projectList .documentPreview {
+  width: 70%;
+}
+.projectList .previewPages {
+  padding: 8px;
+}
+.projectList .previewPages > div {
+  padding: 4px;
+}
+.projectList
+  :is(
+    .previewBar,
+    .previewFooter,
+    .previewPages span,
+    .previewPages small,
+    .openHint,
+    .cloudCover span
+  ) {
+  display: none;
+}
+.projectList .cardInfo {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px 80px;
+  min-height: 360px;
+  text-align: center;
+}
+.emptyIcon {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  color: var(--text-2);
+  margin-bottom: 24px;
+}
+.empty h2 {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin-bottom: 10px;
+}
+.empty p {
+  max-width: 44ch;
+  color: var(--text-3);
+  line-height: 1.8;
+  font-size: 13px;
+}
+.empty > :is(button, a) {
+  margin-top: 24px;
+}
+.loading {
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-3);
+  font-size: 13px;
+}
+.footnote {
+  color: var(--text-3);
+  font-size: 11px;
+  margin-top: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.6;
+}
+.error,
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.error {
+  color: var(--red);
+}
+.notice {
+  color: var(--green);
+}
+.error button:last-child,
+.notice button:last-child {
+  margin-left: auto;
+}
+.groupActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -12px 0 28px;
+  color: var(--text-3);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.groupActions button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  color: var(--text-2);
+  padding: 6px;
+  font-size: 11px;
+}
+.groupActions button:first-of-type {
+  margin-left: auto;
+}
+.dialog {
+  margin: auto;
+  width: min(460px, calc(100vw - 32px));
+  padding: 28px;
+  background: var(--bg-panel);
+  color: var(--text-1);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-panel);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  font: inherit;
+}
+.dialog::backdrop {
+  background: #0009;
+}
+.dialogHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+.dialogHeading h2 {
+  font-size: 18px;
+  font-weight: 500;
+}
+.dialog label,
+.profileForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.dialog :is(input, select),
+.profileForm input {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-1);
+  background: var(--bg-input);
+  font: inherit;
+  font-size: 13px;
+}
+.dialog p {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.7;
+  margin-top: 12px;
+}
+.dialog p.error {
+  color: var(--red);
+}
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 28px;
+}
+.profile {
+  max-width: 760px;
+}
+.profileSection {
+  padding: 28px 0;
+  border-top: 1px solid var(--border);
+}
+.profileSection h2 {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.profileSection p {
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.7;
+  max-width: 65ch;
+}
+.profileSection > :is(a, button) {
+  margin-top: 20px;
+}
+.profileSection > svg {
+  margin-bottom: 16px;
+}
+.profileIdentity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.largeAvatar {
+  width: 60px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  font-size: 23px;
+}
+.profileForm {
+  max-width: 460px;
+}
+.profileForm > p {
+  font-size: 11px;
+  margin: 8px 0 24px;
+}
+.profileForm input[readonly] {
+  color: var(--text-3);
+}
+.profileSave {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.profileSave span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  font-size: 12px;
+}
+.providerRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 0 0;
+  flex-wrap: wrap;
+}
+.providerRow > div {
+  flex: 1;
+  min-width: 200px;
+}
+.providerRow strong {
+  font-weight: 500;
+  font-size: 13px;
+}
+.providerRow p {
+  margin-top: 4px;
+}
+.connected {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  font-size: 12px;
+}
+.providerRow > a {
+  margin-left: auto;
+}
+.skip {
+  position: absolute;
+  left: 16px;
+  top: -100px;
+  z-index: 100;
+  background: var(--bg-panel);
+  padding: 12px;
+}
+.skip:focus {
+  top: 12px;
+}
+.mobileMenu,
+.scrim {
+  display: none;
+}
+@media (min-width: 1600px) {
+  .content {
+    padding: 48px 56px;
+  }
+  .topbar {
+    padding-inline: 56px;
+  }
+  .projectGrid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+@media (max-width: 1100px) {
+  .shell {
+    grid-template-columns: 208px minmax(0, 1fr);
+  }
+  .content {
+    padding: 32px 24px;
+  }
+  .topbar {
+    padding-inline: 24px;
+  }
+  .heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .toolbar {
+    gap: 12px;
+  }
+  .viewControls {
+    gap: 8px;
+  }
+}
+@media (max-width: 700px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sidebar {
+    display: none;
+  }
+  .sidebarOpen {
+    display: flex;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 264px;
+    z-index: 40;
+  }
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: #0008;
+    border: 0;
+    z-index: 35;
+  }
+  .mobileMenu {
+    display: grid;
+    place-items: center;
+    color: var(--text-1);
+    background: transparent;
+    border: 0;
+    width: 32px;
+    height: 36px;
+    margin-left: -8px;
+  }
+  .topbar {
+    min-height: 64px;
+    padding: 12px 20px;
+  }
+  .topbar > div {
+    gap: 10px;
+  }
+  .topbar .account > span:last-child {
+    display: none;
+  }
+  .content {
+    padding: 28px 20px;
+  }
+  .heading {
+    margin-bottom: 28px;
+  }
+  .heading h1 {
+    font-size: 25px;
+  }
+  .headingActions {
+    width: 100%;
+  }
+  .headingActions > * {
+    flex: 1;
+  }
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .search {
+    width: 100%;
+  }
+  .viewControls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .projectGrid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 24px;
+  }
+  .empty {
+    min-height: 300px;
+    padding: 36px 0;
+  }
+  .empty h2 {
+    font-size: 19px;
+  }
+  .footnote {
+    align-items: flex-start;
+  }
+  .groupActions button:first-of-type {
+    margin-left: 0;
+  }
+  .profileSection {
+    padding: 24px 0;
+  }
+  .providerRow > a {
+    margin-left: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell *,
+  .dialog * {
+    transition: none !important;
+  }
+}

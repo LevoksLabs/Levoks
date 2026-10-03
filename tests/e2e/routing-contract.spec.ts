@@ -1,10 +1,11 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect } from "@playwright/test";
 import { mappedLoginFixture } from "../helpers/mapped-login-fixture";
 test("routing contract inspector persists field identities and failure behavior through undo and reload", async ({
   page,
 }) => {
   const { project, email } = mappedLoginFixture();
-  await page.goto("/");
+  await openEditor(page);
   await expect(
     page.getByRole("button", { name: "Save project", exact: true }),
   ).toBeEnabled();

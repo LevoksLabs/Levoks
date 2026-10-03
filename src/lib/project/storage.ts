@@ -15,16 +15,24 @@ export interface Checkpoint {
   document: ProjectDocument;
 }
 let connection: Promise<IDBDatabase> | undefined;
-function database() {
+export function workspaceDatabase() {
   if (!connection)
     connection = new Promise((resolve, reject) => {
-      const request = indexedDB.open("levoks-workspace", 1);
+      const request = indexedDB.open("levoks-workspace", 2);
       request.onupgradeneeded = () => {
-        request.result.createObjectStore("projects", { keyPath: "id" });
-        const history = request.result.createObjectStore("checkpoints", {
-          keyPath: "id",
-        });
-        history.createIndex("projectId", "projectId");
+        const db = request.result;
+        if (!db.objectStoreNames.contains("projects"))
+          db.createObjectStore("projects", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("checkpoints")) {
+          const history = db.createObjectStore("checkpoints", {
+            keyPath: "id",
+          });
+          history.createIndex("projectId", "projectId");
+        }
+        if (!db.objectStoreNames.contains("groups"))
+          db.createObjectStore("groups", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("projectMeta"))
+          db.createObjectStore("projectMeta", { keyPath: "id" });
       };
       request.onerror = () => {
         connection = undefined;
@@ -51,7 +59,7 @@ function result<T>(request: IDBRequest<T>): Promise<T> {
   });
 }
 export async function listProjects(): Promise<SavedProject[]> {
-  const db = await database();
+  const db = await workspaceDatabase();
   return (
     await result<SavedProject[]>(
       db.transaction("projects").objectStore("projects").getAll(),
@@ -61,13 +69,13 @@ export async function listProjects(): Promise<SavedProject[]> {
 export async function getProject(
   id: string,
 ): Promise<SavedProject | undefined> {
-  const db = await database();
+  const db = await workspaceDatabase();
   return result(db.transaction("projects").objectStore("projects").get(id));
 }
 export async function listCheckpoints(
   projectId: string,
 ): Promise<Checkpoint[]> {
-  const db = await database();
+  const db = await workspaceDatabase();
   return (
     await result<Checkpoint[]>(
       db
@@ -85,10 +93,22 @@ export async function saveProject(
   label?: string,
 ): Promise<number> {
   const safe = redactProject(parseProject(document));
-  const db = await database();
+  const db = await workspaceDatabase();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(["projects", "checkpoints"], "readwrite");
+    const tx = db.transaction(
+      ["projects", "checkpoints", "projectMeta"],
+      "readwrite",
+    );
     let failure: Error | undefined;
+    const metadata = tx.objectStore("projectMeta").get(safe.id);
+    metadata.onsuccess = () => {
+      if (metadata.result?.trashedAt) {
+        failure = new Error(
+          "This project is in Trash. Restore it from Home before editing.",
+        );
+        tx.abort();
+      }
+    };
     const store = tx.objectStore("projects");
     const request = store.get(safe.id);
     request.onsuccess = () => {

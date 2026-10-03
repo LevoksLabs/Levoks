@@ -15,6 +15,7 @@ import {
   type ProjectDocument,
 } from "@/lib/project/schema";
 import { getProject, listProjects, saveProject } from "@/lib/project/storage";
+import { readLibrary } from "@/lib/project/library";
 
 interface WorkspaceState {
   id: string;
@@ -142,6 +143,11 @@ export async function openWorkspace(document: ProjectDocument, revision = 0) {
 }
 export async function reopenSavedWorkspace(id: string) {
   await flushWorkspace();
+  const library = await readLibrary();
+  if (library.metadata.some((item) => item.id === id && item.trashedAt))
+    throw new Error(
+      "This project is in Trash. Restore it from Home to continue editing.",
+    );
   const saved = await getProject(id);
   if (!saved)
     throw new Error("This project is no longer available on this device.");
@@ -188,18 +194,42 @@ export function updateSource(files?: Record<string, string>) {
   });
   markDirty();
 }
-export function initializeWorkspace() {
-  if (init) return init;
+export function initializeWorkspace(projectId?: string): Promise<void> {
+  // Returning to a project with unsaved changes must preserve its recovery controls.
+  const current = useWorkspaceStore.getState();
+  if (init && projectId === current.id && current.ready && current.dirty)
+    return init;
+  if (init)
+    return projectId ? init.then(() => reopenSavedWorkspace(projectId)) : init;
   init = (async () => {
     try {
-      const active = localStorage.getItem("levoks-active-project");
+      const active = projectId || localStorage.getItem("levoks-active-project");
       const saved = active ? await getProject(active) : undefined;
-      const fallback = saved || (await listProjects())[0];
+      if (projectId && !saved)
+        throw new Error(
+          "This project is not saved on this device. Find it in Home or download it from your cloud projects.",
+        );
+      const library = await readLibrary();
+      const trashed = new Set(
+        library.metadata
+          .filter((item) => item.trashedAt)
+          .map((item) => item.id),
+      );
+      if (projectId && trashed.has(projectId))
+        throw new Error(
+          "This project is in Trash. Restore it from Home to continue editing.",
+        );
+      const fallback =
+        (saved && !trashed.has(saved.id) ? saved : undefined) ||
+        (projectId
+          ? undefined
+          : (await listProjects()).find((item) => !trashed.has(item.id)));
       await openWorkspace(
         fallback?.document || emptyProject(),
         fallback?.revision || 0,
       );
     } catch (error) {
+      if (projectId) throw error;
       useWorkspaceStore.setState({
         error:
           error instanceof Error
@@ -220,7 +250,9 @@ export function initializeWorkspace() {
     useEditorStore.subscribe((next, prev) => {
       if (
         [
-          "assets", "tokens", "components",
+          "assets",
+          "tokens",
+          "components",
           "elementsById",
           "rootIds",
           "globalRootIds",
@@ -264,5 +296,8 @@ export function initializeWorkspace() {
         void flushWorkspace().catch(() => {});
     });
   })();
-  return init;
+  return init.catch((error) => {
+    init = undefined;
+    throw error;
+  });
 }

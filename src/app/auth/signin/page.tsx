@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, Suspense } from "react";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { motion, type Variants } from "framer-motion";
@@ -52,7 +53,9 @@ function SignInContent() {
 
   const handleSignIn = (provider: string) => {
     setLoadingProvider(provider);
-    signIn(provider, { callbackUrl: "/" });
+    const requested = searchParams.get("callbackUrl");
+    const callbackUrl = requested?.startsWith("/") && !requested.startsWith("//") && !requested.includes("\\") ? requested : "/";
+    void signIn(provider, { callbackUrl });
   };
 
   const errorMessages: Record<string, string> = {
@@ -123,8 +126,8 @@ function SignInContent() {
           animate="visible"
           custom={4}
         >
-          Sign in to save your projects, collaborate,<br />
-          and push directly to GitHub.
+          Sign in to access your cloud projects<br />
+          and continue building with Levoks.
         </motion.p>
 
         {/* Error banner */}
@@ -190,8 +193,7 @@ function SignInContent() {
         >
           <Shield size={14} className={styles.scopeIcon} />
           <span>
-            GitHub sign-in requests repository access so Levoks can push
-            your generated code directly to your account.
+            Sign-in identifies your account. Repository access is connected separately from the editor.
           </span>
         </motion.div>
 
@@ -203,9 +205,7 @@ function SignInContent() {
           animate="visible"
           custom={7}
         >
-          By continuing, you agree to our{" "}
-          <a href="#">Terms of Service</a> and{" "}
-          <a href="#">Privacy Policy</a>.
+          <Link href="/">Continue with projects on this device</Link>
         </motion.div>
       </motion.div>
     </div>

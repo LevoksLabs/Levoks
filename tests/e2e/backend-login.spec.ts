@@ -1,3 +1,4 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect } from "@playwright/test";
 import { loginProject } from "../helpers/login-fixture";
 
@@ -19,7 +20,7 @@ test("legacy login expands into editable steps and inspector changes survive und
   service.blocks.forEach((block) => {
     block.connections = [];
   });
-  await page.goto("/");
+  await openEditor(page);
   await expect(
     page.getByRole("button", { name: "Save project", exact: true }),
   ).toBeEnabled();

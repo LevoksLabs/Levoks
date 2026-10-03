@@ -1,3 +1,4 @@
+import { openEditor } from "../helpers/open-editor";
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -8,7 +9,7 @@ import { modelLifecycleFixture } from "../helpers/model-lifecycle-fixture";
 test("database chooser persists engine and storage through history, reload and exported runtime", async ({
   page,
 }) => {
-  await page.goto("/");
+  await openEditor(page);
   await expect(
     page.getByRole("button", { name: "Save project", exact: true }),
   ).toBeEnabled();

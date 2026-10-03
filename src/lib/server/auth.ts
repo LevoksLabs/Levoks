@@ -23,16 +23,24 @@ export const authOptions: NextAuthOptions = {
   ],
   session: { strategy: "jwt" },
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, account, trigger, session }) {
       if (account) {
         token.id = `${account.provider}:${account.providerAccountId}`;
         token.provider = account.provider;
+      }
+      // Only accept the editable display field; never trust client-supplied identity or provider.
+      if (trigger === "update" && typeof session?.name === "string") {
+        const name = session.name.trim();
+        if (name.length > 0 && name.length <= 80) token.name = name;
       }
       delete token.githubAccessToken;
       return token;
     },
     async session({ session, token }) {
-      if (session.user) session.user.id = token.id || token.sub || "";
+      if (session.user) {
+        session.user.id = token.id || token.sub || "";
+        session.user.name = token.name;
+      }
       session.provider = token.provider;
       return session;
     },

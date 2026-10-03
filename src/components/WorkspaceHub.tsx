@@ -29,7 +29,6 @@ import {
   applyDesign,
   currentProject,
   flushWorkspace,
-  initializeWorkspace,
   openWorkspace,
   reopenSavedWorkspace,
   recoverSavedWorkspace,
@@ -103,6 +102,16 @@ async function api(
 function projectSignature() {
   const p = currentProject();
   return JSON.stringify([p.id, p.name, designFingerprint(p), p.source || null]);
+}
+
+// Keep legacy in-editor switching controls aligned with the address bar.
+async function switchWorkspace(...args: Parameters<typeof openWorkspace>) {
+  await openWorkspace(...args);
+  window.history.replaceState(null, "", `/workplace/${encodeURIComponent(args[0].id)}`);
+}
+async function switchSavedWorkspace(id: string) {
+  await reopenSavedWorkspace(id);
+  window.history.replaceState(null, "", `/workplace/${encodeURIComponent(id)}`);
 }
 
 export default function WorkspaceHub() {
@@ -256,9 +265,6 @@ export default function WorkspaceHub() {
     !!compilation?.error || diagnostics.some((d) => d.severity === "error");
 
   useEffect(() => {
-    void initializeWorkspace();
-  }, []);
-  useEffect(() => {
     const open = (event: Event) => {
       setPanel((event as CustomEvent<Panel>).detail);
       void refreshProjects().catch(() => {});
@@ -408,7 +414,7 @@ export default function WorkspaceHub() {
         <details className="header-action-menu" onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}>
           <summary>Files <ChevronDown size={12} /></summary>
           <div onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}>
-            <button disabled={!workspace.ready || busy} onClick={() => void run(async () => { await flushWorkspace("Before new project"); await openWorkspace(emptyProject()); await refreshProjects(); })}>New project</button>
+            <button disabled={!workspace.ready || busy} onClick={() => void run(async () => { await flushWorkspace("Before new project"); await switchWorkspace(emptyProject()); await refreshProjects(); })}>New project</button>
             <button disabled={!workspace.ready} onClick={() => openPanel("projects")}>Open, rename or import…</button>
             <button disabled={!workspace.ready || busy} onClick={() => void run(async () => { await flushWorkspace("Manual checkpoint"); setMessage("Checkpoint saved."); })}>Save checkpoint</button>
             <button disabled={!workspace.ready || busy} onClick={() => void run(async () => { downloadProject(redactProject(currentProject())); })}>Download project backup</button>
@@ -709,7 +715,7 @@ export default function WorkspaceHub() {
                       disabled={busy}
                       onClick={() =>
                         void run(async () => {
-                          await openWorkspace(emptyProject());
+                          await switchWorkspace(emptyProject());
                           await refreshProjects();
                         })
                       }
@@ -736,7 +742,7 @@ export default function WorkspaceHub() {
                         if (file.size > MAX_PROJECT_BYTES)
                           throw new Error("Project exceeds 5 MB.");
                         const project = parseProjectJSON(await file.text());
-                        await openWorkspace({
+                        await switchWorkspace({
                           ...project,
                           id: crypto.randomUUID(),
                           name: `${project.name.slice(0, 90)} (import)`,
@@ -772,7 +778,7 @@ export default function WorkspaceHub() {
                       disabled={busy}
                       onClick={() =>
                         void run(async () => {
-                          await reopenSavedWorkspace(project.id);
+                          await switchSavedWorkspace(project.id);
                           await refreshProjects();
                         })
                       }
@@ -874,7 +880,7 @@ export default function WorkspaceHub() {
                             throw new Error("Your account changed. Reload cloud projects before opening one.");
                           await flushWorkspace("Before cloud restore");
                           const local = await getProject(project.projectId);
-                          await openWorkspace(
+                          await switchWorkspace(
                             remote.document,
                             local?.revision || 0,
                           );
