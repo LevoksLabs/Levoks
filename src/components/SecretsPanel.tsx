@@ -14,10 +14,12 @@ export default function SecretsPanel({ projectId }: { projectId: string }) {
     );
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
-    setSecrets(data);
+    return data as SecretMetadata[];
   }, [projectId]);
   useEffect(() => {
-    void refresh().catch((error) => setError(error.message));
+    let active = true;
+    void refresh().then(data => { if (active) setSecrets(data); }).catch((error) => { if (active) setError(error.message); });
+    return () => { active = false; };
   }, [refresh]);
   const change = async (
     action: "put" | "remove" | "rotate",
@@ -40,7 +42,7 @@ export default function SecretsPanel({ projectId }: { projectId: string }) {
       });
       if (!response.ok) throw new Error((await response.json()).error);
       setValue("");
-      await refresh();
+      setSecrets(await refresh());
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "Secret operation failed",
@@ -90,7 +92,7 @@ export default function SecretsPanel({ projectId }: { projectId: string }) {
       </button>
       <button
         disabled={busy}
-        onClick={() => void refresh().catch((error) => setError(error.message))}
+        onClick={() => void refresh().then(setSecrets).catch((error) => setError(error.message))}
       >
         Refresh secrets
       </button>

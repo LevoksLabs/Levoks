@@ -1,6 +1,6 @@
 # Documented product completion plan
 
-Updated 2 October 2026. The user's direction is to **complete the documented product**, not to narrow it to a beta or prioritize launching. Product implementation and acceptance come first. Marketing, launch videos and publication are deferred.
+Updated 9 October 2026. The user's direction is to **complete the documented product**, not to narrow it to a beta or prioritize launching. Product implementation and acceptance come first. Marketing, launch videos and publication are deferred.
 
 ## Sources and completion rule
 
@@ -21,9 +21,15 @@ A current cloud-saving defect takes priority: the browser shares the expected cl
 
 First increment implemented: tab/account-scoped revision tracking, server-side account-change rejection and correct same-origin validation when Next normalizes loopback URLs. All 89 unit tests, typecheck/lint, real Next/MongoDB concurrency/ownership testing and the two-tab Chromium regression pass. See the 2 October entry in `completion-matrix.md` for evidence and boundaries. The rest of the workstreams below remain open.
 
-Second increment implemented: typed model defaults and resource soft-delete lifecycle through inspector, persistence, compiler, downloaded application and real MongoDB/Express execution. Restore/purge preserve owner/tenant policy and transaction rollback; inferred CRUD now honors soft deletion. All 91 unit and 13 integration tests pass, as do the lifecycle/login browser checks and editor production build. BE04–05 remain partial for the explicit boundaries recorded in the matrix. The next backend gap is BE06: relation cardinality, foreign-key mapping and referential actions; the existing relation block still has no executable semantics.
+Second increment implemented: typed model defaults and resource soft-delete lifecycle through inspector, persistence, compiler, downloaded application and real MongoDB/Express execution. Restore/purge preserve owner/tenant policy and transaction rollback; inferred CRUD now honors soft deletion. All 91 unit and 13 integration tests passed at that increment, as did lifecycle/login browser checks and the editor production build. BE04–05 remain partial for the explicit boundaries recorded in the matrix.
+
+8 October increment: BE06 now has editable one-to-one, one-to-many and explicit-junction many-to-many MongoDB resource relations. Foreign-key creation is undoable; validated scope matching, uniqueness, Restrict/Cascade/Unlink, restore and purge execute through generated repositories. Real execution of the browser-downloaded ZIP covers two server processes, concurrent mutation races, cross-owner/tenant denial, transaction rollback, restart and bounded cascades. SQL relations, migrations, populated reads and cross-service/self relations remain open. A publish-readiness checklist also selects affected elements, pages and backend blocks, distinguishes compiler blockers from advisory/runtime checks, and handles 1,000-element projects with bounded rendered rows. Saved button redirects now execute through the shared renderer and generated production website. [Implementation progress](product-implementation-progress.md) records validation and remaining work; these increments do not complete the eight workstreams.
 
 ## Implementation sequence
+
+9 October increment: BE03/RT02 now have scalar request-header contracts and stable routing mappings, with per-endpoint gateway forwarding and validated workflow bindings. BE46 now exposes persisted origin/method/header/credential/preflight controls using the installed cors middleware. Actual browser-downloaded applications pass required-header enforcement, login/session creation, real cross-origin fetch/preflight and credential/exposure checks. Shared backend labels and expanded-state semantics are also repaired. Error/status/response contracts, broader middleware scope and the other documented workstreams remain open.
+
+Continued 9 October: editable Response blocks now persist application response headers with typed literals/public bindings, pre-session value validation and per-endpoint gateway allowlists. Bodyless 204/205/304 statuses execute through Express, HEAD, gateway and API client. Browser authoring/recovery/undo/save/reload/download and actual downloaded login metadata are verified; rich error/status-specific schemas and the other workstreams remain open. See the response-header entry in the completion matrix.
 
 User-requested addition: generated applications can now choose MongoDB, PostgreSQL, MySQL, MariaDB or SQLite per service, and local or remote storage. Levoks's own project database remains unchanged. [Database choices](databases.md) records usage, real engine verification and remaining adapter/migration/container/provider boundaries. This work precedes returning to BE06 relations.
 

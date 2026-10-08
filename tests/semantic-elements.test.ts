@@ -23,6 +23,19 @@ import { useEditorUIStore } from "../src/store/editorUIStore";
 import { BACKEND_REGISTRY } from "../src/lib/backend/registry";
 import { analyzeSource } from "../src/lib/source-analysis";
 
+test("saved redirect buttons use safe links in the shared HTML and React tree", () => {
+  const project = emptyProject();
+  restoreProject(project);
+  const id = useEditorStore.getState().addElement({ ...elementTemplate("button"), props: { label: "View work", href: "" }, actions: { type: "redirect", target: "/work" } });
+  const saved = parseProject(captureProject(project.id, project.name));
+  restoreProject(saved);
+  const element = useEditorStore.getState().elementsById[id];
+  assert.match(nativeMarkup(nativeTree(element), "html"), /href="\/work"/);
+  assert.match(compileProject(saved).files["frontend/app/page.jsx"], /href="\/work"/);
+  assert.doesNotMatch(nativeMarkup(nativeTree({ ...element, props: { ...element.props, disabled: true } }), "html"), /href=/);
+  assert.doesNotMatch(nativeMarkup(nativeTree({ ...element, actions: { type: "redirect", target: "javascript:alert(1)" } }), "html"), /href=|javascript:/);
+});
+
 test("every registry definition creates, round-trips and emits parseable React deterministically", () => {
   const project = emptyProject("Registry coverage");
   restoreProject(project);
@@ -200,5 +213,6 @@ test("backend registry exposes existing configuration validators and explicit ex
     );
   assert.equal(BACKEND_REGISTRY.query.generate, "workflow");
   assert.equal(BACKEND_REGISTRY.rest_endpoint.generate, "express-route");
-  assert.equal(BACKEND_REGISTRY.relation.status, "experimental");
+  assert.equal(BACKEND_REGISTRY.relation.status, "supported-subset");
+  assert.equal(BACKEND_REGISTRY.relation.generate, "service-configuration");
 });

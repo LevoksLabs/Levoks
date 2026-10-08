@@ -33,9 +33,8 @@ export const PACKAGE_JSON_TEMPLATE = (name: string, port: number) => `{
   "engines": { "node": ">=22" }
 }`;
 
-export const SERVER_TEMPLATE = (port: number, imports: string, middlewareSetup: string, routeSetup: string, corsOrigins = "http://localhost:3000") => `
+export const SERVER_TEMPLATE = (port: number, imports: string, middlewareSetup: string, routeSetup: string) => `
 const express = require('express');
-const cors = require('cors');
 const helmet = require('helmet');
 require('dotenv').config();
 const database = require('./database');
@@ -52,9 +51,7 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(observability.audit);
-const allowedOrigins = (process.env.CORS_ORIGINS || ${JSON.stringify(corsOrigins)}).split(',').map(origin => origin.trim());
-app.use(cors({ origin: allowedOrigins, credentials: true }));
-app.use((req, res, next) => { if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.headers.origin && !allowedOrigins.includes(req.headers.origin)) return res.status(403).json({ error: 'Origin not allowed' }); next(); });
+app.use(require('./middleware/cors'));
 app.use(helmet());
 app.use(require('express-rate-limit')({ windowMs: 60000, limit: 120, standardHeaders: true, legacyHeaders: false }));
 

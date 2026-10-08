@@ -304,7 +304,7 @@ test("Button and Input properties render and execute through the shared semantic
     "Loading…",
   );
   await inspector.getByLabel("Loading", { exact: true }).uncheck();
-  await inspector.getByLabel("Href", { exact: true }).fill("#field");
+  await inspector.getByLabel("Link URL", { exact: true }).fill("#field");
   await expect(
     page.locator(`[data-element-id="${button}"] > a`),
   ).toHaveAttribute("href", "#field");

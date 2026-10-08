@@ -10,6 +10,7 @@ import {
     MiddlewareConfig,
     AuthConfig,
     SchemaField,
+    RelationConfig,
 } from "@/types/backend";
 import {
     PACKAGE_JSON_TEMPLATE,
@@ -33,6 +34,9 @@ import { observabilityRuntime } from "./observability";
 import { programFiles } from "@/lib/backend/program";
 import { rateLimitRuntime } from "./rate-limits";
 import { workflowOutputs } from "@/lib/backend/workflow-editor";
+import { relationFiles } from "./relations";
+import { relationEdges } from "@/lib/backend/relations";
+import { corsSource } from "@/lib/backend/cors";
 
 // ─── Field type → Mongoose type ───
 function mongooseType(type: SchemaField["type"]): string {
@@ -73,12 +77,12 @@ function generateModel(block: BackendBlock, identityModel = false): string {
 }
 
 // ─── Generate route handler for an endpoint ───
-function generateEndpointHandler(block: BackendBlock, models: string[], fields: SchemaField[], identityModel: boolean, modelConfig?: DbModelConfig): string {
+function generateEndpointHandler(block: BackendBlock, models: string[], fields: SchemaField[], identityModel: boolean, modelConfig?: DbModelConfig, relationModelId?: string): string {
     const config = block.config as EndpointConfig;
     const softDelete = modelConfig?.softDelete;
     const method = config.method.toLowerCase();
-    const middleware = (authenticate = false) => `...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'ip'), ${authenticate ? "auth, " : ""}...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'identity'), validateParameters(${JSON.stringify({query: config.queryParameters, path: config.pathParameters})}), `;
-    if (block.connections.length) return `router.${method}(${JSON.stringify(config.route)}, ${middleware(Boolean(config.authRequired || config.policyIds?.length))}${identityModel ? "identity.limit, " : ""}validateBody(${JSON.stringify(config.requestBody)}), async (req, res, next) => { try { const output = await workflow(${JSON.stringify(block.id)}, req${identityModel ? ", res" : ""}); if (output.status === 204) return res.status(204).end(); res.status(output.status).json(output.body ?? null); } catch (error) { next(error); } });`;
+    const middleware = (authenticate = false) => `...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'ip'), ${authenticate ? "auth, " : ""}...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'identity'), validateParameters(${JSON.stringify({query: config.queryParameters, path: config.pathParameters, header: config.requestHeaders})}), `;
+    if (block.connections.length) return `router.${method}(${JSON.stringify(config.route)}, ${middleware(Boolean(config.authRequired || config.policyIds?.length))}${identityModel ? "identity.limit, " : ""}validateBody(${JSON.stringify(config.requestBody)}), async (req, res, next) => { try { const output = await workflow(${JSON.stringify(block.id)}, req${identityModel ? ", res" : ""}); if (output.headers) res.set(output.headers); if ([204, 205, 304].includes(output.status)) return res.status(output.status).end(); res.status(output.status).json(output.body ?? null); } catch (error) { next(error); } });`;
     const modelName = models.length > 0 ? models[0] : null;
     if (identityModel) {
         const action = config.route.split("/").pop();
@@ -165,6 +169,13 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
   }`;
     }
 
+    if (relationModelId && ["POST", "PUT", "PATCH", "DELETE"].includes(config.method)) {
+        const operation = config.method === "POST" ? "create" : config.method === "DELETE" ? "delete" : "update";
+        handlerBody = `  try {
+    const item = await require('../relations').mutate({modelId: ${JSON.stringify(relationModelId)}, operation: ${JSON.stringify(operation)}, ${operation !== "create" ? `filter: {_id: req.params.id${softDelete ? ", deletedAt: null" : ""}}, ` : ""}values: req.body});
+    res.status(${operation === "create" ? 201 : 200}).json(${operation === "delete" ? `{message: ${JSON.stringify(`${modelName} deleted successfully`)}}` : "item"});
+  } catch (error) { next(error); }`;
+    }
     const inputFields = (config.requestBody.length ? config.requestBody : fields.filter(f => !/password|token|secret|role/i.test(f.name)).map(f => f.defaultValue === undefined ? f : {...f, required: false})).filter(f => !["_id", "__v", ...(modelConfig?.timestamps ? ["createdAt", "updatedAt"] : []), ...(softDelete ? ["deletedAt"] : [])].includes(f.name));
     return `router.${method}(${JSON.stringify(config.route)}, ${middleware(config.authRequired)}validateBody(${JSON.stringify(inputFields)}), validateRules, async (req, res, next) => {\n${handlerBody.replaceAll(/res.status\((400|500)\).json\(\{ error: error.message \}\)/g, 'next(error)')}\n});`;
 }
@@ -196,6 +207,9 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
     const servicePath = serviceSlug(service.name);
     const sql = isSql(service.database);
     for (const [name, source] of Object.entries(databaseFiles(service))) files[`${servicePath}/${name}`] = source;
+    for (const [name, source] of Object.entries(relationFiles(service))) files[`${servicePath}/${name}`] = source;
+    const relations = service.blocks.filter(b => b.type === "relation").map(b => b.config as RelationConfig);
+    files[`${servicePath}/middleware/cors.js`] = corsSource(service.blocks.find(b => b.type === "middleware" && (b.config as MiddlewareConfig).middlewareType === "cors")?.config as MiddlewareConfig | undefined, service.blocks.filter(b => b.type === "rest_endpoint").flatMap(b => ((b.config as EndpointConfig).requestHeaders || []).map(field => field.name)));
 
     // Separate blocks by type
     const endpoints = service.blocks.filter((b) => b.type === "rest_endpoint");
@@ -214,7 +228,22 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
     // 1. Generate models
     models.forEach((model) => {
         const config = model.config as DbModelConfig;
-        let generatedModel = sql ? `module.exports = require('../database').model(${JSON.stringify(config.tableName)});` : generateModel(model, identityModel);
+        const referenceFields = relations.flatMap(relationEdges).filter(edge => edge.child === model.id);
+        const referencedModel = {...model, config: {...config, fields: config.fields.map(field => {
+            const edge = referenceFields.find(edge => edge.field === field.name);
+            const parent = models.find(m => m.id === edge?.parent)?.config as DbModelConfig | undefined;
+            const unique = relations.some(r => r.relationType === "one-to-one" && r.toModel === model.id && r.foreignKey === field.name);
+            return parent ? {...field, ref: parent.tableName, indexed: field.indexed || !unique} : field;
+        })}};
+        let generatedModel = sql ? `module.exports = require('../database').model(${JSON.stringify(config.tableName)});` : generateModel(referencedModel, identityModel);
+        const indexes: string[] = [];
+        for (const relation of relations) {
+            if (relation.relationType === "one-to-one" && relation.toModel === model.id)
+                indexes.push(`${config.tableName}Schema.index(${JSON.stringify({[relation.foreignKey]: 1})}, {name: ${JSON.stringify(`levoks_relation_${relation.foreignKey}`)}, unique: true, partialFilterExpression: ${JSON.stringify({[relation.foreignKey]: {$type: "objectId"}})}});`);
+            if (relation.relationType === "many-to-many" && relation.joinModel === model.id)
+                indexes.push(`${config.tableName}Schema.index(${JSON.stringify({[relation.foreignKey]: 1, [relation.inverseForeignKey!]: 1})}, {unique: true});`);
+        }
+        if (indexes.length) generatedModel = generatedModel.replace('module.exports =', indexes.join('\n') + '\nmodule.exports =');
         if (identityModel && config.fields.some(f => f.name === "password")) generatedModel = generatedModel.replace('module.exports =', ['authReset', 'authVerify'].map(prefix => `${config.tableName}Schema.index({"${prefix}Mail.status": 1, "${prefix}Mail.dueAt": 1});\n${config.tableName}Schema.index({"${prefix}Hash": 1}, {sparse: true});`).join('\n') + '\nmodule.exports =');
         files[`${servicePath}/models/${config.tableName}.js`] = generatedModel;
     });
@@ -238,7 +267,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
                 const bound = models.find(m => m.id === (e.config as EndpointConfig).modelId) || models[0];
                 const boundConfig = bound?.config as DbModelConfig | undefined;
                 const effective = e.connections.length && programAuth && !identityModel ? {...e, config: {...e.config, authRequired: true}} : e;
-                return generateEndpointHandler(effective, boundConfig ? [boundConfig.tableName] : modelNames, boundConfig?.fields || [], identityModel, boundConfig);
+                return generateEndpointHandler(effective, boundConfig ? [boundConfig.tableName] : modelNames, boundConfig?.fields || [], identityModel, boundConfig, relations.length ? bound?.id : undefined);
             })
             .join("\n\n");
 
@@ -263,9 +292,11 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
         service.port,
         routeImport,
         middlewareSetup,
-        routeSetup,
-        (middlewares.find(m => (m.config as MiddlewareConfig).middlewareType === "cors")?.config as MiddlewareConfig | undefined)?.corsOrigins
+        routeSetup
     );
+    if (relations.length) files[`${servicePath}/server.js`] = files[`${servicePath}/server.js`]
+        .replace('await observability.initialize();', "await require('./relations').initialize();\n    await observability.initialize();")
+        .replace("console.error('Service startup failed. Check database and observability configuration.');", "if (err.message === 'Relations require a MongoDB replica set') console.error('Relations require a MongoDB replica set or sharded cluster. See RELATIONS.md.');\n    else console.error('Service startup failed. Check database and observability configuration.');");
 
     // 5. package.json
     files[`${servicePath}/package.json`] = PACKAGE_JSON_TEMPLATE(service.name, service.port);
@@ -312,19 +343,22 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
     files[`${servicePath}/middleware/validate.js`] = `exports.validateParameters = (contracts) => (req, res, next) => {
   for (const [location, fields] of Object.entries(contracts)) {
     if (!fields) continue;
-    const source = location === 'path' ? req.params : req.query;
+    const source = location === 'path' ? req.params : location === 'header' ? req.headers : req.query;
     const clean = {};
     for (const field of fields) {
-      let value = source[field.name];
+      let value = source[location === 'header' ? field.name.toLowerCase() : field.name];
+      if (location === 'header' && (req.rawHeaders || []).filter((_, i) => i % 2 === 0 && req.rawHeaders[i].toLowerCase() === field.name.toLowerCase()).length > 1) return res.status(400).json({error: 'Repeated ' + field.name});
       if (value === undefined || value === '') { if (field.required) return res.status(400).json({error: field.name + ' is required'}); continue; }
       if (typeof value !== 'string') return res.status(400).json({error: 'Invalid ' + field.name});
+      if (location === 'header' && (value.length > 4096 || /[^\\x20-\\x7e]/.test(value))) return res.status(400).json({error: 'Invalid ' + field.name});
       if (field.type === 'number') value = Number(value);
       if (field.type === 'boolean') value = value === 'true' ? true : value === 'false' ? false : null;
       const valid = field.type === 'objectId' ? /^[a-f0-9]{24}$/i.test(value) : field.type === 'date' ? !Number.isNaN(Date.parse(value)) : typeof value === field.type && (field.type !== 'number' || Number.isFinite(value));
       if (!valid || value === null) return res.status(400).json({error: 'Invalid ' + field.name});
-      clean[field.name] = value;
+      clean[location === 'header' ? field.name.toLowerCase().replaceAll('-', '_') : field.name] = value;
     }
     if (location === 'path') { req.params = clean; req.levoksExplicitPath = true; }
+    else if (location === 'header') req.levoksHeaders = clean;
     else Object.defineProperty(req, 'query', {value: clean, configurable: true, writable: true});
   }
   next();

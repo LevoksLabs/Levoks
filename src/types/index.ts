@@ -156,6 +156,7 @@ export interface Page {
     id: string;
     title: string;
     route: string;
+    seo?: { title?: string; description?: string; noIndex?: boolean };
 }
 
 export interface EditorState {

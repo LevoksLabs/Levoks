@@ -29,6 +29,7 @@ export default function ElementProperties({
   const set = (key: string, value: string | number | boolean) =>
     updateElement(element.id, {
       props: { [key]: value },
+      ...(element.type === "button" && key === "href" ? {actions: {type: "none"}} : {}),
       ...(element.type === "button" && key === "variant"
         ? {
             styles:

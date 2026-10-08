@@ -25,7 +25,9 @@ exports.register = async (req, res) => {
     return res.status(201).json(identity(user));
   } catch (error) { return res.status(error.code === 11000 ? 409 : 500).json({ error: 'Unable to create account' }); }
 };
-const fail = (status, message) => Object.assign(new Error(message), {status});
+// Only these authored identity errors may supply a public message. Database and
+// unexpected errors still go through the observability fallback.
+const fail = (status, message, publicCode) => Object.assign(new Error(message), {status, publicMessage: message, publicCode});
 exports.findAccount = async email => {
   if (!ready()) throw fail(503, 'Authentication is not configured');
   if (typeof email !== 'string' || email.length > 320) throw fail(401, 'Invalid credentials');
@@ -35,7 +37,7 @@ exports.verifyPassword = async (user, password) => {
   if (typeof password !== 'string' || Buffer.byteLength(password, 'utf8') > 72) throw fail(401, 'Invalid credentials');
   const valid = await bcrypt.compare(password, user?.password || dummyHash);
   if (!user || !valid || user.disabledAt) throw fail(401, 'Invalid credentials');
-  ${requireVerifiedEmail ? "if (!user.emailVerifiedAt) throw fail(403, 'Verify your email before signing in. You can request a new verification message.');" : ""}
+  ${requireVerifiedEmail ? "if (!user.emailVerifiedAt) throw fail(403, 'Verify your email before signing in. You can request a new verification message.', 'email_verification_required');" : ""}
 };
 exports.publicAccount = identity;
 exports.issueSession = async (user, req, res) => {if (!ready()) throw fail(503, 'Authentication is not configured'); await sessions.issue(user, req, res);};

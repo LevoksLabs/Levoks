@@ -47,7 +47,7 @@ export function generateProject(
                 identityOrigin: target ? `http://${serviceSlug(target.name)}:${target.port}` : undefined,
                 healthOrigins: Object.fromEntries(healthConfiguration(s).serviceIds.flatMap(id => {const target = services.find(v => v.id === id); return target ? [[`HEALTH_ORIGIN_${target.port}`, `http://${serviceSlug(target.name)}:${target.port}`]] : [];})),
             }; });
-        allFiles["docker-compose.yml"] = services.some(s => s.database) ? databaseCompose(services, infrastructure) : DOCKER_COMPOSE_TEMPLATE(infrastructure);
+        allFiles["docker-compose.yml"] = services.some(s => s.database || s.blocks.some(b => b.type === "relation")) ? databaseCompose(services, infrastructure) : DOCKER_COMPOSE_TEMPLATE(infrastructure);
     }
 
     // README
@@ -75,5 +75,6 @@ export function generateProject(
         allFiles["README.md"] = allFiles["README.md"].replace('- MongoDB', '- The database engines selected per service (see storage below)');
         allFiles["README.md"] += '\n\n## Database storage\n\nEach service owns its selected database. See its .env.example and, for SQL, DATABASE.md. Local Compose databases use private networks and persistent named volumes; remote connections use environment variables and do not provision a local database. SQLite uses a persistent file volume.\n\nFor local SQL containers, set <SERVICE_SLUG>_DB_PASSWORD (uppercase, underscores) to a random URL-safe password, such as a 64-character hex secret, in the Compose .env. Remote connections use <SERVICE_SLUG>_<CONNECTION_ENV>. Do not commit credentials. For each SQL service, run `docker compose run --rm <service> npm run db:migrate` before `docker compose up -d`. SQLite also needs this initial setup. Migrations are explicit and never alter or adopt existing application tables automatically. Back up data before changing schema or engines. Local database containers do not configure TLS: disable Require TLS for those containers, or provide your own TLS-enabled server.\n';
     }
+    if (services.some(s => s.blocks.some(b => b.type === "relation"))) allFiles["README.md"] += '\n\n## Relationships\n\nSee RELATIONS.md in each related service. Configure a MongoDB replica set or sharded cluster for transactions. Local Compose configures a single-member replica set on the existing named database volume and waits for a writable primary. Back up existing storage before enabling replica-set operation; this does not migrate or validate existing application references. Relationship indexes initialize before request handling; startup fails on conflicting existing unique values.\n';
     return allFiles;
 }

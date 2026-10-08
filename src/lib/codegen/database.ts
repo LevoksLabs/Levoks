@@ -81,6 +81,7 @@ export function databaseCompose(
   const lines = ["services:"];
   const volumes: string[] = [];
   const emittedDatabases = new Set<string>();
+  const legacyReplica = services.some(service => !service.database && service.blocks.some(block => block.type === "relation"));
   const serviceNames = new Set(services.map(service => serviceSlug(service.name)));
   if (services.some(service => !service.database)) serviceNames.add("mongodb");
   const volumeNames = new Set(services.some(service => !service.database) ? ["mongo-data"] : []);
@@ -112,7 +113,7 @@ export function databaseCompose(
         "    volumes:",
         `      - ${volume}:${mongo ? "/data/db" : postgres ? "/var/lib/postgresql/data" : "/var/lib/mysql"}`,
       );
-      if (mongo && service.database)
+      if (mongo && (service.database || legacyReplica))
         lines.push(
           '    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]',
         );
@@ -133,7 +134,7 @@ export function databaseCompose(
       }
       lines.push(
         "    healthcheck:",
-        `      test: ${JSON.stringify(mongo ? ["CMD", "mongosh", "--quiet", "--eval", service.database ? `try {rs.status()} catch {rs.initiate({_id:'rs0',members:[{_id:0,host:'${dbService}:27017'}]})}; if (!db.hello().isWritablePrimary) quit(1)` : "db.adminCommand({ping:1})"] : postgres ? ["CMD", "pg_isready", "-U", "levoks", "-d", databaseName] : ["CMD", config.engine === "mariadb" ? "mariadb-admin" : "mysqladmin", "ping", "--silent"])}`,
+        `      test: ${JSON.stringify(mongo ? ["CMD", "mongosh", "--quiet", "--eval", service.database || legacyReplica ? `try {rs.status()} catch {rs.initiate({_id:'rs0',members:[{_id:0,host:'${dbService}:27017'}]})}; if (!db.hello().isWritablePrimary) quit(1)` : "db.adminCommand({ping:1})"] : postgres ? ["CMD", "pg_isready", "-U", "levoks", "-d", databaseName] : ["CMD", config.engine === "mariadb" ? "mariadb-admin" : "mysqladmin", "ping", "--silent"])}`,
         "      interval: 5s",
         "      timeout: 5s",
         "      retries: 20",
@@ -158,7 +159,7 @@ export function databaseCompose(
           config.connectionEnv +
           ":?Set the remote database URL}"
         : config.engine === "mongodb"
-          ? `mongodb://${dbService}:27017/${databaseName}${service.database ? "?replicaSet=rs0" : ""}`
+          ? `mongodb://${dbService}:27017/${databaseName}${service.database || legacyReplica ? "?replicaSet=rs0" : ""}`
           : `${config.engine === "postgresql" ? "postgresql" : "mysql"}://levoks:${password}@${dbService}:${config.engine === "postgresql" ? 5432 : 3306}/${databaseName}`;
     lines.push(
       `  ${slug}:`,

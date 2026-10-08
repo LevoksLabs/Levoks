@@ -729,6 +729,7 @@ for (const id of [
   definitions.find((d) => d.id === id)!.status = "experimental";
 
 const buttonFields = definitions.find(d => d.id === "button")!.propsSchema;
+for (const definition of definitions) if (definition.propsSchema.href) definition.propsSchema.href.label = "Link URL";
 buttonFields.type.options = ["button", "submit", "reset"];
 buttonFields.variant.options = ["solid", "outline", "ghost"];
 buttonFields.icon.options = ["", ...Object.keys(ICON_PATHS)];

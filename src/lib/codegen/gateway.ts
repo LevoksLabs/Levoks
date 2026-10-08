@@ -3,6 +3,8 @@ import type {
   AuthConfig,
   EndpointConfig,
 } from "@/types/backend";
+import { workflowOutputs } from "@/lib/backend/workflow-editor";
+import type { ResponseHeader } from "@/lib/backend/response-headers";
 
 export function gatewaySource(services: ServiceContainer[]) {
   const cookieNames = Object.fromEntries(
@@ -24,15 +26,29 @@ export function gatewaySource(services: ServiceContainer[]) {
     }),
   );
   const endpoints = Object.fromEntries(
-    services.map((s) => [
-      s.port,
-      s.blocks
+    services.map((s) => {
+      const byId = new Map(s.blocks.map(block => [block.id, block]));
+      return [s.port, s.blocks
         .filter((b) => b.type === "rest_endpoint")
-        .map((b) => ({
-          route: (b.config as EndpointConfig).route,
-          method: (b.config as EndpointConfig).method,
-        })),
-    ]),
+        .map((b) => {
+          const pending = [...b.connections], seen = new Set<string>(), responseHeaders = new Set<string>();
+          while (pending.length) {
+            const id = pending.pop()!;
+            if (seen.has(id)) continue;
+            seen.add(id);
+            const block = byId.get(id);
+            if (!block) continue;
+            if (block.type === "response") for (const header of (block.config as {headers?: ResponseHeader[]}).headers || []) responseHeaders.add(header.name.toLowerCase());
+            pending.push(...workflowOutputs(block).flatMap(output => output.ids));
+          }
+          return {
+            route: (b.config as EndpointConfig).route,
+            method: (b.config as EndpointConfig).method,
+            headers: ((b.config as EndpointConfig).requestHeaders || []).map(field => field.name.toLowerCase()),
+            responseHeaders: [...responseHeaders],
+          };
+        })];
+    }),
   );
   return `
 export const runtime = 'nodejs';
@@ -43,7 +59,7 @@ async function proxy(request, context) {
   const {service, path: segments} = await context.params;
   if (!Object.hasOwn(endpoints, service) || !Array.isArray(segments) || segments.some(s => !s || s === '.' || s === '..' || /[\\\\/\\x00]/.test(s))) return Response.json({error: 'Unknown API route'}, {status: 404});
   const method = request.method;
-  const matched = endpoints[service].some(e => (e.method === method || method === 'HEAD' && e.method === 'GET') && e.route.split('/').filter(Boolean).length === segments.length && e.route.split('/').filter(Boolean).every((s, i) => s.startsWith(':') || s === segments[i]));
+  const matched = endpoints[service].find(e => (e.method === method || method === 'HEAD' && e.method === 'GET') && e.route.split('/').filter(Boolean).length === segments.length && e.route.split('/').filter(Boolean).every((s, i) => s.startsWith(':') || s === segments[i]));
   if (!matched) return Response.json({error: 'Unknown API route'}, {status: 404});
   const here = new URL(request.url);
   try {
@@ -56,6 +72,12 @@ async function proxy(request, context) {
     const url = new URL('/' + segments.map(encodeURIComponent).join('/'), base); url.search = here.search;
     const headers = new Headers();
     for (const key of ['authorization', 'content-type', 'accept', 'user-agent']) {const value = request.headers.get(key); if (value) headers.set(key, value);}
+    for (const key of matched.headers) {
+      const value = request.headers.get(key);
+      if (value === null) continue;
+      if (value.length > 4096 || /[^\\x20-\\x7e]/.test(value)) return Response.json({error: 'Invalid application header'}, {status: 400});
+      headers.set(key, value);
+    }
     const cookies = (request.headers.get('cookie') || '').split(';').map(v => v.trim()).filter(v => cookieNames[service].includes(v.split('=')[0]));
     if (cookies.length) headers.set('cookie', cookies.join('; '));
     headers.set('origin', publicOrigin);
@@ -68,8 +90,16 @@ async function proxy(request, context) {
     const response = await fetch(url, {method, headers, body, redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(30000)});
     const outgoing = new Headers({'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'});
     for (const key of ['content-type', 'x-levoks-session', 'retry-after']) {const value = response.headers.get(key); if (value) outgoing.set(key, value);}
+    let headerBytes = 0;
+    for (const key of matched.responseHeaders) {
+      const value = response.headers.get(key);
+      if (value === null) continue;
+      headerBytes += key.length + value.length;
+      if (value.length > 4096 || /[^\\x20-\\x7e]/.test(value) || headerBytes > 8192) {await response.body?.cancel(); return Response.json({error: 'Invalid application response header'}, {status: 502});}
+      outgoing.set(key, value);
+    }
     for (const cookie of response.headers.getSetCookie()) if (cookieNames[service].includes(cookie.split('=')[0])) outgoing.append('set-cookie', cookie);
-    return new Response(method === 'HEAD' || [204, 304].includes(response.status) ? null : response.body, {status: response.status, headers: outgoing});
+    return new Response(method === 'HEAD' || [204, 205, 304].includes(response.status) ? null : response.body, {status: response.status, headers: outgoing});
   } catch {return Response.json({error: 'Application service is unavailable. Please retry.'}, {status: 502, headers: {'Cache-Control': 'no-store'}});}
 }
 export {proxy as GET, proxy as HEAD, proxy as POST, proxy as PUT, proxy as PATCH, proxy as DELETE};
@@ -128,7 +158,7 @@ export async function apiFetch(path, options = {}, port) {
     let detail; try {detail = await response.json();} catch {}
     const error = new Error(typeof detail?.error === 'string' ? detail.error : detail?.error?.message || 'Request failed (' + response.status + ')'); error.status = response.status; throw error;
   }
-  return response.status === 204 ? null : response.json();
+  return [204, 205].includes(response.status) ? null : response.json();
 }
 `.trim();
 }

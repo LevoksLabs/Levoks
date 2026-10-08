@@ -8,8 +8,8 @@ import { parseProject } from "../src/lib/project/schema";
 import { resolveContract } from "../src/lib/contracts";
 import type { IRDiagnostic } from "../src/types/ir";
 
-function fixture() {
-  const fixture = mappedLoginFixture();
+function fixture(withHeaders = false) {
+  const fixture = mappedLoginFixture(withHeaders);
   return { ...fixture, output: compileProject(fixture.project) };
 }
 function handler(source: string) {
@@ -35,6 +35,28 @@ function handler(source: string) {
   assert.ok(text);
   return text;
 }
+
+test("generated mapped form sends scalar headers and refuses control characters before fetching", async () => {
+  const {project,email,password} = fixture(true);
+  const target = {dataset:{}, elements:[{id:email,value:"person@example.test"},{id:password,value:"password-123456"}],setAttribute(){},removeAttribute(){}};
+  const calls: {headers: Record<string,string>;body:string}[] = [];
+  const statuses: string[] = [];
+  const context = {event:{currentTarget:target,preventDefault(){}},window:{location:{href:""}},URLSearchParams,Error,setStatus:(value:string)=>statuses.push(value),setFlowValues:()=>{},apiFetch:async (_path:string,options:{headers:Record<string,string>;body:string})=>{calls.push(options);return {email:"person@example.test"};}};
+  await runInNewContext(`(${handler(compileProject(project).files["frontend/app/page.jsx"])})(event)`,context);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].headers)), {"x-app-version":"7"});
+  assert.deepEqual(JSON.parse(calls[0].body), {email:"person@example.test",password:"password-123456"});
+  for (const disabled of [{disabled:true}, {getAttribute:()=>"true"}]) {
+    await runInNewContext(`(${handler(compileProject(project).files["frontend/app/page.jsx"])})(event)`,{...context,event:{currentTarget:{...target,...disabled},preventDefault(){}}});
+    assert.equal(calls.length,1,"disabled controls must not run a wired request");
+  }
+  const endpoint = project.backend.services[0].blocks.find(b=>b.type==="rest_endpoint" && b.config.route.endsWith("/login"))!;
+  if(endpoint.type!=="rest_endpoint")throw new Error("Endpoint");
+  endpoint.config.requestHeaders![0].type="string";
+  project.routing.connections[0].requestMappings!.at(-1)!.source={kind:"literal",value:"bad\r\nX-Forged: yes"};
+  await runInNewContext(`(${handler(compileProject(project).files["frontend/app/page.jsx"])})(event)`,context);
+  assert.equal(calls.length,1);
+  assert.match(statuses.at(-1)!,/Invalid header/);
+});
 test("stable contract identities survive input renames and reject deleted mappings and competing form actions", () => {
   const { project, email, submit, form } = fixture();
   project.editor.elementsById[email].props.name = "anotherImplementationName";

@@ -1,17 +1,21 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
 import { mappedLoginFixture } from "../tests/helpers/mapped-login-fixture";
 import { compileProject } from "../src/lib/project/compiler";
 import { createProjectZip } from "../src/lib/codegen/exporter";
 async function main() {
-  const { project } = mappedLoginFixture();
+  const { project } = mappedLoginFixture(true);
+  const response = project.backend.services[0].blocks.find(block => block.type === "response");
+  if(response?.type === "response") response.config.headers!.push({name:"X-App-Version", value:7});
+  const cors=project.backend.services[0].blocks.find(b=>b.type==="middleware" && b.config.middlewareType==="cors")!;
+  if(cors.type==="middleware")Object.assign(cors.config,{corsOrigins:"https://client.example.test",corsMethods:["GET","HEAD","POST","PUT","PATCH"],corsAllowedHeaders:["Content-Type","X-App-Version"],corsExposedHeaders:["X-App-Result"],corsCredentials:false,corsMaxAge:300});
   const output = compileProject(project);
   const errors = output.diagnostics.filter((d) => d.severity === "error");
   if (errors.length) throw new Error(JSON.stringify(errors));
   const root = path.resolve(".verification/mapped-login-e2e");
   await mkdir(root, { recursive: true });
-  const bytes = await createProjectZip(output.files);
+  const bytes = process.env.LEVOKS_MAPPED_EXPORT ? await readFile(process.env.LEVOKS_MAPPED_EXPORT) : await createProjectZip(output.files);
   await writeFile(path.join(root, "export.zip"), bytes);
   const zip = await JSZip.loadAsync(bytes);
   for (const entry of Object.values(zip.files)) {

@@ -44,9 +44,7 @@ export const BACKEND_REGISTRY = Object.fromEntries(
     );
     const metadata = category?.items.find((item) => item.type === type);
     const strategy =
-      type === "relation"
-        ? "unsupported"
-        : type === "rest_endpoint"
+      type === "rest_endpoint"
           ? "express-route"
           : steps.has(type)
             ? "workflow"
@@ -63,8 +61,7 @@ export const BACKEND_REGISTRY = Object.fromEntries(
         icon: metadata?.icon || "custom",
         version: 1,
         migration: "legacy-v1" as const,
-        status:
-          strategy === "unsupported" ? "experimental" : "supported-subset",
+        status: "supported-subset",
         propsSchema: schema,
         defaultConfig: config,
         inputPorts:

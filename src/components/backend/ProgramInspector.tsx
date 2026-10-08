@@ -17,6 +17,7 @@ import {
 } from "@/lib/backend/program-schema";
 import { useBackendStore } from "@/store/backendStore";
 import { addLoginWorkflow } from "@/lib/backend/login";
+import { responseHeaderProblems } from "@/lib/backend/response-headers";
 
 function AggregateFields({
   value,
@@ -748,6 +749,23 @@ export default function ProgramInspector({
               value={c.value}
               onChange={(value) => update({ value })}
             />
+            {[204, 205, 304].includes(c.status) && <p className="bi-hint">This status sends no response body. The value is ignored.</p>}
+            <fieldset>
+              <legend>Response headers</legend>
+              <p className="bi-hint">Send application metadata using literals or $context.path bindings. Browser, identity, caching and security headers are managed separately. Maximum 32 headers, 4 KB per value and 8 KB total. Cross-origin clients also need these names in CORS Exposed headers.</p>
+              {(c.headers || []).map((header, index) => <fieldset key={index}>
+                <legend>Header {index + 1}</legend>
+                <label className="bi-field">Name<input className="bi-input" aria-label={`Response header ${index + 1} name`} maxLength={120} value={header.name} onChange={e => update({headers: c.headers!.map((item, position) => position === index ? {...item, name: e.target.value} : item)})} /></label>
+                <Binding label={`Response header ${index + 1} value`} value={header.value} onChange={value => update({headers: c.headers!.map((item, position) => position === index ? {...item, value} : item)})} />
+                <button type="button" className="bi-btn" aria-label={`Remove response header ${index + 1}`} onClick={() => update({headers: c.headers!.filter((_, position) => position !== index)})}>Remove header</button>
+              </fieldset>)}
+              <button type="button" className="bi-btn" disabled={(c.headers?.length || 0) >= 32} onClick={() => {
+                let number = (c.headers?.length || 0) + 1;
+                while (c.headers?.some(header => header.name.toLowerCase() === `x-app-result-${number}`)) number++;
+                update({headers: [...(c.headers || []), {name: `X-App-Result-${number}`, value: ""}]});
+              }}>Add response header</button>
+              {responseHeaderProblems(c.headers || []).map((message, index) => <p className="bi-hint" role="alert" key={index}>{message}</p>)}
+            </fieldset>
           </>
         )}
         {"name" in c && (

@@ -42,6 +42,7 @@ export interface EndpointConfig {
   responseBody: SchemaField[];
   queryParameters?: SchemaField[];
   pathParameters?: SchemaField[];
+  requestHeaders?: SchemaField[];
   middlewareIds: string[]; // references to middleware blocks
   authRequired: boolean;
   modelId?: string;
@@ -72,6 +73,10 @@ export interface RelationConfig {
   toModel: string;
   relationType: "one-to-one" | "one-to-many" | "many-to-many";
   foreignKey: string;
+  joinModel?: string;
+  inverseForeignKey?: string;
+  onDelete?: "restrict" | "cascade" | "setNull";
+  scopeFields?: string[];
 }
 
 export interface MiddlewareConfig {
@@ -79,6 +84,11 @@ export interface MiddlewareConfig {
   middlewareType:
     "cors" | "rateLimit" | "logger" | "bodyParser" | "helmet" | "custom";
   corsOrigins?: string;
+  corsMethods?: string[];
+  corsAllowedHeaders?: string[];
+  corsExposedHeaders?: string[];
+  corsCredentials?: boolean;
+  corsMaxAge?: number;
   rateLimit?: number; // requests per configured window, per client identity
   rateLimitWindow?: number; // window in minutes
   rateLimitMessage?: string;
@@ -236,6 +246,8 @@ export const DEFAULT_RELATION_CONFIG: RelationConfig = {
   toModel: "",
   relationType: "one-to-many",
   foreignKey: "",
+  onDelete: "restrict",
+  scopeFields: [],
 };
 
 export const DEFAULT_MIDDLEWARE_CONFIG: MiddlewareConfig = {

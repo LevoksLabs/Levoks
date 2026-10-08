@@ -1,4 +1,7 @@
 import { loginDiagnostics } from "./login";
+import { headerContractProblems } from "./header-contracts";
+import { responseHeaderProblems } from "./response-headers";
+import { corsProblems } from "./cors";
 import type {
   SemanticBackendBlock as BackendBlock,
   SemanticBackendService as ServiceContainer,
@@ -51,6 +54,10 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
         const schema =
           programConfigs[block.type as keyof typeof programConfigs];
         const c = schema.parse(block.config);
+        if (block.type === "response") {
+          const response = programConfigs.response.parse(c);
+          for (const message of responseHeaderProblems(response.headers || [])) fail(block, message);
+        }
         if (
           "output" in c &&
           [
@@ -176,6 +183,7 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
       }
       if (block.type === "rest_endpoint") {
         const c = block.config as EndpointConfig;
+        for (const message of headerContractProblems(c.requestHeaders || [])) fail(block, message);
         const routeFields = [...c.route.matchAll(/:([A-Za-z_][A-Za-z0-9_]*)/g)].map(match => match[1]);
         if (c.pathParameters && (c.pathParameters.some(field => !routeFields.includes(field.name) || !field.required) || routeFields.some(name => !c.pathParameters!.some(field => field.name === name)))) fail(block, "Path parameters must declare every route parameter as required.");
         for (const field of [...(c.pathParameters || []), ...(c.queryParameters || [])]) if (["object", "array"].includes(field.type)) fail(block, "Query and path parameters must use scalar types.");
@@ -224,6 +232,10 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
       }
       if (block.type === "middleware") {
         const c = block.config as MiddlewareConfig;
+        if (c.middlewareType === "cors") {
+          for (const message of corsProblems(c)) fail(block, message);
+          if (service.blocks.filter(b => b.type === "middleware" && (b.config as MiddlewareConfig).middlewareType === "cors").length > 1) fail(block, "Use one CORS block per service.");
+        }
         if (
           c.middlewareType === "rateLimit" &&
           c.rateLimitKey === "identity" &&
@@ -333,14 +345,18 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
       endpointConfig.requestBody.map((field) => field.name),
     );
     const missingFields = new Set<string>();
-    const checkBodyBinding = (value: unknown) => {
+    const headerFields = new Set((endpointConfig.requestHeaders || []).map(field => field.name.toLowerCase().replaceAll('-', '_')));
+    const missingHeaders = new Set<string>();
+    const checkRequestBinding = (value: unknown) => {
       if (typeof value === "string") {
         const field = /^\$request\.body\.([A-Za-z_][A-Za-z0-9_]*)/.exec(
           value,
         )?.[1];
-        if (field && !requestFields.has(field)) missingFields.add(field);
+        if (field && !["GET", "DELETE"].includes(endpointConfig.method) && !requestFields.has(field)) missingFields.add(field);
+        const header = /^\$request\.headers\.([A-Za-z_][A-Za-z0-9_]*)/.exec(value)?.[1];
+        if (header && !headerFields.has(header)) missingHeaders.add(header);
       } else if (value && typeof value === "object")
-        Object.values(value).forEach(checkBodyBinding);
+        Object.values(value).forEach(checkRequestBinding);
     };
     const pending = [...endpoint.connections],
       checked = new Set<string>();
@@ -350,9 +366,9 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
       checked.add(id);
       pending.push(...(adjacency.get(id) || []));
       const query = byId.get(id);
-      // Generated request validation preserves only declared body fields. Catch
+      // Generated request validation preserves only declared body/header fields. Catch
       // discarded workflow inputs before delivery, including nested control paths.
-      if (query && !["GET", "DELETE"].includes(endpointConfig.method)) {
+      if (query) {
         const c = query.config as unknown as Record<string, unknown>;
         const control = c.program as
           { left?: unknown; right?: unknown; source?: unknown } | undefined;
@@ -364,12 +380,14 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
           cache: [c.key, c.value],
           transform: c.fields,
           function: [c.inputs, c.result],
-          response: c.value,
+          response: [c.value, c.headers],
           logic_if: [control?.left, control?.right],
           logic_loop: control?.source,
           validation: `$request.body.${c.fieldName}`,
         };
-        checkBodyBinding(inputs[query.type]);
+        checkRequestBinding(inputs[query.type]);
+        if (query.type === "response" && [204, 205].includes(Number(c.status)) && endpointConfig.responseBody.length)
+          fail(endpoint, "A 204 or 205 response has no body. Remove this endpoint's Response Body fields or use a body-bearing status.");
       }
       if (!query || query.type !== "query") continue;
       const config = programConfigs.query.safeParse(query.config);
@@ -413,6 +431,7 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
         endpoint,
         `Declare ${[...missingFields].sort().join(", ")} in this endpoint's Request Body schema; its workflow reads these fields but validation would remove them.`,
       );
+    if (missingHeaders.size) fail(endpoint, `Declare ${[...missingHeaders].sort().join(", ")} in this endpoint's Request Headers schema; only declared headers enter workflow bindings (lowercase, hyphens replaced by underscores).`);
   }
   return diagnostics;
 }
@@ -445,7 +464,7 @@ export function programFiles(
 const program = require('./program.json');
 const mongoose = require(${JSON.stringify(service.database && service.database.engine !== 'mongodb' ? '../database' : 'mongoose')});
 const models = {${models.map((b) => `${JSON.stringify(b.id)}: require('../models/${(b.config as DbModelConfig).tableName}')`).join(",")}};
-module.exports = createWorkflow(program, models, mongoose, require('../observability')${service.blocks.some(b => b.type === 'credential_lookup') ? ", require('../controllers/identity')" : ''});
+module.exports = createWorkflow(program, models, mongoose, require('../observability'), ${service.blocks.some(b => b.type === 'credential_lookup') ? "require('../controllers/identity')" : 'undefined'}, ${service.blocks.some(b => b.type === 'relation') ? "require('../relations')" : 'undefined'});
 `,
   };
 }

@@ -6,7 +6,7 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import path from "node:path";
 const root = path.resolve(".verification/mapped-login-e2e");
 const processes: ChildProcess[] = [];
-let database: MongoMemoryServer, origin: string;
+let database: MongoMemoryServer, origin: string, backendOrigin: string;
 let logs = "";
 async function freePort() {
   const s = createServer();
@@ -55,6 +55,7 @@ test.beforeAll(async () => {
   const frontendPort = await freePort(),
     backendPort = await freePort();
   origin = `http://127.0.0.1:${frontendPort}`;
+  backendOrigin = `http://127.0.0.1:${backendPort}`;
   const env = {
     PORT: String(backendPort),
     NODE_ENV: "test",
@@ -147,6 +148,27 @@ test("ZIP-exported canvas form maps identities, rejects invalid input and creden
       payloads.push(request.postDataJSON());
   });
   await page.goto(origin);
+  const preflight = await fetch(backendOrigin + "/api/auth/login", {method:"OPTIONS",headers:{Origin:origin,"Access-Control-Request-Method":"POST","Access-Control-Request-Headers":"content-type,x-app-version"}});
+  expect(preflight.status).toBe(204);
+  expect(preflight.headers.get("access-control-allow-origin")).toBe(origin);
+  expect(preflight.headers.get("access-control-allow-credentials")).toBeNull();
+  expect(preflight.headers.get("access-control-max-age")).toBe("300");
+  expect((await fetch(backendOrigin + "/api/auth/login",{method:"OPTIONS",headers:{Origin:origin,"Access-Control-Request-Method":"DELETE"}})).status).toBe(403);
+  const crossOrigin = await page.evaluate(async url => {
+    const response = await fetch(url+"/api/auth/profile",{headers:{"X-App-Version":"7"}});
+    let credentialsDenied=false;
+    try {await fetch(url+"/api/auth/profile",{credentials:"include"});} catch {credentialsDenied=true;}
+    return {status:response.status,privateHeader:response.headers.get("x-levoks-session"),credentialsDenied};
+  },backendOrigin);
+  expect(crossOrigin).toEqual({status:401,privateHeader:null,credentialsDenied:true});
+  expect((await fetch(backendOrigin+"/api/auth/profile",{headers:{Origin:origin}})).headers.get("x-levoks-session")).toBe("invalid");
+  const invalidHeaders: Record<string, string>[] = [{ origin }, { origin, "X-App-Version": "invalid" }];
+  for (const headers of invalidHeaders) {
+    const invalid = await page.request.post(origin + "/__levoks/api/3001/api/auth/login", { headers, data: {email: "mapped@example.test", password: "password-123456"} });
+    expect(invalid.status()).toBe(400);
+    expect((await context.cookies()).some(cookie => /levoks_session/.test(cookie.name))).toBe(false);
+  }
+  const mappedRequest = page.waitForRequest(request => request.url().includes("/api/auth/login"));
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   expect(payloads).toHaveLength(0);
   await page
@@ -160,8 +182,9 @@ test("ZIP-exported canvas form maps identities, rejects invalid input and creden
   );
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   expect((await rejected).status()).toBe(401);
+  expect((await mappedRequest).headers()["x-app-version"]).toBe("7");
   await expect(page.getByRole("status")).toContainText(
-    "The request could not be completed.",
+    "Invalid credentials",
   );
   expect(page.url()).toBe(origin + "/");
   expect(payloads).toEqual([
@@ -175,8 +198,11 @@ test("ZIP-exported canvas form maps identities, rejects invalid input and creden
   await page
     .getByPlaceholder("Password", { exact: true })
     .fill("password-123456");
+  const successful = page.waitForResponse(response => response.url().includes("/api/auth/login") && response.status() === 200);
   await page.getByPlaceholder("Password", { exact: true }).press("Enter");
   await expect(page).toHaveURL(origin + "/dashboard");
+  expect((await successful).headers()["x-app-result"]).toBe("mapped@example.test");
+  expect((await successful).headers()["x-app-version"]).toBe("7");
   expect(payloads).toHaveLength(2);
   expect(payloads[1]).toEqual({
     email: "mapped@example.test",
@@ -188,6 +214,11 @@ test("ZIP-exported canvas form maps identities, rejects invalid input and creden
     ),
   ).toBe(true);
   expect(errors).toEqual([]);
+  const metadata = await page.evaluate(async url => {
+    const response = await fetch(url+"/api/auth/login", {method:"POST", credentials:"omit", headers:{"Content-Type":"application/json","X-App-Version":"7"}, body:JSON.stringify({email:"mapped@example.test",password:"password-123456"})});
+    return {status:response.status,result:response.headers.get("x-app-result"),version:response.headers.get("x-app-version"),cookie:response.headers.get("set-cookie")};
+  },backendOrigin);
+  expect(metadata).toEqual({status:200,result:"mapped@example.test",version:null,cookie:null});
   await page.goto(origin);
   await page.route("**/__levoks/api/3001/api/auth/login", (route) =>
     route.fulfill({

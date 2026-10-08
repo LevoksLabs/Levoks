@@ -109,6 +109,7 @@ export const programConfigs = {
   response: z.object({
     status: z.number().int().min(200).max(599),
     value: binding,
+    headers: z.array(z.object({name: z.string().max(120), value: z.union([z.string().max(10000), z.number().finite(), z.boolean(), z.null()])})).max(32).optional(),
   }),
   role: z.object({ name, permissions: z.array(z.string().max(100)).max(100) }),
   permission: z.object({ resource: name, action: name }),

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ElementNode } from "@/types";
 import type { EndpointConfig, SchemaField } from "@/types/backend";
 import { definitionFor } from "./elements/registry";
+import { buttonHref } from "./elements/native";
 
 const id = z
   .string()
@@ -10,7 +11,7 @@ const id = z
   .regex(/^[a-zA-Z0-9_-]+$/);
 export const requestMappingSchema = z.object({
   fieldId: id,
-  location: z.enum(["body", "query", "path"]),
+  location: z.enum(["body", "query", "path", "header"]),
   source: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("element"), elementId: id }),
     z.object({ kind: z.literal("response"), fieldId: id }),
@@ -52,6 +53,7 @@ export function endpointFields(config: EndpointConfig) {
       ...field,
       location: "query" as const,
     })),
+    ...(config.requestHeaders || []).map((field) => ({ ...field, location: "header" as const })),
     ...(
       config.pathParameters ||
       [...config.route.matchAll(/:([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => ({
@@ -79,7 +81,7 @@ export function isSubmitControl(element: ElementNode) {
     (element.type === "button" ||
       (element.type === "native" &&
         definitionFor(element)?.tag === "button")) &&
-    !element.props.href &&
+    !(element.type === "button" ? buttonHref(element) : element.props.href) &&
     (element.props.type ||
       (element.type === "button" ? "submit" : "button")) === "submit"
   );
@@ -115,6 +117,8 @@ export function resolveContract(
       message,
     });
   const fields = endpointFields(config);
+  if (!connection.requestMappings && config.requestHeaders?.some(field => field.required))
+    error("Required header fields need explicit request mappings in Routing.");
   const requestMappings: ResolvedRequestMapping[] = [];
   const seen = new Set<string>();
   for (const mapping of connection.requestMappings || []) {

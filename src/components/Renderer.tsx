@@ -90,6 +90,8 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
     const mergedStyles: React.CSSProperties = {
         ...(["native", "button", "input"].includes(element.type) ? semanticStyleParts(element.styles).box : orderedStyles(element.styles) as React.CSSProperties),
         ...positionStyles,
+        ...(!isRoot && resolvedPosition === "static" ? { maxWidth: "100%", minWidth: 0, flexShrink: 0 } : {}),
+        ...(isContainer && element.children.length && !element.styles.height ? { height: "auto" } : {}),
         ...(element.type === "shape" && element.props.shapeType && element.props.shapeType !== "rectangle" ? { backgroundColor: "transparent" } : {}),
         fontFamily: fontFamily(element.styles.fontFamily),
         ...(element.type === "gallery" ? { display: "block" } : {}),

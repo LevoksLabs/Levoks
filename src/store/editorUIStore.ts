@@ -16,6 +16,7 @@ export const useEditorUIStore = create<{
   hideOverflow: boolean;
   snapEnabled: boolean;
   inspectorVisible: boolean;
+  inspectorTab: "design" | "content" | "animate";
   trayCollapsed: boolean;
   helpOpen: boolean;
   setTool: (tool: "select" | "hand" | "marquee" | "pen") => void;
@@ -43,6 +44,7 @@ export const useEditorUIStore = create<{
   hideOverflow: false,
   snapEnabled: true,
   inspectorVisible: true,
+  inspectorTab: "design",
   trayCollapsed: false,
   helpOpen: false,
   setTool: (tool) => set({ tool }),

@@ -84,6 +84,8 @@ interface EditorStore {
     deletePage: (id: string) => void;
     renamePage: (id: string, title: string) => void;
     updatePageRoute: (id: string, route: string) => void;
+    updatePageSeo: (id: string, seo: NonNullable<Page["seo"]>) => void;
+    arrangeFormFields: (id: string) => void;
     switchPage: (id: string) => void;
     addGlobalElement: (elementData: NewElement) => string;
     deleteGlobalElement: (id: string) => void;
@@ -115,6 +117,10 @@ function updateLayout(el: ElementNode, patch: Partial<ElementNode["layout"]>): E
     return patchLayout(el, patch, useEditorUIStore.getState().breakpoint);
 }
 
+function isSubmitButton(element: ElementNode | undefined): boolean {
+    return element?.type === "button" && !element.props.href && (!element.props.type || element.props.type === "submit");
+}
+
 // Build nested elements from template data (old format with nested children objects)
 function buildTemplateElements(
     items: TemplateElement[],
@@ -129,6 +135,7 @@ function buildTemplateElements(
             : { byId: {}, rootIds: [] };
         // Merge old-format top-level layout fields with explicit layout object
         const layoutOverrides: Partial<ElementNode["layout"]> = {
+            ...(parentId && item.x === undefined && item.y === undefined && item.layout?.x === undefined && item.layout?.y === undefined ? { position: "static" as const } : {}),
             ...(item.layout || {}),
         };
         if (item.x !== undefined) layoutOverrides.x = item.x;
@@ -264,7 +271,7 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
             ...elementData.layout,
             x: posX,
             y: posY,
-            position: isInContainer ? (elementData.layout?.position || "absolute") : (elementData.layout?.position || DEFAULT_LAYOUT[elementData.type]?.position || "absolute"),
+            position: isInContainer ? (elementData.layout?.position || (get().elementsById[parentId!]?.type === "form" ? "static" : "absolute")) : (elementData.layout?.position || DEFAULT_LAYOUT[elementData.type]?.position || "absolute"),
         };
         const element: ElementNode = {
             definitionId: elementData.definitionId,
@@ -288,7 +295,12 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
             const next = { ...state.elementsById, ...nested.byId, [id]: { ...element, parentId: validParent || null } };
             let newRoots = state.rootIds;
             if (validParent && next[validParent]) {
-                next[validParent] = { ...next[validParent], children: [...next[validParent].children, id] };
+                const parent = next[validParent];
+                const children = [...parent.children];
+                const submitIndex = parent.type === "form" && element.type === "input"
+                    ? children.findIndex(childId => isSubmitButton(next[childId])) : -1;
+                children.splice(submitIndex < 0 ? children.length : submitIndex, 0, id);
+                next[validParent] = { ...parent, children };
             } else {
                 newRoots = [...state.rootIds, id];
             }
@@ -629,6 +641,21 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
 
     renamePage: (id, title) => {
         set(state => ({ pages: state.pages.map(p => p.id === id ? { ...p, title } : p) }));
+    },
+    updatePageSeo: (id, seo) => {
+        set(state => ({ pages: state.pages.map(page => page.id === id ? { ...page, seo: { title: (seo.title || "").slice(0, 200), description: (seo.description || "").slice(0, 500), noIndex: !!seo.noIndex } } : page) }));
+    },
+    arrangeFormFields: (id) => {
+        set(state => {
+            const form = state.elementsById[id];
+            if (form?.type !== "form") return state;
+            const next = { ...state.elementsById };
+            const submit = form.children.filter(child => isSubmitButton(next[child]));
+            const fields = form.children.filter(child => !submit.includes(child));
+            next[id] = { ...form, children: [...fields, ...submit], styles: { ...form.styles, height: "auto", display: "flex", flexDirection: "column" } };
+            for (const child of form.children) if (next[child]) next[child] = { ...next[child], layout: { ...next[child].layout, position: "static", x: 0, y: 0 }, styles: { ...next[child].styles, position: "static", maxWidth: "100%", flexShrink: 0 } };
+            return { elementsById: next };
+        });
     },
     updatePageRoute: (id, route) => {
         const state = get();

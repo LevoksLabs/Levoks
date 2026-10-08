@@ -75,7 +75,8 @@ exports.error = (err, req, res, next) => {
   const [kind, status] = classify(err), rule = errors.rules.find(r => r.kind === kind);
   if (errors.logErrors) console.error(JSON.stringify({event: 'request.error', ...metadata(req), kind, status: rule?.status || status}));
   if (res.headersSent) {res.destroy(); return;}
-  res.status(rule?.status || status).json({error: {code: kind, message: rule?.message || errors.fallbackMessage, requestId: req.levoksRequestId}});
+  const publicMessage = status < 500 && typeof err.publicMessage === 'string' ? err.publicMessage : null;
+  res.status(rule?.status || status).json({error: {code: publicMessage && err.publicCode || kind, message: rule?.message || publicMessage || errors.fallbackMessage, requestId: req.levoksRequestId}});
 };
 `.trim();
 }

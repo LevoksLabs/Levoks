@@ -594,9 +594,8 @@ const PropertyInspector: React.FC = () => {
     addElement: storeAddElement,
   } = useEditorStore();
   const storeDeleteElement = deleteElement;
-  const [activeTab, setActiveTab] = useState<"design" | "content" | "animate">(
-    "design",
-  );
+  const activeTab = ui.inspectorTab;
+  const setActiveTab = (inspectorTab: "design" | "content" | "animate") => useEditorUIStore.setState({inspectorTab});
   const [customCss, setCustomCss] = useState("");
   const [renamingElementId, setRenamingElementId] = useState<string | null>(
     null,
@@ -772,7 +771,7 @@ const PropertyInspector: React.FC = () => {
   };
   const setAnim = (anim: AnimationData) =>
     updateElement(el.id, { animation: anim });
-  const setAction = (act: ActionData) => updateElement(el.id, { actions: act });
+  const setAction = (act: ActionData) => updateElement(el.id, { actions: act, ...(el.type === "button" && act.type !== "none" ? {props: {href: ""}} : {}) });
   const startRenameElement = () => {
     setElementNameDraft(displayName);
     setRenamingElementId(el.id);
@@ -1854,6 +1853,8 @@ const PropertyInspector: React.FC = () => {
             {el.type === "form" && (
               <>
                 <Section title="Fields">
+                  <button type="button" onClick={() => useEditorStore.getState().arrangeFormFields(el.id)}>Arrange fields vertically</button>
+                  <p className="panel-caption">Place fields in order above Submit. Use this to repair an older overlapping form; undo restores your previous layout.</p>
                   <div className="insp-form-fields-header">
                     <span>
                       {formFields.length} field

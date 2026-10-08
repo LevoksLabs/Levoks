@@ -106,7 +106,7 @@ export function compileProject(value: ProjectDocument) {
       editor.assets,
       editor.customElements,
     );
-    const folder = page.route === "/" ? "" : page.route.slice(1) + "/";
+    const folder = page.route === "/" ? "" : page.route.slice(1).split("/").map(segment => segment.startsWith("_") ? `%5F${segment.slice(1)}` : segment).join("/") + "/";
     const app = output.files["src/App.jsx"]
       .replaceAll('from "./custom/', 'from "@/components/custom/')
       .replace('import "./styles.css";', 'import "./page.css";')
@@ -125,8 +125,18 @@ export function compileProject(value: ProjectDocument) {
       customDependencies[name] = version;
     }
   }
+  const metadataFor = (page: (typeof editor.pages)[number]) => {
+    const title = page.seo?.title?.trim() || (page.route === "/" ? project.name : page.title);
+    const description = page.seo?.description?.trim() || "Created with Levoks";
+    return JSON.stringify({ title, description, robots: { index: !page.seo?.noIndex, follow: !page.seo?.noIndex }, openGraph: { title, description }, twitter: { card: "summary", title, description } }).replace(/</g, "\\u003c");
+  };
+  const home = editor.pages.find(page => page.route === "/")!;
   files["frontend/app/layout.jsx"] =
-    `export const metadata = { title: ${JSON.stringify(project.name)}, description: "Created with Levoks" };\nexport default function Layout({ children }) { return <html lang="en"><body style={{margin: 0}}>{children}</body></html>; }`;
+    `export const metadata = ${metadataFor(home)};\nexport default function Layout({ children }) { return <html lang="en"><body style={{margin: 0}}>{children}</body></html>; }`;
+  for (const page of editor.pages.filter(page => page.route !== "/")) {
+    const folder = page.route.slice(1).split("/").map(segment => segment.startsWith("_") ? `%5F${segment.slice(1)}` : segment).join("/");
+    files[`frontend/app/${folder}/layout.jsx`] = `export const metadata = ${metadataFor(page)};\nexport default function Layout({ children }) { return children; }`;
+  }
   // Next treats leading underscores as private folders; encode them in the filesystem route.
   if (backend.services.length)
     files["frontend/app/%5F%5Flevoks/api/[service]/[...path]/route.js"] =
@@ -154,7 +164,7 @@ export function compileProject(value: ProjectDocument) {
       scripts: { dev: "next dev", build: "next build", start: "next start" },
       dependencies: {
         ...customDependencies,
-        next: "16.3.5",
+        next: "16.4.0",
         react: "19.2.3",
         "react-dom": "19.2.3",
       },

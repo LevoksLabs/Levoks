@@ -57,6 +57,21 @@ test(
       });
       const errors: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
+      await page.goto(`${address}/_work`);
+      await expect(page).toHaveTitle("Selected work");
+      await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", "Our recent projects");
+      await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
+      await page.goto(address);
+      await expect(page).toHaveTitle("Studio design");
+      await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", "Studio design");
+      await expect(page.locator('meta[name="twitter:description"]')).toHaveAttribute("content", "Design verification website");
+      await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
+      const redirect = page.getByRole("link", { name: "View selected work", exact: true });
+      await expect(redirect).toHaveAttribute("href", "/_work");
+      await redirect.focus();
+      await redirect.press("Enter");
+      await expect(page).toHaveURL(`${address}/_work`);
+      await expect(page).toHaveTitle("Selected work");
       await page.goto(address);
       await expect(
         page.getByText("Overview content", { exact: true }),

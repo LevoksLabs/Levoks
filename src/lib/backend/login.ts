@@ -189,7 +189,7 @@ export function loginDiagnostics(
           const values =
             "fields" in parsed.data
               ? Object.values(parsed.data.fields)
-              : [parsed.data.value];
+              : [parsed.data.value, ...(parsed.data.headers || []).map(header => header.value)];
           for (const value of values)
             if (
               typeof value === "string" &&

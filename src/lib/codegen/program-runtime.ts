@@ -1,3 +1,5 @@
+import { RESPONSE_HEADERS_RUNTIME } from "@/lib/backend/response-headers";
+
 /** Emitted as a standalone CommonJS module. Interprets validated data, never JavaScript expressions. */
 export const PROGRAM_RUNTIME = String.raw`
 class WorkflowError extends Error {
@@ -42,7 +44,8 @@ function publicValue(value, depth = 0) {
   if (Array.isArray(value)) return value.map(item => publicValue(item, depth + 1));
   return Object.fromEntries(Object.entries(value).filter(([key]) => safeKey(key) && !/password|secret|token/i.test(key)).map(([key, child]) => [key, publicValue(child, depth + 1)]));
 }
-exports.createWorkflow = (program, models, database, observability, identity) => {
+${RESPONSE_HEADERS_RUNTIME}
+exports.createWorkflow = (program, models, database, observability, identity, relations) => {
   // ponytail: bounded process-local cache; use an external adapter for shared durability.
   const cache = new Map();
   const blocks = Object.fromEntries(program.blocks.map(block => [block.id, block]));
@@ -71,7 +74,7 @@ exports.createWorkflow = (program, models, database, observability, identity) =>
     const endpoint = blocks[endpointId];
     if (!endpoint || endpoint.type !== 'rest_endpoint') throw new WorkflowError(500, 'Endpoint not found');
     for (const id of endpoint.config.policyIds || []) policy(id, request.user);
-    let context = {request: {body: safeValue(request.body || {}), params: safeValue(request.params || {}), query: safeValue(request.query || {})}, principal: request.user || null};
+    let context = {request: {body: safeValue(request.body || {}), params: safeValue(request.params || {}), query: safeValue(request.query || {}), headers: safeValue(request.levoksHeaders || {})}, principal: request.user || null};
     let response;
     // Credentials and verification proof never enter the user-bindable context.
     const accounts = new Map(), verified = new Map();
@@ -178,7 +181,8 @@ exports.createWorkflow = (program, models, database, observability, identity) =>
             const page = c.page === undefined ? 1 : Number(resolve(c.page, context) ?? 1);
             if (!Number.isInteger(page) || page < 1 || page > 10000) throw new WorkflowError(400, 'Page must be between 1 and 10000');
             let value;
-            if (c.operation === 'find') value = await model.find(filter, null, options).sort(c.sortField ? {[c.sortField]: c.sortDirection === 'desc' ? -1 : 1} : {_id: 1}).skip((page - 1) * c.limit).limit(c.limit).lean();
+            if (relations && ['create', 'update', 'delete', 'restore', 'purge'].includes(c.operation)) value = await relations.mutate({modelId: c.modelId, operation: c.operation, filter, values, session, maxTimeMS: options.maxTimeMS});
+            else if (c.operation === 'find') value = await model.find(filter, null, options).sort(c.sortField ? {[c.sortField]: c.sortDirection === 'desc' ? -1 : 1} : {_id: 1}).skip((page - 1) * c.limit).limit(c.limit).lean();
             else if (c.operation === 'findOne') value = await model.findOne(filter, null, options).lean();
             else if (c.operation === 'count') value = await model.countDocuments(filter).session(session || null).maxTimeMS(options.maxTimeMS);
             else if (c.operation === 'aggregate') {
@@ -213,7 +217,7 @@ exports.createWorkflow = (program, models, database, observability, identity) =>
             }
             context[c.output] = publicValue(value);
           } else if (block.type === 'transform') context[c.output] = mapValues(c.fields, context);
-          else if (block.type === 'response') { response = {status: c.status, body: publicValue(resolve(c.value, context))}; }
+          else if (block.type === 'response') { response = {status: c.status, body: [204, 205, 304].includes(c.status) ? null : publicValue(resolve(c.value, context)), ...(c.headers?.length ? {headers: responseHeaders(c.headers, context)} : {})}; }
           else if (block.type === 'access_policy') policy(block.id, request.user);
           else if (block.type === 'transaction') {
             if (session) throw new WorkflowError(422, 'Nested transactions are not supported');
@@ -251,7 +255,7 @@ exports.createWorkflow = (program, models, database, observability, identity) =>
             try { await run(p.steps, session, depth + 1); }
             catch (error) {
               // Authentication, authorization and execution limits cannot be converted into success by a catch branch.
-              if ([401, 403, 408].includes(error.status) || !p.catchSteps.length) throw error;
+              if (error.relationshipMutation || [401, 403, 408].includes(error.status) || !p.catchSteps.length) throw error;
               context.error = {status: error.status || 500, message: error.status && error.status < 500 ? error.message : 'Operation failed'};
               await run(p.catchSteps, session, depth + 1);
             } finally { await run(p.finallySteps, session, depth + 1); }

@@ -96,7 +96,7 @@ function flowHandler(
             const apiStep = step as ApiCallStep;
             bodyLines.push(`failure = ${JSON.stringify(apiStep.failure || {})};`);
             if (apiStep.requestMappings) {
-                bodyLines.push(`const values${i} = { body: {}, query: {}, path: {} };
+                bodyLines.push(`const values${i} = { body: {}, query: {}, path: {}, header: {} };
                   for (const mapping of ${JSON.stringify(apiStep.requestMappings)}) {
                     let value;
                     if (mapping.source.kind === "literal") value = mapping.source.value;
@@ -115,11 +115,15 @@ function flowHandler(
                     if (mapping.type === "number") { value = Number(value); if (!Number.isFinite(value)) throw new Error("Invalid number: " + mapping.name); }
                     if (mapping.type === "boolean") { if (![true, false, "true", "false"].includes(value)) throw new Error("Invalid boolean: " + mapping.name); value = value === true || value === "true"; }
                     if (mapping.type === "string" || mapping.type === "objectId" || mapping.type === "date") value = String(value);
+                    if (mapping.location === "header") {
+                      value = String(value);
+                      if (value.length > 4096 || /[^\\x20-\\x7e]/.test(value)) throw new Error("Invalid header: " + mapping.name);
+                    }
                     values${i}[mapping.location][mapping.name] = value;
                   }
                   const path${i} = ${JSON.stringify(apiStep.endpoint)}.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, key) => { const value = values${i}.path[key]; if (value === undefined) throw new Error("Missing " + key); return encodeURIComponent(String(value)); });
                   const query${i} = new URLSearchParams(values${i}.query).toString();
-                  result = await apiFetch(path${i} + (query${i} ? "?" + query${i} : ""), {method: ${JSON.stringify(apiStep.method)}${apiStep.method === "GET" ? "" : `, body: JSON.stringify(values${i}.body)`}}, ${apiStep.servicePort});`);
+                  result = await apiFetch(path${i} + (query${i} ? "?" + query${i} : ""), {method: ${JSON.stringify(apiStep.method)}, headers: values${i}.header${apiStep.method === "GET" ? "" : `, body: JSON.stringify(values${i}.body)`}}, ${apiStep.servicePort});`);
             } else if (el.type === "form") {
                 const isGet = apiStep.method === "GET";
                 bodyLines.push(`const payload${i} = { ...body }; const path${i} = ${JSON.stringify(apiStep.endpoint)}.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, key) => { const value = payload${i}[key]; if (value === undefined || value === "") throw new Error("Missing " + key); delete payload${i}[key]; return encodeURIComponent(String(value)); });`);
@@ -145,7 +149,7 @@ function flowHandler(
 
     const handlerBody = bodyLines.join(" ");
 
-    return `async (e) => { e.preventDefault(); const target = e.currentTarget; if (target.dataset.busy) return; target.dataset.busy = "true"; target.setAttribute("aria-busy", "true"); setStatus("Working…"); let failure = {}; try { ${handlerBody} setStatus("Done"); } catch (err) { setStatus(failure.message || (err instanceof Error ? err.message : "Request failed. Please try again.")); ${mode === "jsx" ? "if (failure.pageRoute) window.location.href = failure.pageRoute;" : 'if (failure.pageId) window.parent.postMessage({type: "levoks:preview:navigate", pageId: failure.pageId}, "*");'} } finally { delete target.dataset.busy; target.removeAttribute("aria-busy"); } }`;
+    return `async (e) => { e.preventDefault(); const target = e.currentTarget; if (target.dataset.busy || target.disabled || target.getAttribute?.("aria-disabled") === "true") return; target.dataset.busy = "true"; target.setAttribute("aria-busy", "true"); setStatus("Working…"); let failure = {}; try { ${handlerBody} setStatus("Done"); } catch (err) { setStatus(failure.message || (err instanceof Error ? err.message : "Request failed. Please try again.")); ${mode === "jsx" ? "if (failure.pageRoute) window.location.href = failure.pageRoute;" : 'if (failure.pageId) window.parent.postMessage({type: "levoks:preview:navigate", pageId: failure.pageId}, "*");'} } finally { delete target.dataset.busy; target.removeAttribute("aria-busy"); } }`;
 }
 
 // Both preview and exported React handlers use the same generated flow body.
@@ -210,6 +214,7 @@ const renderElementBody = (
             baseStyles.top = `${el.layout.y}px`;
         }
         baseStyles.width = el.styles?.width || `${el.layout.w}px`;
+        if (baseStyles.position === "static") { baseStyles.maxWidth = "100%"; baseStyles.minWidth = "0"; baseStyles.flexShrink = "0"; }
         baseStyles.minHeight = `${el.layout.h}px`;
     }
 
@@ -255,6 +260,7 @@ const renderElementBody = (
     }
 
     if (!["title", "text", "paragraph"].includes(el.type)) baseStyles.height = `${el.layout.h}px`;
+    if (["form", "section", "container", "stack", "columns"].includes(el.type) && el.children.length) baseStyles.height = "auto";
     if (el.styles.height && !el.styles.minHeight) delete baseStyles.minHeight;
     const mergedStyles = { ...baseStyles, ...(el.type === "image" ? { objectFit: String(el.props.objectFit || "cover"), objectPosition: String(el.props.objectPosition || "50% 50%") } : {}), ...(el.type === "button" && el.props.hoverBg ? { "--button-hover": String(el.props.hoverBg) } : {}), ...(el.styles || {}), ...(!el.layout.visible ? { display: "none" } : {}), opacity: el.layout.opacity, ...(el.layout.rotation ? { transform: `rotate(${el.layout.rotation}deg)` } : {}) };
     const css = cssFromStyles(mergedStyles);
@@ -501,7 +507,7 @@ button { cursor: pointer; font-family: inherit; }
 input, textarea, select { font-family: inherit; }
 input:focus, textarea:focus { outline: 2px solid #6366f1; outline-offset: -1px; }
 hr { border: none; }
-${hasResponsive ? "" : '@media (max-width: 640px) { .page { padding: 1rem; display: flex; flex-direction: column; gap: 1rem; } .page > [class^="el-"] { position: relative !important; left: auto !important; top: auto !important; max-width: 100%; } }'}
+${hasResponsive ? "" : '@media (max-width: 640px) { .page { padding: 1rem; display: flex; flex-direction: column; gap: 1rem; } .page > [class^="el-"] { position: relative !important; left: auto !important; top: auto !important; max-width: 100%; flex-shrink: 0; } .page [class^="el-"] { max-width: 100%; overflow-wrap: anywhere; } .page p[class^="el-"], .page h1[class^="el-"], .page h2[class^="el-"], .page h3[class^="el-"], .page h4[class^="el-"], .page h5[class^="el-"], .page h6[class^="el-"] { height: auto; } }'}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 `;
 

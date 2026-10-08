@@ -5,6 +5,7 @@ import { programDiagnostics } from "./program";
 import { modelDefault } from "./model-defaults";
 import { databaseSchema, isSql, defaultDatabase } from "./database";
 import { serviceSlug } from "@/lib/project/schema";
+import { relationDiagnostics } from "./relations";
 
 export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
   const diagnostics: IRDiagnostic[] = [];
@@ -66,6 +67,7 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
         );
     }
     diagnostics.push(...programDiagnostics(service));
+    diagnostics.push(...relationDiagnostics(service));
     for (const type of ["error_handler", "audit_log"])
       if (service.blocks.filter((b) => b.type === type).length > 1)
         problem(
@@ -212,7 +214,7 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
           );
       }
       if (
-        ["logic_if", "logic_loop", "logic_trycatch", "relation"].includes(
+        ["logic_if", "logic_loop", "logic_trycatch"].includes(
           block.type,
         ) &&
         !("program" in block.config && block.config.program)

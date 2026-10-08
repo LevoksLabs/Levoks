@@ -1,7 +1,10 @@
 "use client";
+import { headerContractProblems } from "@/lib/backend/header-contracts";
+import { CORS_METHODS, corsList, corsProblems } from "@/lib/backend/cors";
 
 import React, { useState } from "react";
 import ProgramInspector from "./ProgramInspector";
+import RelationInspector from "./RelationInspector";
 import HealthInspector from "./HealthInspector";
 import { AuditInspector, ErrorInspector } from "./ObservabilityInspector";
 import { useBackendStore } from "@/store/backendStore";
@@ -48,7 +51,7 @@ const Section: React.FC<{
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="bi-section">
-      <button className="bi-section-header" onClick={() => setOpen(!open)}>
+      <button className="bi-section-header" aria-expanded={open} onClick={() => setOpen(!open)}>
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         {icon}
         <span>{title}</span>
@@ -62,12 +65,13 @@ const Section: React.FC<{
 const FieldRow: React.FC<{ label: string; children: React.ReactNode }> = ({
   label,
   children,
-}) => (
-  <div className="bi-field">
-    <label className="bi-label">{label}</label>
-    <div className="bi-input-wrap">{children}</div>
-  </div>
-);
+}) => {
+  const id = React.useId();
+  return <div className="bi-field">
+    <label className="bi-label" htmlFor={id}>{label}</label>
+    <div className="bi-input-wrap">{React.Children.map(children, child => React.isValidElement<{id?: string}>(child) && ["input", "select", "textarea"].includes(String(child.type)) ? React.cloneElement(child, {id}) : child)}</div>
+  </div>;
+};
 
 // ─── Schema Fields Editor ───
 const SchemaFieldsEditor: React.FC<{
@@ -75,10 +79,11 @@ const SchemaFieldsEditor: React.FC<{
   onChange: (fields: SchemaField[]) => void;
   label?: string;
   modelFields?: boolean;
-}> = ({ fields, onChange, label = "Fields", modelFields = false }) => {
+  headerFields?: boolean;
+}> = ({ fields, onChange, label = "Fields", modelFields = false, headerFields = false }) => {
   const addField = () => {
-    let name = `field_${fields.length + 1}`;
-    while (fields.some((field) => field.name === name)) name += "_new";
+    let name = headerFields ? `x-app-field-${fields.length + 1}` : `field_${fields.length + 1}`;
+    while (fields.some((field) => field.name.toLowerCase() === name.toLowerCase())) name += headerFields ? "-new" : "_new";
     onChange([...fields, { id: crypto.randomUUID(), name, type: "string", required: false }]);
   };
 
@@ -123,8 +128,8 @@ const SchemaFieldsEditor: React.FC<{
             <option value="number">Number</option>
             <option value="boolean">Boolean</option>
             <option value="date">Date</option>
-            <option value="object">Object</option>
-            <option value="array">Array</option>
+            {!headerFields && <option value="object">Object</option>}
+            {!headerFields && <option value="array">Array</option>}
             <option value="objectId">ObjectId</option>
           </select>
           <label className="bi-checkbox-label">
@@ -136,7 +141,7 @@ const SchemaFieldsEditor: React.FC<{
             />
             Req
           </label>
-          <label className="bi-checkbox-label">
+          {!headerFields && <label className="bi-checkbox-label">
             <input
               type="checkbox"
               aria-label={`Unique field ${field.name}`}
@@ -144,8 +149,8 @@ const SchemaFieldsEditor: React.FC<{
               onChange={(e) => updateField(idx, { unique: e.target.checked })}
             />
             Unique
-          </label>
-          <label className="bi-checkbox-label">
+          </label>}
+          {!headerFields && <label className="bi-checkbox-label">
             <input
               type="checkbox"
               aria-label={`Index field ${field.name}`}
@@ -153,7 +158,7 @@ const SchemaFieldsEditor: React.FC<{
               onChange={(e) => updateField(idx, { indexed: e.target.checked })}
             />
             Index
-          </label>
+          </label>}
           <button
             aria-label={`Remove field ${field.name}`}
             className="bi-remove-field-btn"
@@ -229,6 +234,7 @@ const BackendInspector: React.FC = () => {
           </Section>
 
           {/* Type-specific editors */}
+          {block.type === "relation" && <RelationInspector block={block} service={services.find(s => s.id === serviceId)!} />}
           <ProgramInspector
             block={block}
             service={services.find((s) => s.id === serviceId)!}
@@ -497,6 +503,12 @@ const EndpointEditor: React.FC<{
         </label>
       </FieldRow>
     </Section>
+    <Section title="Request Headers" icon={<ChevronDown size={12} />} defaultOpen={false}>
+      <p className="bi-help">Declare application metadata, then map it in Routing. Names are case-insensitive. Authentication and browser headers are managed separately.</p>
+      <SchemaFieldsEditor label="Request headers" headerFields fields={config.requestHeaders || []} onChange={fields => onChange({requestHeaders: fields})} />
+      <p className="bi-help">Workflow bindings use lowercase names with hyphens replaced by underscores: X-App-Version becomes $request.headers.x_app_version.</p>
+      {headerContractProblems(config.requestHeaders || []).map((message, i) => <p className="bi-hint" role="alert" key={i}>{message}</p>)}
+    </Section>
     <Section
       title="Request Body"
       icon={<ChevronDown size={12} />}
@@ -598,6 +610,7 @@ const MiddlewareEditor: React.FC<{
       </select>
     </FieldRow>
     {config.middlewareType === "cors" && (
+      <>
       <FieldRow label="Origins">
         <input
           className="bi-input"
@@ -605,6 +618,32 @@ const MiddlewareEditor: React.FC<{
           onChange={(e) => onChange({ corsOrigins: e.target.value })}
         />
       </FieldRow>
+      <p className="bi-help">Comma-separated HTTP(S) origins. Runtime CORS_ORIGINS can override them. Paths and wildcards are not supported.</p>
+      <fieldset className="bi-relation-scope">
+        <legend className="bi-label">Allowed browser methods</legend>
+        {CORS_METHODS.map(method => <label className="bi-checkbox-label" key={method}>
+          <input type="checkbox" aria-label={`CORS ${method}`} checked={(config.corsMethods || CORS_METHODS).includes(method)} onChange={event => onChange({corsMethods:event.target.checked ? [...(config.corsMethods || CORS_METHODS), method] : (config.corsMethods || CORS_METHODS).filter(value=>value!==method)})} />{method}
+        </label>)}
+      </fieldset>
+      <label className="bi-checkbox-label">
+        <input type="checkbox" checked={config.corsAllowedHeaders === undefined} onChange={event=>onChange({corsAllowedHeaders:event.target.checked ? undefined : []})} />Use automatic request headers
+      </label>
+      <FieldRow label="Allowed headers">
+        <input key={config.corsAllowedHeaders?.join(", ") ?? "automatic"} className="bi-input" disabled={config.corsAllowedHeaders === undefined} defaultValue={config.corsAllowedHeaders?.join(", ") ?? ""} placeholder="Automatic from endpoint contracts" onBlur={event=>onChange({corsAllowedHeaders:corsList(event.target.value)})} />
+      </FieldRow>
+      <p className="bi-help">Automatic uses Content-Type, Authorization and declared endpoint headers. A custom list must include every header your browser client sends; an empty custom list allows none.</p>
+      <FieldRow label="Exposed headers">
+        <input key={config.corsExposedHeaders?.join(", ") ?? "automatic"} className="bi-input" defaultValue={config.corsExposedHeaders?.join(", ") ?? "X-Levoks-Session, Retry-After"} onBlur={event=>onChange({corsExposedHeaders:corsList(event.target.value)})} />
+      </FieldRow>
+      <label className="bi-checkbox-label">
+        <input type="checkbox" checked={config.corsCredentials ?? true} onChange={event=>onChange({corsCredentials:event.target.checked})} />Allow browser credentials
+      </label>
+      <FieldRow label="Preflight cache (seconds)">
+        <input className="bi-input" type="number" min={0} max={86400} step={1} value={config.corsMaxAge ?? 600} onChange={event=>{if(event.target.value && event.target.validity.valid)onChange({corsMaxAge:Number(event.target.value)});}} />
+      </FieldRow>
+      <p className="bi-help">These settings control browser access. Authentication and owner/tenant policies still protect resources.</p>
+      {corsProblems(config).map((message,i)=><p className="bi-hint" role="alert" key={i}>{message}</p>)}
+      </>
     )}
     {config.middlewareType === "rateLimit" && (
       <>

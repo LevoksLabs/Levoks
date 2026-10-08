@@ -4,6 +4,7 @@ import { useEditorStore } from "@/store/editorStore";
 import { useState } from "react";
 import type { Page } from "@/types";
 import { Plus, Pencil, Trash2 } from "lucide-react";
+import PageSearchSettings from "./PageSearchSettings";
 
 function RouteField({ page }: { page: Page }) {
   const [route, setRoute] = useState(page.route);
@@ -158,6 +159,7 @@ const PagesPanel: React.FC = () => {
                   </button>
                 )}
                 <RouteField key={`${page.id}:${page.route}`} page={page} />
+                <PageSearchSettings page={page} />
               </div>
 
               {pages.length > 1 && (

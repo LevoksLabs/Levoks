@@ -58,6 +58,10 @@ import "./workspace.css";
 import SourceTools from "./SourceTools";
 import SecretsPanel from "./SecretsPanel";
 import GitHubPanel from "./GitHubPanel";
+import PublishReadiness from "./PublishReadiness";
+import type { ReadinessTarget } from "@/lib/project/readiness";
+import { useEditorUIStore } from "@/store/editorUIStore";
+import { canvasCommand } from "@/lib/editor-shortcuts";
 import { conversations, saveConversation, clearConversations, type ConversationEntry } from "@/lib/project/conversations";
 import { readProposalStream, type GenerationProgress } from "@/lib/ai-stream";
 
@@ -353,6 +357,35 @@ export default function WorkspaceHub() {
     const errors = output.diagnostics.filter((d) => d.severity === "error");
     if (errors.length) throw new Error(errors.map((d) => d.message).join("\n"));
     return output.files;
+  }
+  function reviewReadiness(target: ReadinessTarget) {
+    if (target.kind === "source" || target.kind === "secrets") { openPanel(target.kind); return; }
+    setPanel(null);
+    useEditorUIStore.setState({inspectorVisible: true, trayCollapsed: false});
+    const state = useEditorStore.getState();
+    if (target.kind === "element") {
+      state.switchPage(target.pageId);
+      state.selectElement(target.elementId);
+      state.setSidebarOpen("layers");
+      useEditorUIStore.setState({inspectorTab: "content"});
+    } else if (target.kind === "page") {
+      state.switchPage(target.pageId);
+      state.setSidebarOpen("pages");
+    } else if (target.kind === "backend") {
+      state.setSidebarOpen("backend");
+      useBackendStore.getState().selectService(target.serviceId);
+      useBackendStore.getState().selectBlock(target.blockId || null);
+    } else {
+      state.setSidebarOpen("routes");
+      useRoutingStore.getState().selectConnection(target.connectionId || null);
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      canvasCommand("selection");
+      const selector = target.kind === "element" ? '.inspector .insp-tab.active' : target.kind === "backend" ? '.backend-inspector input, .backend-inspector select' : target.kind === "page" ? '.page-card-active .page-search-settings summary' : '.routing-right-panel button, .routing-right-panel input';
+      const focus = document.querySelector<HTMLElement>(selector);
+      if (target.kind === "page") focus?.closest('details')?.setAttribute('open', '');
+      focus?.focus();
+    }));
   }
   async function generate() {
     const project = redactProject(currentProject());
@@ -1313,6 +1346,7 @@ export default function WorkspaceHub() {
             )}
             {panel === "ship" && (
               <div className="workspace-grid">
+                <PublishReadiness key={workspace.id} project={compilation?.value?.project || currentProject()} graph={compilation?.value?.graph} diagnostics={diagnostics} error={compilation?.error} onReview={reviewReadiness} />
                 <section>
                   <h2>Export the complete application</h2>
                   <p>

@@ -33,11 +33,15 @@ export function safeElementUrl(value: unknown) {
     ? raw
     : "";
 }
+/** Preserve saved redirect buttons through the shared canvas/HTML/React tree. */
+export function buttonHref(element: ElementNode) {
+  return safeElementUrl(element.props.href || (element.actions?.type === "redirect" ? element.actions.target : ""));
+}
 
 /** An allowlisted tree, never raw HTML or executable project source. */
 export function nativeTree(element: ElementNode): SemanticTree {
   if (element.type === "button") {
-    const p = element.props, disabled = Boolean(p.disabled || p.loading), href = safeElementUrl(p.href);
+    const p = element.props, disabled = Boolean(p.disabled || p.loading), href = buttonHref(element);
     const attrs: Record<string, string | number | boolean> = { id: element.id, "data-button": "true", "aria-busy": Boolean(p.loading) };
     if (p.hoverBg) attrs["data-button-hover"] = "true";
     if (element.accessibility?.label) attrs["aria-label"] = element.accessibility.label;

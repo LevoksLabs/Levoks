@@ -16,7 +16,14 @@ export function designFixture() {
   store.addElement({ ...templates.shape, styles: { backgroundColor: "#995544" }, layout: { w: 140, h: 120 } }, gallery);
   const primitive = store.addElement({ ...templates.shape, props: { shapeType: "triangle" }, styles: { backgroundColor: "#553388" } }, undefined, 700, 410);
   const icon = store.addElement({ ...templates.icon, props: { icon: "heart", iconSize: 48, iconColor: "#553388" } }, undefined, 520, 410);
+  const redirect = store.addElement({ ...templates.button, props: { label: "View selected work", href: "" }, actions: { type: "redirect", target: "/_work" } }, undefined, 820, 30);
   const vector = store.addElement({ ...templates.shape, label: "Curved shape", styles: { backgroundColor: "transparent" }, vector: { points: [{ x: 0, y: 0, outX: 25, outY: 60 }, { x: 100, y: 100, inX: 80, inY: 40 }, { x: 0, y: 100 }], closed: true, stroke: "#553388", strokeWidth: 2, fill: "#ddd0ee" }, motion: { duration: 1, delay: 0, easing: "linear", iterations: 1, frames: [{ time: 0, x: 0, y: 0, scale: 1, rotation: 0, opacity: 0 }, { time: 1, x: 40, y: 0, scale: 1, rotation: 0, opacity: 1 }] } }, undefined, 30, 650);
   store.updateElement(tabs, { responsive: { mobile: { layout: { x: 12, y: 20, w: 350 } } } });
-  return { project: captureProject(project.id, project.name), tabs, repeater, gallery, icon, vector, primitive };
+  store.updatePageSeo(project.editor.activePageId, { title: "Studio design", description: "Design verification website", noIndex: true });
+  store.addPage();
+  const workPage = useEditorStore.getState().activePageId;
+  store.updatePageRoute(workPage, "/_work");
+  store.updatePageSeo(workPage, { title: "Selected work", description: "Our recent projects", noIndex: false });
+  store.switchPage(project.editor.activePageId);
+  return { project: captureProject(project.id, project.name), tabs, repeater, gallery, icon, vector, primitive, redirect };
 }

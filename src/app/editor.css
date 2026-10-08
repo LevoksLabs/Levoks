@@ -1,4 +1,41 @@
 /* Shared editor chrome. Application content inside artboards keeps its own styles. */
+.page-search-settings {
+  margin-top: 8px;
+  font-size: 12px;
+  cursor: default;
+}
+.page-search-settings summary {
+  padding: 8px 0;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.page-search-settings label {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+  color: var(--text-2);
+}
+.page-search-settings input:not([type="checkbox"]),
+.page-search-settings textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  background: var(--bg-input);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+}
+.page-search-settings textarea { resize: vertical; }
+.page-search-settings .page-search-indexing {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.5;
+}
+.page-search-indexing input { margin-top: 3px; accent-color: var(--accent); }
+.page-search-settings p { color: var(--text-2); font-size: 11px; line-height: 1.6; }
 .editor-root {
   height: 100dvh;
   min-width: 720px;
@@ -1744,3 +1781,16 @@ kbd {
 .workplace-state h1 { font-size: 24px; font-weight: 500; }
 .workplace-state p { color: var(--text-2); max-width: 55ch; }
 .workplace-state a { display: flex; align-items: center; gap: 8px; color: var(--accent); }
+.bi-relation-scope {
+  border: 0;
+  padding: 0;
+  margin: 8px 0;
+  display: grid;
+  gap: 8px;
+}
+.bi-relation-errors {
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.5;
+  padding-left: 16px;
+}

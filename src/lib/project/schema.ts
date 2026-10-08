@@ -48,6 +48,7 @@ const endpoint = z.object({
   responseBody: fields,
   queryParameters: fields.optional(),
   pathParameters: fields.optional(),
+  requestHeaders: fields.optional(),
   middlewareIds: z.array(id),
   authRequired: z.boolean(),
   modelId: id.optional(),
@@ -72,6 +73,11 @@ const configs = {
       "custom",
     ]),
     corsOrigins: text.optional(),
+    corsMethods: z.array(z.enum(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"])).max(6).optional(),
+    corsAllowedHeaders: z.array(z.string().max(120)).max(32).optional(),
+    corsExposedHeaders: z.array(z.string().max(120)).max(32).optional(),
+    corsCredentials: z.boolean().optional(),
+    corsMaxAge: finite.int().min(0).max(86400).optional(),
     rateLimit: finite.int().min(1).max(100000).optional(),
     rateLimitWindow: finite.min(1 / 60).max(1440).optional(),
     rateLimitMessage: z.string().trim().min(1).max(160).optional(),
@@ -135,6 +141,10 @@ const configs = {
     toModel: text,
     relationType: z.enum(["one-to-one", "one-to-many", "many-to-many"]),
     foreignKey: text,
+    joinModel: text.optional(),
+    inverseForeignKey: text.optional(),
+    onDelete: z.enum(["restrict", "cascade", "setNull"]).optional(),
+    scopeFields: z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/)).max(20).optional(),
   }),
   env_var: z.object({
     key: z.string().regex(/^[A-Z_][A-Z0-9_]*$/),
@@ -332,6 +342,11 @@ export const projectSchema = z.object({
         z.object({
           id,
           title: z.string().min(1).max(200),
+          seo: z.object({
+            title: z.string().max(200).optional(),
+            description: z.string().max(500).optional(),
+            noIndex: z.boolean().optional(),
+          }).optional(),
           route: z
             .string()
             .regex(/^\/(?:[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*)?$/),

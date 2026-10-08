@@ -3,7 +3,7 @@ import { useEditorStore } from "../../src/store/editorStore";
 import { captureProject } from "../../src/lib/project/workspace";
 import { templates } from "../../src/templates";
 
-export function mappedLoginFixture() {
+export function mappedLoginFixture(withHeaders = false) {
   const initial = loginProject(),
     editor = useEditorStore.getState();
   const form = editor.addElement(
@@ -130,6 +130,12 @@ export function mappedLoginFixture() {
       toPortId: "dashboard_node:in:page",
     },
   ];
+  if (withHeaders) {
+    endpoint.config.requestHeaders = [{ id: "client_version", name: "x-app-version", type: "number", required: true }];
+    project.routing.connections[0].requestMappings!.push({ fieldId: "client_version", location: "header", source: { kind: "literal", value: 7 } });
+    const response = service.blocks.find(block => block.type === "response" && block.label === "Login response");
+    if (response?.type === "response") response.config.headers = [{name: "X-App-Result", value: "$result.email"}];
+  }
   return {
     project,
     form,

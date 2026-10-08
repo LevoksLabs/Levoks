@@ -369,3 +369,35 @@
     display: none;
   }
 }
+.workspace-readiness {
+  grid-column: 1 / -1;
+}
+.readiness-list {
+  list-style: none;
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.readiness-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.readiness-item-title {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.readiness-item-title span {
+  margin-left: auto;
+  color: var(--text-2);
+  font-size: 11px;
+}
+.readiness-error .readiness-item-title { color: var(--red); }
+.readiness-warning .readiness-item-title { color: var(--yellow); }
+.readiness-item small { color: var(--text-2); }
+.readiness-item p { margin: 8px 0; }
