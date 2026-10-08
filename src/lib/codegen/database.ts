@@ -76,6 +76,7 @@ export function databaseCompose(
     port: number;
     identityOrigin?: string;
     healthOrigins?: Record<string, string>;
+    operatorSetup?: boolean;
   }[],
 ) {
   const lines = ["services:"];
@@ -147,6 +148,7 @@ export function databaseCompose(
       CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}",
     };
     const item = infrastructure.find((item) => item.name === service.name)!;
+    if (item.operatorSetup) environment.OPERATOR_SETUP_TOKEN = "${" + slug.replaceAll("-", "_").toUpperCase() + "_OPERATOR_SETUP_TOKEN:-}";
     if (item.identityOrigin)
       environment.AUTH_IDENTITY_ORIGIN = item.identityOrigin;
     Object.assign(environment, item.healthOrigins);

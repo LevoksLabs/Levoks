@@ -35,6 +35,7 @@ export type BackendBlockType =
 // ─── Block Configs ───
 
 export interface EndpointConfig {
+  view?: "submissionInbox";
   route: string;
   method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
   description: string;

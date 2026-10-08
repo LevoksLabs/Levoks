@@ -1,5 +1,5 @@
 import type { ServiceContainer, EndpointConfig } from "@/types/backend";
-export function accountPageSource(service: ServiceContainer) {
+export function accountPageSource(service: ServiceContainer, inboxes: {title: string; path: string}[] = []) {
   const routes = Object.fromEntries(
     service.blocks
       .filter((b) => b.type === "rest_endpoint")
@@ -13,13 +13,14 @@ import {useEffect, useState} from 'react';
 import {apiFetch} from '@/lib/api';
 import './account.css';
 const routes = ${JSON.stringify(routes)};
+const inboxes = ${JSON.stringify(inboxes).replaceAll("<", "\\u003c")};
 const call = (action, body, method = 'POST') => {
   if (!routes[action]) throw new Error('This account action is not configured in the backend.');
   return apiFetch(routes[action], {method, ...(method === 'GET' ? {} : {body: JSON.stringify(body || {})})}, ${service.port});
 };
 export default function AccountPage() {
   const [user, setUser] = useState(null), [sessions, setSessions] = useState([]), [mode, setMode] = useState('login');
-  const [email, setEmail] = useState(''), [name, setName] = useState(''), [password, setPassword] = useState(''), [newPassword, setNewPassword] = useState(''), [token, setToken] = useState('');
+  const [email, setEmail] = useState(''), [name, setName] = useState(''), [password, setPassword] = useState(''), [newPassword, setNewPassword] = useState(''), [token, setToken] = useState(''), [setupCode, setSetupCode] = useState('');
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [error, setError] = useState(''), [ready, setReady] = useState(false);
   async function reload() {setUser(await call('profile', undefined, 'GET')); if (routes.sessions) setSessions(await call('sessions', undefined, 'GET'));}
   useEffect(() => {
@@ -36,12 +37,13 @@ export default function AccountPage() {
     return () => {alive = false; window.removeEventListener('hashchange', consumeLink);};
   }, []);
   async function run(action) {if (busy) return; setBusy(true); setError(''); setMessage(''); try {await action();} catch(e) {setError(e.message || 'Account action failed');} finally {setBusy(false);}}
-  function changeMode(value) {setMode(value); setPassword(''); setNewPassword(''); setMessage(''); setError('');}
+  function changeMode(value) {setMode(value); setPassword(''); setNewPassword(''); setSetupCode(''); setMessage(''); setError('');}
   async function submit(event) {
     event.preventDefault();
     await run(async () => {
       if (mode === 'login') {await call('login', {email, password}); setPassword(''); await reload(); setMessage('Signed in.');}
       if (mode === 'register') {await call('register', {email, password, name}); setPassword(''); setMode('login'); setMessage('Account created. Verify your email if required, then sign in.');}
+      if (mode === 'setup') {await call('operator-setup', {email, password, name, setupCode}); setPassword(''); setSetupCode(''); setMode('login'); setMessage('Operator account created. Sign in to open your inbox.');}
       if (mode === 'forgot') {const result = await call('forgot-password', {email}); setMessage(result.message);}
       if (mode === 'reset') {await call('reset-password', {token, newPassword}); setToken(''); setNewPassword(''); setUser(null); setSessions([]); setMode('login'); setMessage('Password reset. Sign in with your new password.');}
       if (mode === 'verify') {await call('verify-email', {token}); setToken(''); setMode('login'); setMessage('Email verified. You can sign in now.'); if (user) await reload();}
@@ -52,6 +54,7 @@ export default function AccountPage() {
     {message && <p role="status" className="account-message">{message}</p>}{error && <p role="alert" className="account-error">{error}</p>}
     {!ready ? <p role="status">Checking your session…</p> : user && !['reset', 'verify'].includes(mode) ? <>
       <h2>Welcome, {user.name}</h2><p>{user.email} · {user.emailVerified ? 'Email verified' : 'Email not verified'}</p>
+      {inboxes.length > 0 && <nav aria-label="Application inboxes">{inboxes.map(inbox => <a key={inbox.path} href={inbox.path}>{inbox.title} submissions</a>)}</nav>}
       {!user.emailVerified && routes['request-verification'] && <button disabled={busy} onClick={() => run(async () => {const result = await call('request-verification', {email: user.email}); setMessage(result.message);})}>Send verification email</button>}
       <button disabled={busy} onClick={() => run(async () => {await call('logout'); setUser(null); setSessions([]); setMode('login'); setMessage('Signed out.');})}>Sign out</button>
       {routes['change-password'] && <form onSubmit={e => {e.preventDefault(); void run(async () => {await call('change-password', {currentPassword: password, newPassword}); setPassword(''); setNewPassword(''); setUser(null); setSessions([]); setMode('login'); setMessage('Password changed. Sign in again.');});}}>
@@ -59,14 +62,15 @@ export default function AccountPage() {
       </form>}
       {routes.sessions && <><h2>Active sessions</h2><button disabled={busy} onClick={() => run(reload)}>Refresh sessions</button><ul>{sessions.map(s => <li key={s.id}><span>{s.agent || 'Unknown device'}<small>Last used {new Date(s.lastUsedAt).toLocaleString()}</small></span><button disabled={busy} onClick={() => run(async () => {await call('revoke-session', {sessionId: s.id}); try {await reload();} catch {setUser(null); setSessions([]); setMode('login');}})}>Revoke session</button></li>)}</ul><button disabled={busy} onClick={() => run(async () => {await call('logout-all'); setUser(null); setSessions([]); setMode('login'); setMessage('All sessions signed out.');})}>Sign out all devices</button></>}
     </> : <>
-      <nav aria-label="Account actions"><button type="button" aria-pressed={mode === 'login'} onClick={() => changeMode('login')}>Sign in</button><button type="button" aria-pressed={mode === 'register'} onClick={() => changeMode('register')}>Create account</button>{routes['forgot-password'] && <button type="button" aria-pressed={mode === 'forgot'} onClick={() => changeMode('forgot')}>Forgot password</button>}</nav>
+      <nav aria-label="Account actions"><button type="button" aria-pressed={mode === 'login'} onClick={() => changeMode('login')}>Sign in</button><button type="button" aria-pressed={mode === 'register'} onClick={() => changeMode('register')}>Create account</button>{routes['forgot-password'] && <button type="button" aria-pressed={mode === 'forgot'} onClick={() => changeMode('forgot')}>Forgot password</button>}{routes['operator-setup'] && <button type="button" aria-pressed={mode === 'setup'} onClick={() => changeMode('setup')}>Set up first operator</button>}</nav>
       <form onSubmit={submit}>
-        {['login', 'register', 'forgot'].includes(mode) && <label>Email address<input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} maxLength={320} required/></label>}
-        {mode === 'register' && <label>Name<input autoComplete="name" value={name} onChange={e => setName(e.target.value)} maxLength={200} required/></label>}
-        {['login', 'register'].includes(mode) && <label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'register' ? 12 : undefined} value={password} onChange={e => setPassword(e.target.value)} required/></label>}
+        {mode === 'setup' && <><p>Use the runtime setup code from SUBMISSIONS.md to enroll the first operator. Ordinary accounts cannot read submissions.</p><label>Setup code<input type="password" autoComplete="off" maxLength={256} value={setupCode} onChange={e => setSetupCode(e.target.value)} required/></label></>}
+        {['login', 'register', 'forgot', 'setup'].includes(mode) && <label>Email address<input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} maxLength={320} required/></label>}
+        {['register', 'setup'].includes(mode) && <label>Name<input autoComplete="name" value={name} onChange={e => setName(e.target.value)} maxLength={200} required/></label>}
+        {['login', 'register', 'setup'].includes(mode) && <label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode !== 'login' ? 12 : undefined} value={password} onChange={e => setPassword(e.target.value)} required/></label>}
         {['reset', 'verify'].includes(mode) && <><p>{mode === 'reset' ? 'Choose a new password. Every existing session will be signed out.' : 'Confirm this email verification request.'}</p><label>Confirmation token<input autoComplete="off" value={token} onChange={e => setToken(e.target.value)} required/></label></>}
         {mode === 'reset' && <label>New password<input type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={e => setNewPassword(e.target.value)} required/></label>}
-        <button className="account-primary" disabled={busy}>{busy ? 'Working…' : {login: 'Sign in to account', register: 'Register account', forgot: 'Send recovery instructions', reset: 'Reset password', verify: 'Verify email'}[mode]}</button>
+        <button className="account-primary" disabled={busy}>{busy ? 'Working…' : {login: 'Sign in to account', register: 'Register account', setup: 'Create first operator', forgot: 'Send recovery instructions', reset: 'Reset password', verify: 'Verify email'}[mode]}</button>
       </form>
       {mode === 'login' && routes['request-verification'] && <button disabled={busy || !email} onClick={() => run(async () => {const result = await call('request-verification', {email}); setMessage(result.message);})}>Resend verification email</button>}
     </>}

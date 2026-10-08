@@ -6,6 +6,10 @@ import { useBackendStore } from "@/store/backendStore";
 import { useRoutingStore } from "@/store/routingStore";
 import { projectHistory } from "@/store/projectHistory";
 import {
+  createSubmissionInbox,
+  submissionInboxPath,
+} from "@/lib/submission-inbox";
+import {
   endpointFields,
   fieldIdentity,
   isFormInput,
@@ -52,6 +56,14 @@ function FormDestinationSettings({ form }: { form: ElementNode }) {
     (item) =>
       item.service.id === connectedService &&
       connected?.toPortId.endsWith(`:in:${item.block.id}`),
+  );
+  const inbox = initial?.service.blocks.find(
+    (block) =>
+      block.type === "rest_endpoint" &&
+      "view" in block.config &&
+      block.config.view === "submissionInbox" &&
+      "modelId" in initial.block.config &&
+      block.config.modelId === initial.block.config.modelId,
   );
   const [destination, setDestination] = useState(initial?.key || "new"),
     [name, setName] = useState("Form submissions"),
@@ -268,6 +280,37 @@ function FormDestinationSettings({ form }: { form: ElementNode }) {
           saves in the downloaded application.
         </p>
       )}
+      {initial &&
+        (inbox ? (
+          <p className="panel-caption">
+            Private inbox:{" "}
+            <code>{submissionInboxPath(initial.service, inbox.id)}</code>. Run
+            the downloaded application, then use its account page to set up the
+            first operator. Runtime setup instructions are in SUBMISSIONS.md.
+          </p>
+        ) : (
+          <button
+            type="button"
+            className="insp-form-add-btn"
+            onClick={() => {
+              setErrorMessage("");
+              try {
+                createSubmissionInbox(initial.service.id, initial.block.id);
+                setMessage(
+                  "Private inbox added. Download and run the application; follow SUBMISSIONS.md to enroll its first operator.",
+                );
+              } catch (error) {
+                setErrorMessage(
+                  error instanceof Error
+                    ? error.message
+                    : "Inbox setup failed.",
+                );
+              }
+            }}
+          >
+            Add private submission inbox
+          </button>
+        ))}
       <button
         type="button"
         className="insp-form-add-btn"

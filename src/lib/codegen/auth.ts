@@ -10,10 +10,24 @@ const bcrypt = require('bcryptjs');
 const sessions = require('../identity/sessions');
 const recovery = require('../identity/recovery');
 const rateLimit = require('express-rate-limit');
+const crypto = require('node:crypto');
 const dummyHash = bcrypt.hashSync('invalid-password-comparison', ${hashRounds});
 exports.limit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false });
 const ready = () => process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32;
 const identity = user => ({ id: String(user._id), email: user.email, name: user.name, emailVerified: !!user.emailVerifiedAt });
+exports['operator-setup'] = async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const configured = process.env.OPERATOR_SETUP_TOKEN || '';
+  if (!ready() || !/^[a-f0-9]{64}$/i.test(configured)) return res.status(503).json({error: 'Operator setup is not configured. Set a random 64-character hexadecimal setup code in the runtime environment.'});
+  try {sessions.checkOrigin(req);} catch {return res.status(403).json({error: 'Origin not allowed'});}
+  const {email, name, password, setupCode} = req.body;
+  if (typeof setupCode !== 'string' || setupCode.length > 256 || !crypto.timingSafeEqual(crypto.createHash('sha256').update(setupCode).digest(), crypto.createHash('sha256').update(configured).digest())) return res.status(403).json({error: 'Invalid setup code'});
+  if (typeof email !== 'string' || email.length > 320 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || typeof name !== 'string' || !name.trim() || name.length > 200 || typeof password !== 'string' || password.length < 12 || Buffer.byteLength(password, 'utf8') > 72) return res.status(400).json({error: 'Provide a valid email, name and a password of 12 characters to 72 bytes'});
+  try {
+    const user = await User.create({email: email.trim().toLowerCase(), name: name.trim(), password: await bcrypt.hash(password, ${hashRounds}), role: 'operator', operatorBootstrap: 'initial'});
+    return res.status(201).json(identity(user));
+  } catch (error) {return res.status(error.code === 11000 ? 409 : 503).json({error: error.code === 11000 ? 'Operator setup was already completed, or this email is in use. Sign in with your existing account.' : 'Operator setup could not be completed. Please retry.'});}
+};
 exports.register = async (req, res) => {
   if (!ready()) return res.status(503).json({ error: 'Authentication is not configured' });
   const { email, password, name } = req.body;

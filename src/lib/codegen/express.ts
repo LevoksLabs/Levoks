@@ -73,7 +73,8 @@ function generateModel(block: BackendBlock, identityModel = false): string {
     if (config.timestamps) opts.push("  timestamps: true");
 
     const identityFields = identityModel && config.fields.some(f => f.name === "password") ? ",\n    authVersion: {type: Number, default: 0, select: false},\n    disabledAt: {type: Date, default: null, select: false},\n    emailVerifiedAt: {type: Date, default: null},\n" + ['authReset', 'authVerify'].map(prefix => `    ${prefix}Hash: {type: String, select: false},\n    ${prefix}ExpiresAt: {type: Date, select: false},\n    ${prefix}RequestedAt: {type: Date, select: false},\n    ${prefix}Mail: {type: mongoose.Schema.Types.Mixed, select: false}`).join(',\n') : "";
-    return MODEL_TEMPLATE(config.tableName, fields + identityFields + (config.softDelete ? ",\n    deletedAt: { type: Date, default: null, index: true }" : "")).replace("timestamps: true", `timestamps: ${config.timestamps}`);
+    const bootstrapField = identityFields ? ",\n    operatorBootstrap: { type: String, select: false, unique: true, sparse: true }" : "";
+    return MODEL_TEMPLATE(config.tableName, fields + identityFields + bootstrapField + (config.softDelete ? ",\n    deletedAt: { type: Date, default: null, index: true }" : "")).replace("timestamps: true", `timestamps: ${config.timestamps}`);
 }
 
 // ─── Generate route handler for an endpoint ───
@@ -81,12 +82,12 @@ function generateEndpointHandler(block: BackendBlock, models: string[], fields: 
     const config = block.config as EndpointConfig;
     const softDelete = modelConfig?.softDelete;
     const method = config.method.toLowerCase();
-    const middleware = (authenticate = false) => `...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'ip'), ${authenticate ? "auth, " : ""}...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'identity'), validateParameters(${JSON.stringify({query: config.queryParameters, path: config.pathParameters, header: config.requestHeaders})}), `;
+    const middleware = (authenticate = false) => `${config.view ? "(req, res, next) => {res.set('Cache-Control', 'private, no-store'); next();}, " : ""}...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'ip'), ${authenticate ? "auth, " : ""}...require('../middleware/rate-limits').endpoint(${JSON.stringify(config.middlewareIds)}, 'identity'), validateParameters(${JSON.stringify({query: config.queryParameters, path: config.pathParameters, header: config.requestHeaders})}), `;
     if (block.connections.length) return `router.${method}(${JSON.stringify(config.route)}, ${middleware(Boolean(config.authRequired || config.policyIds?.length))}${identityModel ? "identity.limit, " : ""}validateBody(${JSON.stringify(config.requestBody)}), async (req, res, next) => { try { const output = await workflow(${JSON.stringify(block.id)}, req${identityModel ? ", res" : ""}); if (output.headers) res.set(output.headers); if ([204, 205, 304].includes(output.status)) return res.status(output.status).end(); res.status(output.status).json(output.body ?? null); } catch (error) { next(error); } });`;
     const modelName = models.length > 0 ? models[0] : null;
     if (identityModel) {
         const action = config.route.split("/").pop();
-        if (action === "register" || action === "login") return `router.post(${JSON.stringify(config.route)}, ${middleware()}identity.limit, validateBody(${JSON.stringify(config.requestBody)}), validateRules, identity.${action});`;
+        if (["register", "login", "operator-setup"].includes(action || "")) return `router.post(${JSON.stringify(config.route)}, ${middleware()}identity.limit, validateBody(${JSON.stringify(config.requestBody)}), validateRules, identity[${JSON.stringify(action)}]);`;
         if (action === "profile") return `router.get(${JSON.stringify(config.route)}, ${middleware(true)}identity.profile);`;
         if (action === "logout") return `router.post(${JSON.stringify(config.route)}, ${middleware(true)}identity.logout);`;
         if (action === "refresh") return `router.post(${JSON.stringify(config.route)}, ${middleware()}identity.limit, identity.refresh);`;
@@ -235,7 +236,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
             const unique = relations.some(r => r.relationType === "one-to-one" && r.toModel === model.id && r.foreignKey === field.name);
             return parent ? {...field, ref: parent.tableName, indexed: field.indexed || !unique} : field;
         })}};
-        let generatedModel = sql ? `module.exports = require('../database').model(${JSON.stringify(config.tableName)});` : generateModel(referencedModel, identityModel);
+        let generatedModel = sql ? `module.exports = require('../database').model(${JSON.stringify(config.tableName)});` : generateModel(referencedModel, identityModel && config.fields.some(field => field.name === "password"));
         const indexes: string[] = [];
         for (const relation of relations) {
             if (relation.relationType === "one-to-one" && relation.toModel === model.id)
@@ -266,7 +267,18 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
             .map((e) => {
                 const bound = models.find(m => m.id === (e.config as EndpointConfig).modelId) || models[0];
                 const boundConfig = bound?.config as DbModelConfig | undefined;
-                const effective = e.connections.length && programAuth && !identityModel ? {...e, config: {...e.config, authRequired: true}} : e;
+                const pending = [...e.connections], seen = new Set<string>();
+                let scoped = false;
+                while (pending.length) {
+                    const id = pending.pop()!;
+                    if (seen.has(id)) continue;
+                    seen.add(id);
+                    const step = service.blocks.find(block => block.id === id);
+                    if (!step) continue;
+                    if (step.type === "query" && "policyId" in step.config && step.config.policyId) scoped = true;
+                    pending.push(...workflowOutputs(step).flatMap(output => output.ids));
+                }
+                const effective = scoped ? {...e, config: {...e.config, authRequired: true}} : e;
                 return generateEndpointHandler(effective, boundConfig ? [boundConfig.tableName] : modelNames, boundConfig?.fields || [], identityModel, boundConfig, relations.length ? bound?.id : undefined);
             })
             .join("\n\n");
@@ -310,6 +322,8 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
         files[`${servicePath}/package.json`] = JSON.stringify(manifest, null, 2);
     }
     if (identityModel) {
+        const identityName = (models.find(m => (m.config as DbModelConfig).fields.some(f => f.name === "password"))!.config as DbModelConfig).tableName;
+        files[`${servicePath}/server.js`] = files[`${servicePath}/server.js`].replace('await observability.initialize();', `await require('./models/${identityName}').init();\n    await observability.initialize();`);
         const manifest = JSON.parse(files[`${servicePath}/package.json`]);
         manifest.scripts['worker:email'] = 'node workers/identity-email.js';
         files[`${servicePath}/package.json`] = JSON.stringify(manifest, null, 2);
@@ -339,6 +353,7 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
     });
     files[`${servicePath}/.env.example`] = ENV_TEMPLATE(envMap);
     if (identityModel) files[`${servicePath}/.env.example`] += '\nIDENTITY_PUBLIC_URL=\nIDENTITY_EMAIL_FROM=\nIDENTITY_EMAIL_KEYS=\nIDENTITY_EMAIL_ACTIVE_KEY=\nRESEND_API_KEY=\n';
+    if (identityModel && endpoints.some(endpoint => (endpoint.config as EndpointConfig).route.endsWith('/operator-setup'))) files[`${servicePath}/.env.example`] += '\nOPERATOR_SETUP_TOKEN=\n';
     files[`${servicePath}/.dockerignore`] = `node_modules\n.env*\n.git\ndata\n*.sqlite*\n*.db*\n`;
     files[`${servicePath}/middleware/validate.js`] = `exports.validateParameters = (contracts) => (req, res, next) => {
   for (const [location, fields] of Object.entries(contracts)) {

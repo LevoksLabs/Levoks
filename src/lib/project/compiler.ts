@@ -9,6 +9,7 @@ import { generateFrontendProject } from "@/lib/codegen/frontend";
 import { generateProject } from "@/lib/codegen";
 import { gatewaySource, apiClientSource } from "@/lib/codegen/gateway";
 import { accountPageSource, ACCOUNT_CSS } from "@/lib/codegen/account-page";
+import { submissionInboxSource, INBOX_CSS } from "@/lib/codegen/submission-inbox";
 import { validateFiles } from "@/lib/codegen/files";
 import {
   parseProject,
@@ -154,9 +155,23 @@ export function compileProject(value: ProjectDocument) {
     )
       continue;
     const folder = `frontend/app/%5F%5Flevoks/account/${serviceSlug(service.name)}`;
-    files[`${folder}/page.jsx`] = accountPageSource(service);
+    const accountInboxes = backend.services.flatMap(resource => resource.blocks.some(b => b.type === "auth_block" && b.config.identityServiceId === service.id) ? resource.blocks.flatMap(b => b.type === "rest_endpoint" && b.config.view === "submissionInbox" ? [{title: resource.name, path: `/__levoks/inbox/${serviceSlug(resource.name)}/${b.id}`}] : []) : []);
+    files[`${folder}/page.jsx`] = accountPageSource(service, accountInboxes);
     files[`${folder}/account.css`] = ACCOUNT_CSS;
   }
+  const inboxes: string[] = [];
+  if (!diagnostics.some(d => d.severity === "error")) for (const service of backend.services) for (const endpoint of service.blocks) {
+    if (endpoint.type !== "rest_endpoint" || endpoint.config.view !== "submissionInbox") continue;
+    const binding = service.blocks.find(b => b.type === "auth_block" && b.config.identityServiceId);
+    const identity = backend.services.find(s => binding?.type === "auth_block" && s.id === binding.config.identityServiceId)!;
+    const path = `/__levoks/inbox/${serviceSlug(service.name)}/${endpoint.id}`;
+    const folder = `frontend/app/%5F%5Flevoks/inbox/${serviceSlug(service.name)}/${endpoint.id}`;
+    files[`${folder}/page.jsx`] = submissionInboxSource(service, endpoint, identity);
+    files[`${folder}/inbox.css`] = INBOX_CSS;
+    files[`${folder}/layout.jsx`] = `export const metadata = {title: 'Submission inbox', robots: {index: false, follow: false}};\nexport default function Layout({children}) {return children;}`;
+    inboxes.push(`- ${service.name}: ${path}\n  Account: /__levoks/account/${serviceSlug(identity.name)}\n  Setup code: OPERATOR_SETUP_TOKEN in backend/${serviceSlug(identity.name)}/.env (Compose: ${serviceSlug(identity.name).replaceAll("-", "_").toUpperCase()}_OPERATOR_SETUP_TOKEN in backend/.env).`);
+  }
+  if (inboxes.length) files["SUBMISSIONS.md"] = `# Private submission inboxes\n\n${inboxes.join("\n\n")}\n\nRun the downloaded application with persistent MongoDB storage and exact frontend CORS_ORIGINS. Set the same random JWT_SECRET of at least 32 characters on both the identity and its connected submission service. Generate a setup code with: node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))". Set that 64-character code only in the runtime environment named above. On the account page, choose Set up first operator and enter your email, name, password and setup code. Then sign in and open the inbox path. Remove the setup code from the runtime environment and restart the identity service after enrollment. Do not commit or share it in the project.\n\nSetup creates one operator account, enforced by a durable unique database marker even across concurrent processes and restarts. Public registration always creates a regular user; it cannot grant operator access. Disabling an operator retains the enrollment marker. Account deletion/recovery and adding more operators require trusted administration; this view does not implement team or tenant management. Operators can read all submissions in their connected resource service.\n\nVisitors continue to use the public submit endpoint. Inbox reads require a live, revocable operator session and return at most 50 records per page, newest IDs first. An exactly full final page may enable Next once before showing an empty page; use Previous to return. Refresh reloads records; loading, errors and sign out clear the visible rows. Text is escaped. These built-in inbox pages are generated from model fields, not editable canvas pages or general live-data widgets. Model changes need reviewed data migrations. The editor preview does not execute backend requests: run this exported application for real saves and reads.\n`;
   files["frontend/package.json"] = JSON.stringify(
     {
       name: serviceSlug(project.name),
@@ -207,6 +222,7 @@ export function compileProject(value: ProjectDocument) {
     `# Generated accounts\n\nIdentity services expose /__levoks/account/<service-slug> on the frontend for registration, sign-in, verification, password recovery, session inventory and revocation. New Auth templates include these endpoints; older projects need the matching endpoint blocks.\n\nSet frontend APP_ORIGIN to its public HTTPS origin and API_ORIGIN_<port> to each backend origin at runtime. API routes are proxied through the same frontend origin with a declared-route allowlist and service-scoped HttpOnly cookies. Keep these values in the hosting environment.\n\nEach identity backend needs MONGO_URI, a random JWT_SECRET of at least 32 characters and exact frontend CORS_ORIGINS. Resource services must bind to the identity service in their Authentication inspector and configure AUTH_IDENTITY_ORIGIN to that service. Bare JWT verification does not revoke sessions.\n\nEmail verification/recovery requires IDENTITY_PUBLIC_URL (the full HTTPS account page URL), IDENTITY_EMAIL_FROM (verified sender), IDENTITY_EMAIL_KEYS (JSON keyring of base64 random 32-byte keys), and IDENTITY_EMAIL_ACTIVE_KEY. Run npm run worker:email separately with the same database and keyring plus RESEND_API_KEY. Keep the provider key on the worker. Enable the verified-email requirement in the Authentication inspector when required. Retain old encryption keys until pending mail has drained or expired. Never put keys in canvas state or generated source.\n\nThe worker uses encrypted durable delivery records, bounded retries, provider idempotency and expiring single-use links. Email provider setup and sender verification are external deployment actions. Supervise both processes, use HTTPS, persist and back up MongoDB, monitor worker failures, and verify real email delivery before release.\n`;
   files["README.md"] =
     `# ${project.name}\n\nGenerated by Levoks. Node.js 22+ required.\n\n## Frontend\n\nIn frontend/: npm install, copy .env.example to .env.local, then npm run dev. Production: npm run build && npm start.\n\n## Backend\n\nIn backend/: docker compose up --build. Configure JWT_SECRET and allowed CORS origins before exposing services. Each service also runs with npm install && npm start.\n\n## Deployment\n\nDeploy frontend/ as a Next.js project. Run Express services on a container host with MongoDB and configure server-only API_ORIGIN_<port> for each service origin and APP_ORIGIN for the frontend public origin at runtime. The generated gateway keeps browser requests on the frontend origin. See IDENTITY.md for account pages and the separately supervised email worker. Keep credentials in the hosting provider's secret store.\n\n## Source of truth\n\nlevoks.project.json restores the visual workspace. levoks.ir.json includes the resolved flows. Secret values are omitted. Review generated code and test application-specific authorization before release.\n`;
+  if (inboxes.length) files["README.md"] += "\n## Submission inbox\n\nSee SUBMISSIONS.md for private inbox paths, first-operator setup and runtime configuration. After sign-in, the account page links to its connected inboxes.\n";
   if (project.source) {
     if (project.source.basedOn !== designFingerprint(project))
       problem(

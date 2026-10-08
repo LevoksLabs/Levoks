@@ -30,6 +30,7 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
     const parsedDatabase = databaseSchema.safeParse(database);
     if (!parsedDatabase.success) problem(service.id, "Choose a valid database engine, storage location, filename and dedicated environment variable.");
     if (service.blocks.some(b => b.type === "env_var" && b.config.key === database.connectionEnv)) problem(service.id, "Database connection values belong in the exported runtime environment, not an Environment Variable block.");
+    if (service.blocks.some(b => b.type === "env_var" && b.config.key === "OPERATOR_SETUP_TOKEN")) problem(service.id, "Operator setup codes belong only in the exported runtime environment, not an Environment Variable block.");
     if (isSql(database)) {
       const tables = service.blocks.filter(b => b.type === "db_model").map(b => b.config.tableName.toLowerCase());
       if (new Set(tables).size !== tables.length) problem(service.id, "SQL table names must be distinct without relying on letter case.");
@@ -55,6 +56,7 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
       if (block.type === "db_model") {
         const reserved = ["_id", "__v", ...(block.config.timestamps ? ["createdAt", "updatedAt"] : []), ...(block.config.softDelete ? ["deletedAt"] : [])];
         for (const field of block.config.fields) {
+          if (field.name === "operatorBootstrap") problem(block.id, "operatorBootstrap is reserved for one-time operator enrollment.");
           if (reserved.includes(field.name)) problem(block.id, `${block.label}: ${field.name} is managed by the model.`);
           try { modelDefault(field); }
           catch (error) { problem(block.id, `${block.label}.${field.name}: ${(error as Error).message}`); }
@@ -157,6 +159,65 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
         `${service.name}: port 3000 is reserved for the frontend.`,
       );
     for (const block of service.blocks) {
+      if (block.type === "rest_endpoint" && block.config.route.endsWith("/operator-setup")) {
+        const fields = block.config.requestBody;
+        if (
+          !jwt ||
+          !identityModel ||
+          block.config.method !== "POST" ||
+          block.config.authRequired ||
+          block.config.policyIds?.length ||
+          block.connections.length ||
+          (block.config.modelId && block.config.modelId !== identityModel.id) ||
+          fields.length !== 4 ||
+          ["email", "name", "password", "setupCode"].some(name => !fields.some(f => f.name === name && f.type === "string" && f.required))
+        )
+          problem(block.id, "Operator setup requires the JWT identity model, public POST, no workflow or policies, and required string email, name, password and setupCode fields.");
+      }
+      if (block.type === "rest_endpoint" && block.config.view === "submissionInbox") {
+        const config = block.config;
+        const model = service.blocks.find(b => b.type === "db_model" && b.id === config.modelId);
+        const policy = service.blocks.find(b => b.type === "access_policy" && config.policyIds?.includes(b.id));
+        const query = service.blocks.find(b => b.type === "query" && b.id === block.connections[0]);
+        const response = service.blocks.find(b => b.type === "response" && b.id === block.connections[1]);
+        if (
+          config.method !== "GET" ||
+          !config.authRequired ||
+          /[:*]/.test(config.route) ||
+          config.requestBody.length ||
+          config.responseBody.length ||
+          config.requestHeaders?.length ||
+          config.pathParameters?.length ||
+          config.queryParameters?.length !== 1 ||
+          config.queryParameters[0].name !== "page" ||
+          config.queryParameters[0].type !== "number" ||
+          config.queryParameters[0].required ||
+          !service.blocks.some(b => b.type === "auth_block" && b.config.strategy === "jwt" && b.config.identityServiceId) ||
+          model?.type !== "db_model" ||
+          model.config.fields.some(f => /password|secret|token/i.test(f.name)) ||
+          policy?.type !== "access_policy" ||
+          policy.config.roles.length !== 1 ||
+          policy.config.roles[0] !== "operator" ||
+          !policy.config.permissions.includes("submissions.read") ||
+          policy.config.ownerField ||
+          policy.config.tenantField ||
+          block.connections.length !== 2 ||
+          query?.type !== "query" ||
+          query.connections.length ||
+          query.config.operation !== "find" ||
+          query.config.modelId !== config.modelId ||
+          query.config.policyId !== policy.id ||
+          query.config.limit !== 50 ||
+          query.config.page !== "$request.query.page" ||
+          query.config.sortField !== "_id" ||
+          query.config.sortDirection !== "desc" ||
+          response?.type !== "response" ||
+          response.connections.length ||
+          response.config.status !== 200 ||
+          response.config.value !== `$${query.config.output}`
+        )
+          problem(block.id, "Submission inbox requires a fixed authenticated GET, a separate JWT identity service, the operator submissions.read policy, and a 50-record descending _id query with optional numeric page and an array response. Credential fields and owner/tenant scopes require a dedicated view.");
+      }
       if (
         jwt &&
         identityModel &&
@@ -246,7 +307,7 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
         jwt &&
         identityModel &&
         block.type === "rest_endpoint" &&
-        !/\/(register|login|profile|logout|refresh|sessions|revoke-session|logout-all|change-password|introspect|forgot-password|reset-password|request-verification|verify-email)$/.test(
+        !/\/(register|login|profile|logout|refresh|sessions|revoke-session|logout-all|change-password|introspect|forgot-password|reset-password|request-verification|verify-email|operator-setup)$/.test(
           block.config.route,
         )
       )

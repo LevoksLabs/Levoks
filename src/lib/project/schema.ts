@@ -41,6 +41,7 @@ const fields = z
   .refine(values => new Set(values.map(field => field.id || field.name)).size === values.length, "Field identities must be unique")
   .refine(values => values.every(field => !["__proto__", "constructor", "prototype"].includes(field.name)), "Reserved field name");
 const endpoint = z.object({
+  view: z.literal("submissionInbox").optional(),
   route: z.string().regex(/^\/[a-zA-Z0-9/_:.-]*$/),
   method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
   description: text,

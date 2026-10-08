@@ -170,7 +170,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["nod
 CMD ["node", "server.js"]
 `.trim();
 
-export const DOCKER_COMPOSE_TEMPLATE = (services: { name: string; port: number; identityOrigin?: string; healthOrigins?: Record<string, string> }[]) => `
+export const DOCKER_COMPOSE_TEMPLATE = (services: { name: string; port: number; identityOrigin?: string; operatorSetup?: boolean; healthOrigins?: Record<string, string> }[]) => `
 version: '3.8'
 
 services:
@@ -188,7 +188,7 @@ ${services.map(s => `  ${serviceSlug(s.name)}:
     environment:
       - PORT=${s.port}
       - JWT_SECRET=\${JWT_SECRET:-}
-${s.identityOrigin ? `      - AUTH_IDENTITY_ORIGIN=${s.identityOrigin}\n` : ""}      - CORS_ORIGINS=\${CORS_ORIGINS:-http://localhost:3000}
+${s.operatorSetup ? `      - OPERATOR_SETUP_TOKEN=\${${serviceSlug(s.name).replaceAll("-", "_").toUpperCase()}_OPERATOR_SETUP_TOKEN:-}\n` : ""}${s.identityOrigin ? `      - AUTH_IDENTITY_ORIGIN=${s.identityOrigin}\n` : ""}      - CORS_ORIGINS=\${CORS_ORIGINS:-http://localhost:3000}
       - MONGO_URI=mongodb://mongodb:27017/${serviceSlug(s.name).replace(/-/g, '_')}_db
 ${Object.entries(s.healthOrigins || {}).map(([key, value]) => `      - ${key}=${value}`).join('\n')}
     depends_on:

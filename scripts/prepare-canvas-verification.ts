@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
 import { validateFiles } from "../src/lib/codegen/files";
@@ -16,6 +16,13 @@ async function main() {
     ),
   );
   const root = path.resolve(process.argv[3] || ".verification/canvas-app");
+  const verificationRoot = path.resolve(".verification");
+  if (!root.startsWith(verificationRoot + path.sep))
+    throw new Error(
+      "Verification exports must use a child directory of .verification.",
+    );
+  // A previous ZIP may contain deleted routes; verify the exact current export.
+  await rm(root, { recursive: true, force: true });
   for (const [file, source] of Object.entries(files)) {
     const destination = path.resolve(root, file);
     if (!destination.startsWith(root + path.sep))

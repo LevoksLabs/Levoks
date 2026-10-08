@@ -44,6 +44,7 @@ export function generateProject(
                 return {
                 name: s.name,
                 port: s.port,
+                operatorSetup: s.blocks.some(b => b.type === "rest_endpoint" && b.config.route.endsWith("/operator-setup")),
                 identityOrigin: target ? `http://${serviceSlug(target.name)}:${target.port}` : undefined,
                 healthOrigins: Object.fromEntries(healthConfiguration(s).serviceIds.flatMap(id => {const target = services.find(v => v.id === id); return target ? [[`HEALTH_ORIGIN_${target.port}`, `http://${serviceSlug(target.name)}:${target.port}`]] : [];})),
             }; });
@@ -68,6 +69,7 @@ export function generateProject(
         for (const service of services) {
             const database = service.database || defaultDatabase();
             const prefix = serviceSlug(service.name).replaceAll("-", "_").toUpperCase();
+            if (service.blocks.some(b => b.type === "rest_endpoint" && b.config.route.endsWith("/operator-setup"))) composeEnvironment[`${prefix}_OPERATOR_SETUP_TOKEN`] = "";
             if (database.location === "remote") composeEnvironment[`${prefix}_${database.connectionEnv}`] = "";
             else if (!["mongodb", "sqlite"].includes(database.engine)) composeEnvironment[`${prefix}_DB_PASSWORD`] = "";
         }

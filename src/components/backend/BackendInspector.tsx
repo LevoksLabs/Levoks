@@ -502,6 +502,12 @@ const EndpointEditor: React.FC<{
           <span className="bi-toggle-slider" />
         </label>
       </FieldRow>
+      <FieldRow label="Generated view">
+        <select className="bi-select" aria-label="Generated endpoint view" value={config.view || ""} onChange={e => onChange({view: e.target.value === "submissionInbox" ? "submissionInbox" : undefined})}>
+          <option value="">None</option><option value="submissionInbox">Private submission inbox</option>
+        </select>
+      </FieldRow>
+      {config.view && <p className="bi-help">Requires the validated operator read policy and paginated query. Use a connected form&apos;s Add private submission inbox action for guided setup.</p>}
     </Section>
     <Section title="Request Headers" icon={<ChevronDown size={12} />} defaultOpen={false}>
       <p className="bi-help">Declare application metadata, then map it in Routing. Names are case-insensitive. Authentication and browser headers are managed separately.</p>
@@ -618,6 +624,7 @@ const MiddlewareEditor: React.FC<{
           onChange={(e) => onChange({ corsOrigins: e.target.value })}
         />
       </FieldRow>
+
       <p className="bi-help">Comma-separated HTTP(S) origins. Runtime CORS_ORIGINS can override them. Paths and wildcards are not supported.</p>
       <fieldset className="bi-relation-scope">
         <legend className="bi-label">Allowed browser methods</legend>
