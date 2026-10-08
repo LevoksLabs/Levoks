@@ -761,6 +761,62 @@
 .insp-row-2 {
   gap: 10px;
 }
+.form-destination {
+  display: grid;
+  gap: 12px;
+  font-size: 12px;
+}
+.form-destination-field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-2);
+}
+.form-destination-field input,
+.form-destination-field select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px;
+  background: var(--bg-input);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font: inherit;
+}
+.form-destination-fields {
+  margin: 0;
+  padding-left: 16px;
+  overflow-wrap: anywhere;
+}
+.form-destination-fields small {
+  color: var(--text-3);
+}
+.form-destination [role="alert"] {
+  margin: 0;
+  color: var(--text-1);
+  border-left: 2px solid var(--border-hover);
+  padding-left: 8px;
+}
+.form-destination [role="status"] {
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.working-form-template {
+  margin: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.working-form-template h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.working-form-template p {
+  color: var(--text-2);
+  line-height: 1.5;
+}
 .inspector-hint {
   margin: 14px;
   padding: 20px 8px;

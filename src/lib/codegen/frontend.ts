@@ -79,7 +79,7 @@ function flowHandler(
     if (steps.some(step => step.type === "api_call")) bodyLines.push("let result;");
     if (el.type === "form" && steps.some(step => step.type === "api_call" && !step.requestMappings)) bodyLines.push(`const body = Object.fromEntries(new FormData(target).entries());
         for (const input of target.elements) {
-            if (!input.name || input.disabled) continue;
+            if (!input.name || input.disabled || input.matches?.(':disabled')) continue;
             if (input.type === "number" || input.type === "range") {
                 if (input.value === "") delete body[input.name];
                 else if (!Number.isFinite(input.valueAsNumber)) throw new Error("Enter a valid number for " + input.name);
@@ -103,7 +103,7 @@ function flowHandler(
                     else if (mapping.source.kind === "response") value = result?.[mapping.responseName];
                     else {
                       const input = Array.from(target.elements || []).find(input => input.id === mapping.source.elementId || input.id === mapping.source.elementId + "-control");
-                      if (input && !input.disabled) {
+                      if (input && !input.disabled && !input.matches?.(':disabled')) {
                         if (input.type === "file") throw new Error("File uploads require a storage endpoint.");
                         value = input.type === "checkbox" ? input.checked : input.type === "radio" && !input.checked ? undefined : input.value;
                       }
@@ -149,7 +149,7 @@ function flowHandler(
 
     const handlerBody = bodyLines.join(" ");
 
-    return `async (e) => { e.preventDefault(); const target = e.currentTarget; if (target.dataset.busy || target.disabled || target.getAttribute?.("aria-disabled") === "true") return; target.dataset.busy = "true"; target.setAttribute("aria-busy", "true"); setStatus("Working…"); let failure = {}; try { ${handlerBody} setStatus("Done"); } catch (err) { setStatus(failure.message || (err instanceof Error ? err.message : "Request failed. Please try again.")); ${mode === "jsx" ? "if (failure.pageRoute) window.location.href = failure.pageRoute;" : 'if (failure.pageId) window.parent.postMessage({type: "levoks:preview:navigate", pageId: failure.pageId}, "*");'} } finally { delete target.dataset.busy; target.removeAttribute("aria-busy"); } }`;
+    return `async (e) => { e.preventDefault(); const target = e.currentTarget; if (target.dataset.busy || target.disabled || target.getAttribute?.("aria-disabled") === "true") return; target.dataset.busy = "true"; target.setAttribute("aria-busy", "true"); setStatus("Working…"); let failure = {}; try { ${handlerBody} ${el.type === "form" && el.props.resetOnSuccess ? "target.reset();" : ""} setStatus(${JSON.stringify(el.type === "form" ? String(el.props.successMessage || "Done") : "Done")}); } catch (err) { setStatus(failure.message || (err instanceof Error ? err.message : "Request failed. Please try again.")); ${mode === "jsx" ? "if (failure.pageRoute) window.location.href = failure.pageRoute;" : 'if (failure.pageId) window.parent.postMessage({type: "levoks:preview:navigate", pageId: failure.pageId}, "*");'} } finally { delete target.dataset.busy; target.removeAttribute("aria-busy"); } }`;
 }
 
 // Both preview and exported React handlers use the same generated flow body.

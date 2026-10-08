@@ -51,6 +51,22 @@ The generated frontend still uses the same-origin Levoks API gateway, declared e
 
 Templates create normal blocks and connections; every block is editable/removable. Existing Auth, CRUD and Chat starters are retained. Chat remains an architecture starter, not a new WebSocket runtime. OAuth providers, general queues/jobs, file storage and arbitrary custom JavaScript execution are not added by this change.
 
+## Guided form destinations
+
+Select a Form → Content → **Submission destination**. **New submission collection** creates a local MongoDB service, a Submission model, a public POST `/api/submissions`, validation, a create query and a receipt response. **Create collection and connect** maps each enabled input by its element identity. Every generated block and wire remains editable in Backend and Routes. Each collection uses a distinct service/database fallback; setting multiple services to the same runtime database remains an explicit operator choice.
+
+Alternatively, select an existing POST/PUT/PATCH endpoint and match its required body/query/path/header fields to form inputs. Names are suggested when they match; explicit mappings support differently named inputs. Existing constants are preserved and remain editable in Routes. Reapplying the same endpoint preserves response-display mappings and failure behavior. Structured objects/arrays and chained response values require Routes. Passwords belong to identity workflows; uploads, radio groups and multiple selections are outside the collection wizard's supported controls.
+
+**Success message** and **Clear fields after a successful save** persist in the form. A failed request keeps entered values and prevents subsequent success actions. Successful requests display the authored message and optionally reset the native form. Disabled controls, including descendants of disabled fieldsets, are not submitted. The collection copies fields/validation when created; later model/contract changes are edited in Backend and mappings reapplied in the form panel. It does not silently migrate existing records when a form field changes.
+
+Templates → **Add working contact form** adds an editable name/email form, database workflow and route in one undoable action, preserving existing canvas content. Disconnecting removes form routes while retaining backend blocks and stored records. Undoing configuration restores project definitions, not database contents from a running exported application.
+
+The generated public endpoint returns only a receipt, with no submitted data or record ID. No GET/update/delete endpoint is created. A submission inbox and operator account/permission setup remain unimplemented; add authenticated access policies before exposing stored records. Do not turn a public form into an anonymous read API. The default limiter permits 20 requests per 15 minutes per backend-observed IP, including invalid requests. It uses process-local counters, resets on restart, and visitors behind a gateway share its IP quota. Shared MongoDB counters are an existing Backend option; trusted proxy/client attribution and bot protection still require separate implementation/acceptance.
+
+Generated frontend preview reports that no data was sent or saved: it does not run the backend. Download the application and configure the generated database/runtime to test actual saves. Isolated full-stack preview, notification delivery, public upload handling, administrative inbox and a complete business-site starter remain open.
+
+`npm run test:form-export` exercises real drag/drop and form configuration, history, persistence, mobile preview and ZIP download, then builds the actual downloaded Next/Express project and runs it against disposable MongoDB. It verifies save/retry/reset, server validation, unknown/managed-field exclusion, denied public reads/edits, quota exhaustion and durable records after backend restart. The reusable extraction script accepts archive and output-directory arguments; its original canvas defaults are retained.
+
 ## Verification
 
 - `npm run check`: TypeScript, lint and unit tests, including contract identities, deleted mappings, form ownership, generated handlers, HTTP retry behavior, parameter validation and cache isolation.

@@ -1,0 +1,485 @@
+import { v4 as uuid } from "uuid";
+import type { ElementNode } from "@/types";
+import type {
+  BackendBlock,
+  EndpointConfig,
+  SchemaField,
+} from "@/types/backend";
+import type { RequestMapping } from "@/lib/contracts";
+import {
+  endpointFields,
+  fieldIdentity,
+  isFormInput,
+  isSubmitControl,
+  resolveContract,
+} from "@/lib/contracts";
+import type { IRDiagnostic } from "@/types/ir";
+import { definitionFor } from "@/lib/elements/registry";
+import { backendDefaults } from "@/lib/backend/registry";
+import { defaultDatabase } from "@/lib/backend/database";
+import { useEditorStore } from "@/store/editorStore";
+import { useBackendStore } from "@/store/backendStore";
+import { useRoutingStore } from "@/store/routingStore";
+import { projectHistory } from "@/store/projectHistory";
+import { templates } from "@/templates";
+
+/** Match native form ownership: stop at nested forms rather than collecting their controls. */
+export function formControls(
+  formId: string,
+  elements: Record<string, ElementNode>,
+) {
+  const controls: ElementNode[] = [],
+    seen = new Set<string>();
+  const pending = [...(elements[formId]?.children || [])].reverse();
+  while (pending.length) {
+    const id = pending.pop()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const node = elements[id];
+    if (!node || node.type === "form") continue;
+    controls.push(node);
+    const children =
+      definitionFor(node)?.tag === "fieldset" && node.props.disabled
+        ? node.children
+            .filter(
+              (id) =>
+                elements[id] && definitionFor(elements[id])?.tag === "legend",
+            )
+            .slice(0, 1)
+        : node.children;
+    pending.push(...children.toReversed());
+  }
+  return controls;
+}
+
+export function submissionFields(
+  formId: string,
+  elements: Record<string, ElementNode>,
+) {
+  const controls = formControls(formId, elements);
+  const inputs = controls.filter(
+    (node) => isFormInput(node) && !node.props.disabled,
+  );
+  const problems: string[] = [];
+  if (!inputs.length)
+    problems.push("Add at least one enabled input to this form.");
+  if (inputs.length > 200)
+    problems.push("A submission collection supports at most 200 fields.");
+  if (
+    !controls.some(
+      (node) =>
+        isSubmitControl(node) && !node.props.disabled && !node.props.loading,
+    )
+  )
+    problems.push("Add an enabled Submit button to this form.");
+  const used = new Set<string>();
+  const fields = inputs.map((input, index) => {
+    const inputType = String(
+      input.type === "input"
+        ? input.props.inputType || "text"
+        : input.props.type || definitionFor(input)?.tag || "text",
+    );
+    if (
+      ["password", "file", "radio"].includes(inputType) ||
+      input.props.multiple
+    )
+      problems.push(
+        `${input.label || "Field " + (index + 1)} needs a dedicated workflow for passwords, uploads, radio groups or multiple selections.`,
+      );
+    let name = String(input.props.name || `field_${index + 1}`)
+      .replace(/[^A-Za-z0-9_]/g, "_")
+      .slice(0, 80);
+    if (
+      !/^[A-Za-z]/.test(name) ||
+      [
+        "constructor",
+        "prototype",
+        "createdAt",
+        "updatedAt",
+        "deletedAt",
+      ].includes(name)
+    )
+      name = `field_${name}`;
+    if (/password|secret|token/i.test(name))
+      problems.push(
+        `${input.label || name} appears to collect credentials. Connect it to an identity endpoint instead of public submission storage.`,
+      );
+    const base = name;
+    for (let suffix = 2; used.has(name); suffix++) name = `${base}_${suffix}`;
+    used.add(name);
+    return {
+      input,
+      field: {
+        id: input.id,
+        name,
+        type: ["number", "range"].includes(inputType)
+          ? "number"
+          : inputType === "checkbox"
+            ? "boolean"
+            : "string",
+        required: Boolean(input.props.required),
+      } as SchemaField,
+      inputType,
+    };
+  });
+  return { fields, problems };
+}
+
+export function addSubmissionFormTemplate() {
+  return projectHistory.run("editor", () => {
+    const editor = useEditorStore.getState();
+    const y = Math.max(
+      40,
+      ...editor.rootIds.map((id) => {
+        const node = editor.elementsById[id];
+        return node.layout.y + node.layout.h + 40;
+      }),
+    );
+    const formId = editor.addElement(
+      {
+        ...templates.form,
+        label: "Contact form",
+        props: {
+          ...templates.form.props,
+          successMessage: "Thanks — your message has been saved.",
+          resetOnSuccess: true,
+        },
+      },
+      undefined,
+      40,
+      y,
+    );
+    createSubmissionDestination(formId, "Contact submissions");
+    editor.selectElement(formId);
+    return formId;
+  });
+}
+
+export function suggestedFormMappings(
+  formId: string,
+  elements: Record<string, ElementNode>,
+  config: EndpointConfig,
+): RequestMapping[] {
+  const inputs = formControls(formId, elements).filter(
+    (node) => isFormInput(node) && !node.props.disabled,
+  );
+  return endpointFields(config).flatMap((field) => {
+    if (["object", "array"].includes(field.type)) return [];
+    const input = inputs.find(
+      (node) =>
+        String(node.props.name || "").toLowerCase() ===
+        field.name.toLowerCase(),
+    );
+    return input
+      ? [
+          {
+            fieldId: fieldIdentity(field),
+            location: field.location,
+            source: { kind: "element" as const, elementId: input.id },
+          },
+        ]
+      : [];
+  });
+}
+
+/** Ordinary blocks/wires remain the source of truth; no hidden submission engine. */
+export function connectFormDestination(
+  formId: string,
+  serviceId: string,
+  endpointId: string,
+  mappings: RequestMapping[],
+) {
+  const editor = useEditorStore.getState(),
+    backend = useBackendStore.getState();
+  const form = editor.elementsById[formId],
+    service = backend.services.find((item) => item.id === serviceId);
+  const endpoint = service?.blocks.find(
+    (block) => block.id === endpointId && block.type === "rest_endpoint",
+  );
+  if (
+    form?.type !== "form" ||
+    !endpoint ||
+    !("method" in endpoint.config) ||
+    !["POST", "PUT", "PATCH"].includes(endpoint.config.method)
+  )
+    throw new Error("Choose an existing POST, PUT or PATCH endpoint.");
+  const inputs = new Set(
+    formControls(formId, editor.elementsById)
+      .filter((node) => isFormInput(node) && !node.props.disabled)
+      .map((node) => node.id),
+  );
+  const fields = endpointFields(endpoint.config as EndpointConfig);
+  for (const field of fields)
+    if (
+      field.required &&
+      !mappings.some(
+        (mapping) =>
+          mapping.location === field.location &&
+          mapping.fieldId === fieldIdentity(field),
+      )
+    )
+      throw new Error(`Choose a value for ${field.name}.`);
+  if (
+    mappings.some(
+      (mapping) =>
+        !fields.some(
+          (field) =>
+            field.location === mapping.location &&
+            fieldIdentity(field) === mapping.fieldId,
+        ) ||
+        (mapping.source.kind === "element" &&
+          !inputs.has(mapping.source.elementId)),
+    )
+  )
+    throw new Error(
+      "A mapped field or input is no longer available. Choose its value again.",
+    );
+  const diagnostics: IRDiagnostic[] = [];
+  const routingState = useRoutingStore.getState();
+  const existing = routingState.connections.find(
+    (connection) =>
+      connection.fromPortId.endsWith(`:out:${formId}`) &&
+      connection.toPortId.endsWith(`:in:${endpointId}`) &&
+      routingState.nodes.find((node) => node.id === connection.toNodeId)
+        ?.refId === serviceId,
+  );
+  const preserved = existing
+    ? { responseMappings: existing.responseMappings, failure: existing.failure }
+    : {};
+  resolveContract(
+    {
+      ...preserved,
+      id: "form_destination",
+      fromNodeId: "page",
+      toNodeId: "service",
+      fromPortId: `page:out:${formId}`,
+      toPortId: `service:in:${endpointId}`,
+      requestMappings: mappings,
+    },
+    endpoint.config as EndpointConfig,
+    undefined,
+    Object.values(editor.elementsById),
+    formId,
+    editor.pages,
+    diagnostics,
+  );
+  if (diagnostics.length)
+    throw new Error(diagnostics.map((item) => item.message).join(" "));
+  const roots = new Set(editor.rootIds);
+  let ancestor: ElementNode | undefined = form;
+  const visited = new Set<string>();
+  while (ancestor.parentId && !visited.has(ancestor.id)) {
+    visited.add(ancestor.id);
+    ancestor = editor.elementsById[ancestor.parentId];
+    if (!ancestor) throw new Error("The form's page is unavailable.");
+  }
+  if (!roots.has(ancestor.id))
+    throw new Error(
+      "Select a form on the active page. Global forms require a page-specific route.",
+    );
+  projectHistory.run("editor", () => {
+    const routing = useRoutingStore.getState();
+    routing.addNode("page", editor.activePageId);
+    routing.addNode("service", serviceId);
+    const state = useRoutingStore.getState(),
+      pageNode = state.nodes.find(
+        (node) => node.type === "page" && node.refId === editor.activePageId,
+      )!,
+      serviceNode = state.nodes.find(
+        (node) => node.type === "service" && node.refId === serviceId,
+      )!;
+    const fromPortId = `${pageNode.id}:out:${formId}`;
+    useRoutingStore.setState({
+      connections: [
+        ...state.connections.filter(
+          (connection) =>
+            !(
+              connection.fromNodeId === pageNode.id &&
+              connection.fromPortId === fromPortId
+            ),
+        ),
+        {
+          ...preserved,
+          id: uuid(),
+          fromNodeId: pageNode.id,
+          fromPortId,
+          toNodeId: serviceNode.id,
+          toPortId: `${serviceNode.id}:in:${endpointId}`,
+          requestMappings: mappings,
+        },
+      ],
+    });
+    const events = { ...form.events };
+    delete events.onSubmit;
+    editor.updateElement(formId, {
+      props: { requestUrl: "" },
+      actions: { type: "none", target: "" },
+      events,
+    });
+  });
+}
+
+export function createSubmissionDestination(
+  formId: string,
+  collectionName: string,
+) {
+  const editor = useEditorStore.getState(),
+    analysis = submissionFields(formId, editor.elementsById);
+  if (analysis.problems.length) throw new Error(analysis.problems.join(" "));
+  const name = collectionName.trim();
+  if (!name || name.length > 80)
+    throw new Error("Choose a collection name of 1–80 characters.");
+  return projectHistory.run("editor", () => {
+    const backend = useBackendStore.getState();
+    backend.addService(name);
+    const service = useBackendStore.getState().services.at(-1)!;
+    const modelId = uuid(),
+      endpointId = uuid(),
+      queryId = uuid(),
+      transformId = uuid(),
+      responseId = uuid(),
+      limitId = uuid();
+    const block = (
+      id: string,
+      type: BackendBlock["type"],
+      label: string,
+      config: object,
+    ): BackendBlock =>
+      ({
+        id,
+        type,
+        label,
+        config: { ...backendDefaults(type), ...config },
+        connections: [],
+        position: { x: 0, y: 0 },
+      }) as BackendBlock;
+    const validations = analysis.fields.flatMap(
+      ({ field, input, inputType }) => {
+        const rules: { type: string; value?: string; message: string }[] = [];
+        if (field.type === "string")
+          rules.push({
+            type: "maxLength",
+            value: String(
+              Math.min(
+                10000,
+                Math.max(
+                  1,
+                  Number(input.props.maxLength) ||
+                    (inputType === "email" ? 320 : 2000),
+                ),
+              ),
+            ),
+            message: `${field.name} is too long.`,
+          });
+        if (inputType === "email")
+          rules.push({
+            type: "email",
+            message: "Enter a valid email address.",
+          });
+        if (field.type === "number")
+          for (const type of ["min", "max"] as const)
+            if (
+              input.props[type] !== undefined &&
+              input.props[type] !== "" &&
+              Number.isFinite(Number(input.props[type]))
+            )
+              rules.push({
+                type,
+                value: String(input.props[type]),
+                message: `${field.name} is outside the allowed range.`,
+              });
+        return rules.length
+          ? [
+              block(uuid(), "validation", `Check ${field.name}`, {
+                fieldName: field.name,
+                rules,
+              }),
+            ]
+          : [];
+      },
+    );
+    const blocks = [
+      block(modelId, "db_model", `${name} records`, {
+        tableName: "Submission",
+        fields: analysis.fields.map((item) => item.field),
+        timestamps: true,
+        softDelete: true,
+      }),
+      // ponytail: per-process IP limits reset on restart; use the existing MongoDB option for shared production limits.
+      block(limitId, "middleware", "Limit public submissions", {
+        middlewareType: "rateLimit",
+        scope: "endpoints",
+        rateLimit: 20,
+        rateLimitWindow: 15,
+        rateLimitStore: "memory",
+        rateLimitKey: "ip",
+      }),
+      block(endpointId, "rest_endpoint", "Receive submission", {
+        route: "/api/submissions",
+        method: "POST",
+        modelId,
+        authRequired: false,
+        middlewareIds: [limitId],
+        requestBody: analysis.fields.map((item) => item.field),
+        responseBody: [{ name: "message", type: "string", required: true }],
+      }),
+      ...validations,
+      block(queryId, "query", "Save submission", {
+        modelId,
+        operation: "create",
+        values: Object.fromEntries(
+          analysis.fields.map(({ field }) => [
+            field.name,
+            `$request.body.${field.name}`,
+          ]),
+        ),
+        output: "submission",
+        policyId: "",
+      }),
+      block(transformId, "transform", "Confirm receipt", {
+        fields: { message: "Submission received." },
+        output: "receipt",
+      }),
+      block(responseId, "response", "Submission response", {
+        status: 201,
+        value: "$receipt",
+      }),
+      block(uuid(), "error_handler", "Submission errors", {
+        fallbackMessage: "Your submission could not be saved. Please retry.",
+        rules: [
+          {
+            kind: "validation",
+            status: 400,
+            message: "Check your form values and try again.",
+          },
+        ],
+      }),
+    ];
+    blocks[2].connections = [
+      ...validations.map((item) => item.id),
+      queryId,
+      transformId,
+      responseId,
+    ];
+    backend.updateService(service.id, {
+      database: defaultDatabase(),
+      description:
+        "Public write-only form submissions. No read endpoint is created. Add authenticated access policies before exposing stored records.",
+      blocks: blocks.map((item, index) => ({
+        ...item,
+        position: { x: 0, y: index * 130 },
+      })),
+    });
+    connectFormDestination(
+      formId,
+      service.id,
+      endpointId,
+      analysis.fields.map(({ input, field }) => ({
+        fieldId: fieldIdentity(field),
+        location: "body",
+        source: { kind: "element", elementId: input.id },
+      })),
+    );
+    return { serviceId: service.id, endpointId };
+  });
+}

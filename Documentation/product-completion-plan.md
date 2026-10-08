@@ -31,6 +31,8 @@ Second increment implemented: typed model defaults and resource soft-delete life
 
 Continued 9 October: editable Response blocks now persist application response headers with typed literals/public bindings, pre-session value validation and per-endpoint gateway allowlists. Bodyless 204/205/304 statuses execute through Express, HEAD, gateway and API client. Browser authoring/recovery/undo/save/reload/download and actual downloaded login metadata are verified; rich error/status-specific schemas and the other workstreams remain open. See the response-header entry in the completion matrix.
 
+Further 9 October: Form → Content now guides creation of public write-only submission storage or mapping to an existing endpoint. Templates can add a working contact form and ordinary editable database/workflow/routing blocks in one undoable action. Authored confirmation/reset settings run in exported applications; failed saves preserve input. Actual downloaded Next/Express/MongoDB execution verifies storage, validation, recovery, denied public reads/edits and rate limits. The submission inbox still needs authenticated operator administration/read access, and isolated full-stack preview and broader business-site starters remain open. See [guided form contracts](fullstack-contracts.md#guided-form-destinations).
+
 User-requested addition: generated applications can now choose MongoDB, PostgreSQL, MySQL, MariaDB or SQLite per service, and local or remote storage. Levoks's own project database remains unchanged. [Database choices](databases.md) records usage, real engine verification and remaining adapter/migration/container/provider boundaries. This work precedes returning to BE06 relations.
 
 | Order | Workstream / matrix references | Required result and acceptance |

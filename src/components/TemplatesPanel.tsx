@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { siteTemplates, SiteTemplate } from "@/templates/siteTemplates";
 import { useEditorStore } from "@/store/editorStore";
+import {addSubmissionFormTemplate} from "@/lib/form-destination";
 import { Eye, Download, X, ArrowLeft, ExternalLink } from "lucide-react";
 
 // ─── Template Card ───
@@ -88,6 +89,7 @@ const TemplatesPanel: React.FC = () => {
     const { loadTemplate, setSidebarOpen } = useEditorStore();
     const [previewTemplate, setPreviewTemplate] = useState<SiteTemplate | null>(null);
     const [filter, setFilter] = useState<string>("all");
+    const [error, setError] = useState("");
 
     const categories = ["all", ...Array.from(new Set(siteTemplates.map((t) => t.category)))];
     const filtered = filter === "all" ? siteTemplates : siteTemplates.filter((t) => t.category === filter);
@@ -116,6 +118,19 @@ const TemplatesPanel: React.FC = () => {
 
     return (
         <div className="templates-panel">
+            <div className="working-form-template">
+                <h3>Working contact form</h3>
+                <p>Editable form, database and submit workflow. Adds to this page.</p>
+                <button type="button" className="template-preview-use" onClick={() => {
+                    try {
+                        addSubmissionFormTemplate();
+                        setSidebarOpen(null);
+                    } catch (error) {
+                        setError(error instanceof Error ? error.message : "The template could not be added.");
+                    }
+                }}>Add working contact form</button>
+                {error && <p role="alert">{error}</p>}
+            </div>
             <div className="templates-filter-bar">
                 {categories.map((cat) => (
                     <button
@@ -146,7 +161,7 @@ const TemplatesPanel: React.FC = () => {
             )}
 
             <div className="templates-hint">
-                Templates replace your current canvas • Undo to restore
+                Site templates replace your canvas • Contact forms add to it • Undo to restore
             </div>
         </div>
     );

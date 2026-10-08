@@ -204,7 +204,7 @@ export const DEFAULT_PROPS: Record<ElementType, Record<string, string | number |
     image: { src: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop", alt: "Placeholder image", objectFit: "cover" },
     video: { src: "https://www.w3schools.com/html/mov_bbb.mp4", autoplay: false, controls: true, loop: false, muted: false },
     gallery: { columns: 3, gap: 8 },
-    form: { requestMethod: "POST", requestUrl: "/api/contact" },
+    form: { requestMethod: "POST", requestUrl: "/api/contact", successMessage: "Done", resetOnSuccess: false },
     input: { placeholder: "Enter text...", inputType: "text", required: false, name: "field", label: "", value: "", disabled: false, readOnly: false, pattern: "", helperText: "", error: "" },
     shape: { shapeType: "rectangle" },
     divider: {},

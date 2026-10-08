@@ -1,6 +1,7 @@
 "use client";
 import { canvasSize } from "@/lib/design";
 import ElementProperties from "./design/ElementProperties";
+import FormDestination from "./FormDestination";
 import { ParameterControl, DimensionControl, LENGTH_UNITS } from "./design/ParameterControl";
 import SpacingControl from "./design/SpacingControl";
 
@@ -1852,6 +1853,7 @@ const PropertyInspector: React.FC = () => {
 
             {el.type === "form" && (
               <>
+                <Section title="Submission destination"><FormDestination key={el.id} form={el} /></Section>
                 <Section title="Fields">
                   <button type="button" onClick={() => useEditorStore.getState().arrangeFormFields(el.id)}>Arrange fields vertically</button>
                   <p className="panel-caption">Place fields in order above Submit. Use this to repair an older overlapping form; undo restores your previous layout.</p>
