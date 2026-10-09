@@ -1,5 +1,9 @@
 # Editor quality audit and verification
 
+## Local full-stack preview — 9 October 2026
+
+The preview mode selector exposes the actual local generated application alongside frontend preview and design simulation. The local mode replaces the decorative URL/navigation toolbar with Start, Rebuild, Stop, Reload and generated account/inbox shortcuts. Controls wrap at the selected mobile width; runtime-only setup codes and captured mail use native disclosure controls. Pages stay hidden until their generated controls are ready, and Reload waits until the current route is known. Real submissions, operator sign-in, shortcut/navigation/reload, rebuild and cancellation pass browser execution. Desktop and mobile screenshots are preserved in `audit-2026-10-08/fullstack-preview-*.png`. Wider editor accessibility/touch acceptance and custom-source/container/hosted preview remain open.
+
 ## Header and account refinements — 4 October 2026
 
 The logo now opens the existing project workspace without navigating away from current edits. The account dropdown has named menu semantics, Arrow/Home/End navigation, Escape dismissal with focus return, and closes when focus leaves. Its bounded width truncates long account details and its opaque background keeps underlying canvas controls from showing through.
@@ -35,7 +39,7 @@ Impeccable's operating-interface guidance and Ponytail's preference for existing
 | AI | Large blocking form | Movable non-modal assistant; canvas remains editable; collapsible provider/usage settings; stream/cancel/review/apply/discard | Conversation history/context selection, suggestion chips, durable budget reporting and live provider acceptance |
 | Connections | Visually disconnected workflow | Shared controls/status/errors; explicit permission-required state | Authenticated live repository/branch/commit/conflict screenshots and provider OAuth completion |
 | Deploy | Frontend-only provider support could be mistaken for full-stack deployment | Clear frontend provider scope, separate backend origins/container explanation, ZIP action and existing deployment state | Backend/database orchestration, domains/TLS, environment lifecycle, hosted logs/rollback |
-| Preview | Simulation labelled Live | Explicit Design preview label; existing fullscreen interaction preserved | Isolated generated full-stack runtime and deployment parity |
+| Preview | Simulation labelled Live | Generated frontend, Design simulation and Local full-stack modes; real generated MongoDB saves/login/inboxes, captured email, page readiness, navigation and stop/rebuild controls | Custom-source/container/SQL previews, hosted execution and deployment parity |
 | Responsive editor | Header density and clipped footer | Verified 1600, 1366 and 1024 widths; panel toggles; visible bottom controls; modal sizing | Full resized inspector coverage, drag-resizable panels, narrow/mobile editor acceptance |
 | Accessibility and motion | Uneven focus/labels; decorative animation | Shared focus rings; native disabled states; input/dialog/menu shortcut guards; reduced-motion styles | Comprehensive screen-reader and contrast audit; no claim of WCAG conformance |
 

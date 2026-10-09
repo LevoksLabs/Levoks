@@ -24,6 +24,13 @@ export default defineConfig({
     url: "http://127.0.0.1:3200",
     timeout: 120000,
     reuseExistingServer: process.env.LEVOKS_REUSE_TEST_SERVER === "1",
-    env: { LEVOKS_E2E: "1", NEXT_TELEMETRY_DISABLED: "1" },
+    env: {
+      LEVOKS_E2E: "1",
+      NEXT_TELEMETRY_DISABLED: "1",
+      LEVOKS_LOCAL_PREVIEW_ORIGIN: "http://127.0.0.1:3200",
+      LEVOKS_PREVIEW_MONGO_BINARY_DIR: path.resolve(
+        ".verification/mongodb-bin",
+      ),
+    },
   },
 });

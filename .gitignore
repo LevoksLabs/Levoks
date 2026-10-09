@@ -72,3 +72,4 @@ Desktop.ini
 
 # docker
 .env.docker
+.levoks-preview/

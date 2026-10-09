@@ -528,7 +528,7 @@ ${generateAnimationSetup(animJsElements)}
 setupAnimations(document);
 const setFlowValues = update => { const values = update({}); for (const [id, value] of Object.entries(values)) { const element = document.querySelector(".el-" + id); if (element) element.textContent = value; } };
 const setStatus = message => { document.querySelector('[role="status"]').textContent = message; };
-const apiFetch = async () => { throw new Error("Backend requests need the exported application runtime. No data was sent or saved."); };
+const apiFetch = async () => { throw new Error("Backend requests need Local full-stack preview or the exported application runtime. No data was sent or saved."); };
 ${previewHandlers}
 document.addEventListener("submit", e => { if (!e.defaultPrevented) { e.preventDefault(); setStatus("This form has no routing connection. Connect it to an endpoint or page."); } });`;
 

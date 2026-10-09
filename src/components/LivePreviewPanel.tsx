@@ -6,6 +6,7 @@ import TabsWidget from "./design/TabsWidget";
 import { widgetNumber } from "@/lib/widgets";
 import { ICON_PATHS } from "@/lib/icon-paths";
 import GeneratedPreview from "./design/GeneratedPreview";
+import FullStackPreview from "./design/FullStackPreview";
 import VectorShape from "./design/VectorShape";
 import { assetElement } from "@/lib/design-assets";
 import { canvasSize, resolveElement, fontFamily } from "@/lib/design";
@@ -323,7 +324,8 @@ interface ToastMsg {
 const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
     const { pages, activePageId, rootIds, globalRootIds, canvasSettings, pageElementMap, tokens } = useEditorStore();
 
-    const [generated, setGenerated] = useState(true);
+    const [mode, setMode] = useState('generated');
+    const generated = mode === 'generated';
     const breakpoint = useEditorUIStore(s => s.breakpoint);
     const viewportSize = useEditorUIStore(s => s.viewportSize);
 
@@ -413,7 +415,7 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
                     Back To Editor
                 </button>
 
-                <div className="live-preview-nav">
+                {mode !== 'fullstack' && <div className="live-preview-nav">
                     <button
                         className="live-nav-btn"
                         disabled={navHistory.length === 0}
@@ -425,17 +427,17 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
                         <Globe size={12} />
                         <span>localhost{currentPage?.route || "/"}</span>
                     </div>
-                </div>
+                </div>}
 
                 <div className="live-preview-meta">
                     <span className="site-preview-title">{currentPage?.title || "Preview"}</span>
                     <div className="live-preview-indicator">
                         <Activity size={10} />
-                        <span>{generated ? "Generated frontend" : "Design simulation"}</span>
+                        <span>{mode === 'fullstack' ? 'Full-stack preview' : generated ? "Generated frontend" : "Design simulation"}</span>
                     </div>
                 </div>
 
-                <select aria-label="Preview mode" value={generated ? "generated" : "design"} onChange={event => setGenerated(event.target.value === "generated")}><option value="design">Design simulation</option><option value="generated">Generated frontend</option></select>
+                <select aria-label="Preview mode" value={mode} onChange={event => setMode(event.target.value)}><option value="design">Design simulation</option><option value="generated">Generated frontend</option><option value="fullstack">Local full-stack</option></select>
                 <select aria-label="Preview breakpoint" value={breakpoint} onChange={event => useEditorUIStore.getState().setBreakpoint(event.target.value as "base" | "tablet" | "mobile")}><option value="base">Desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select>
                 {/* Page tabs */}
                 <div className="live-preview-tabs">
@@ -456,7 +458,7 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
             {/* Body */}
             <div className="site-preview-body">
                 <div className="site-preview-scroll">
-                    {generated ? <GeneratedPreview pageId={currentPageId} width={canvasWidth} onNavigate={navigateToPage} /> : <div
+                    {mode === 'fullstack' ? <FullStackPreview pageId={currentPageId} width={canvasWidth}/> : generated ? <GeneratedPreview pageId={currentPageId} width={canvasWidth} onNavigate={navigateToPage} /> : <div
                         className="site-preview-page"
                         style={{
                             ...Object.fromEntries(Object.entries(tokens).map(([id, token]) => [`--lv-${id}`, token.value])),

@@ -2,6 +2,15 @@
 
 Updated 9 October 2026. The user's direction is to **complete the documented product**, not to narrow it to a beta or prioritize launching. Product implementation and acceptance come first. Marketing, launch videos and publication are deferred.
 
+## Current six-point sequence
+
+1. **Submission inbox and alerts:** the authenticated MongoDB inbox, first-operator enrollment and durable email alert worker are implemented and locally verified. Wider operator administration and live email delivery acceptance remain.
+2. **Full-stack editor preview:** Local full-stack runs the current generated Next/Express/MongoDB app, account/inbox pages and captured email workers. Stop/rebuild use fresh ports, credentials and disposable records. This completes the local generated-MongoDB path; SQL adapters, arbitrary-source container sandboxing, hosted previews and production-runtime parity remain.
+3. **Live database bindings — next implementation:** select a compatible read endpoint, bind its returned records/fields to tables, collections and repeater templates, and handle loading, empty, denied/error and retry states. Preserve server authorization, validated contracts, persistence/history, responsive rendering and actual generated-app execution. Private submissions must not become anonymous read APIs.
+4. **Forms, nested editing and responsive polish:** extend the existing authoring/compiler behavior through its per-element acceptance contracts.
+5. **Managed deployment, collaboration, billing and backend families:** continue the detailed workstreams below; existing export/provider interfaces do not certify these complete.
+6. **Whole-product acceptance:** keep local and external-provider/container verification separate. Local testing continues at every increment; external acceptance remains deferred under the user's local-only instruction.
+
 ## Sources and completion rule
 
 - `levoks.md` defines the requested product. Its descriptions of intended capabilities are not proof that those capabilities exist.

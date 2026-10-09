@@ -10,6 +10,7 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     ".next/**",
     ".verification/**",
+    ".levoks-preview/**",
     ".next-e2e/**",
     "out/**",
     "build/**",

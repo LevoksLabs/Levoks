@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "worker:github": "tsx scripts/github-worker.ts",
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/local-dev.mjs",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "test:integration": "tsx scripts/prepare-integration.ts && npm install --prefix .verification/runtime-test --omit=dev && tsx --test tests/integration/*.test.ts",
     "test:e2e": "playwright test",
+    "test:preview": "npm run build && tsx --test tests/generated/preview-build.test.ts && playwright test --config playwright.preview.config.ts fullstack-preview.spec.ts",
     "test:design-export": "tsx scripts/prepare-design-verification.ts && npm install --prefix .verification/design-app/frontend --ignore-scripts && npm run build --prefix .verification/design-app/frontend && tsx --test tests/generated/design-runtime.test.ts",
     "test:generated-e2e": "tsx scripts/prepare-account-e2e.ts && npm install --prefix .verification/account-e2e/frontend --ignore-scripts && npm install --prefix .verification/account-e2e/backend/auth-service --omit=dev --ignore-scripts && playwright test --config playwright.generated.config.ts account.spec.ts",
     "check": "npm run typecheck && npm run lint && npm test",
@@ -19,7 +20,8 @@
     "test:form-export": "playwright test tests/e2e/form-destination.spec.ts && tsx scripts/prepare-canvas-verification.ts .verification/submissions-export.zip .verification/submissions-app && npm install --prefix .verification/submissions-app/frontend --ignore-scripts && npm install --prefix .verification/submissions-app/backend/website-leads --omit=dev --ignore-scripts && npm run build --prefix .verification/submissions-app/frontend && npm run build --prefix .verification/submissions-app/backend/website-leads && playwright test --config playwright.generated.config.ts submissions.spec.ts",
     "test:fullstack-export": "tsx scripts/prepare-mapped-login-e2e.ts && npm install --prefix .verification/mapped-login-e2e/frontend --ignore-scripts && npm install --prefix .verification/mapped-login-e2e/backend/auth-service --omit=dev --ignore-scripts && playwright test --config playwright.generated.config.ts mapped-login.spec.ts",
     "test:inbox-export": "playwright test tests/e2e/submission-inbox.spec.ts && tsx scripts/prepare-canvas-verification.ts .verification/inbox-export.zip .verification/inbox-app && npm install --prefix .verification/inbox-app/frontend --ignore-scripts && npm install --prefix .verification/inbox-app/backend/website-leads --omit=dev --ignore-scripts && npm install --prefix .verification/inbox-app/backend/website-leads-operators --omit=dev --ignore-scripts && npm run build --prefix .verification/inbox-app/frontend && npm run build --prefix .verification/inbox-app/backend/website-leads && npm run build --prefix .verification/inbox-app/backend/website-leads-operators && playwright test --config playwright.generated.config.ts submission-inbox.spec.ts",
-    "test:notifications-export": "playwright test tests/e2e/submission-notifications.spec.ts && tsx scripts/prepare-canvas-verification.ts .verification/notifications-export.zip .verification/notifications-app && npm install --prefix .verification/notifications-app/frontend --ignore-scripts && npm install --prefix .verification/notifications-app/backend/website-leads --omit=dev --ignore-scripts && npm install --prefix .verification/notifications-app/backend/website-leads-operators --omit=dev --ignore-scripts && npm run build --prefix .verification/notifications-app/frontend && npm run build --prefix .verification/notifications-app/backend/website-leads && npm run build --prefix .verification/notifications-app/backend/website-leads-operators && playwright test --config playwright.generated.config.ts submission-notifications.spec.ts"
+    "test:notifications-export": "playwright test tests/e2e/submission-notifications.spec.ts && tsx scripts/prepare-canvas-verification.ts .verification/notifications-export.zip .verification/notifications-app && npm install --prefix .verification/notifications-app/frontend --ignore-scripts && npm install --prefix .verification/notifications-app/backend/website-leads --omit=dev --ignore-scripts && npm install --prefix .verification/notifications-app/backend/website-leads-operators --omit=dev --ignore-scripts && npm run build --prefix .verification/notifications-app/frontend && npm run build --prefix .verification/notifications-app/backend/website-leads && npm run build --prefix .verification/notifications-app/backend/website-leads-operators && playwright test --config playwright.generated.config.ts submission-notifications.spec.ts",
+    "start:local": "node scripts/local-dev.mjs --production"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.2",
@@ -37,7 +39,8 @@
     "react-dom": "19.2.3",
     "uuid": "^13.0.0",
     "zod": "^4.6.2",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.11",
+    "mongodb-memory-server": "^11.2.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -48,7 +51,6 @@
     "eslint": "^9",
     "eslint-config-next": "^16.4.0",
     "fake-indexeddb": "^6.2.5",
-    "mongodb-memory-server": "^11.2.0",
     "mongoose": "^7.8.12",
     "prettier": "^3.9.6",
     "tsx": "^4.23.13",

@@ -6293,6 +6293,18 @@ body {
   color: var(--accent);
 }
 
+.fullstack-preview-controls { padding: 16px; background: var(--bg-panel); border-bottom: 1px solid var(--border); color: var(--text-1); }
+.fullstack-preview-controls p { margin: 8px 0; font-size: 12px; line-height: 1.5; }
+.fullstack-preview-actions, .fullstack-preview-controls nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.fullstack-preview-controls button { padding: 8px 12px; border: 1px solid var(--border-hover); border-radius: 6px; background: var(--bg-elevated); color: inherit; font: inherit; cursor: pointer; }
+.fullstack-preview-controls button:disabled { opacity: .5; cursor: default; }
+.fullstack-preview-controls details { margin-top: 10px; font-size: 12px; }
+.fullstack-preview-controls summary { cursor: pointer; }
+.fullstack-preview-controls label { display: block; margin-top: 8px; }
+.fullstack-preview-controls input { display: block; width: min(100%, 600px); margin-top: 4px; padding: 8px; background: var(--bg-input); border: 1px solid var(--border-hover); border-radius: 4px; color: inherit; }
+.fullstack-preview-controls pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px; border: 1px solid var(--border); }
+.fullstack-preview iframe { width: 100%; min-height: 850px; border: 0; background: white; }
+
 /* Hover animation previews on cards */
 .anim-card:hover .anim-preview-fadeIn {
   animation: anim-p-fadeIn 0.6s ease forwards;

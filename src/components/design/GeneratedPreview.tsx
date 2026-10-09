@@ -76,8 +76,8 @@ export default function GeneratedPreview({
     <div className="generated-preview" style={{ width, maxWidth: "100%" }}>
       <p>
         Generated frontend · isolated preview. Page links, widgets and
-        animations and embeds work here. Backend requests and source edits
-        require the exported application runtime.
+        animations work here. Use Local full-stack for generated MongoDB APIs.
+        Custom source still requires the exported application runtime.
       </p>
       {result.error ? (
         <p role="alert">{result.error}</p>

@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   distDir: process.env.LEVOKS_E2E === "1" ? ".next-e2e" : ".next",
   output: "standalone",
+  // Disposable databases and test artifacts must never ship with the editor.
+  outputFileTracingExcludes: {
+    "/*": ["./.levoks-preview/**/*", "./.verification/**/*"],
+  },
   poweredByHeader: false,
   async headers() {
     return [
