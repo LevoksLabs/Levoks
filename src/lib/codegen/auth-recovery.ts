@@ -82,19 +82,20 @@ exports.processOne = async () => {
 `.trim();
 }
 
-export const IDENTITY_EMAIL_WORKER = `
-require('dotenv').config();
+export const emailWorkerSource = (modulePath: string, label: string, envPath = '.env') => `
+require('dotenv').config({path: ${JSON.stringify(envPath)}});
 const database = require('../database');
-const recovery = require('../identity/recovery');
+const recovery = require(${JSON.stringify(modulePath)});
 let stopping = false;
 process.on('SIGTERM', () => {stopping = true;}); process.on('SIGINT', () => {stopping = true;});
 (async () => {
-  await database.connect(); recovery.ready();
+  await database.connect(); await recovery.initialize?.(); recovery.ready();
   if (!process.env.RESEND_API_KEY) throw new Error('Email provider is not configured');
   while (!stopping) {
     try {if (!await recovery.processOne()) await new Promise(r => setTimeout(r, 2000));}
-    catch {console.error('Identity email worker unavailable; check server configuration.'); await new Promise(r => setTimeout(r, 10000));}
+    catch {console.error(${JSON.stringify(label + ' worker unavailable; check server configuration.')}); await new Promise(r => setTimeout(r, 10000));}
   }
   await database.disconnect();
-})().catch(() => {console.error('Identity email worker startup failed.'); database.disconnect().finally(() => {process.exitCode = 1;});});
+})().catch(() => {console.error(${JSON.stringify(label + ' worker startup failed.')}); database.disconnect().finally(() => {process.exitCode = 1;});});
 `.trim();
+export const IDENTITY_EMAIL_WORKER = emailWorkerSource('../identity/recovery', 'Identity email');

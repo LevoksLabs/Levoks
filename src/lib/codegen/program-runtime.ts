@@ -42,7 +42,7 @@ function publicValue(value, depth = 0) {
   if (typeof value.toHexString === 'function') return value.toHexString();
   if (typeof value.toObject === 'function') value = value.toObject();
   if (Array.isArray(value)) return value.map(item => publicValue(item, depth + 1));
-  return Object.fromEntries(Object.entries(value).filter(([key]) => safeKey(key) && !/password|secret|token/i.test(key)).map(([key, child]) => [key, publicValue(child, depth + 1)]));
+  return Object.fromEntries(Object.entries(value).filter(([key]) => safeKey(key) && key !== '_levoksSubmissionMail' && !/password|secret|token/i.test(key)).map(([key, child]) => [key, publicValue(child, depth + 1)]));
 }
 ${RESPONSE_HEADERS_RUNTIME}
 exports.createWorkflow = (program, models, database, observability, identity, relations) => {
@@ -181,6 +181,10 @@ exports.createWorkflow = (program, models, database, observability, identity, re
             const page = c.page === undefined ? 1 : Number(resolve(c.page, context) ?? 1);
             if (!Number.isInteger(page) || page < 1 || page > 10000) throw new WorkflowError(400, 'Page must be between 1 and 10000');
             let value;
+            if (c.operation === 'create') {
+              const notification = program.blocks.find(b => b.type === 'submission_notification' && b.config.enabled && b.config.endpointId === endpoint.id && b.config.queryId === block.id && b.config.modelId === c.modelId);
+              if (notification) values._levoksSubmissionMail = {id: require('node:crypto').randomUUID(), configId: notification.id, status: 'queued', attempts: 0, dueAt: new Date(), expiresAt: new Date(Date.now() + 23 * 60 * 60 * 1000), subject: notification.config.subject, inboxPath: notification.config.inboxPath};
+            }
             if (relations && ['create', 'update', 'delete', 'restore', 'purge'].includes(c.operation)) value = await relations.mutate({modelId: c.modelId, operation: c.operation, filter, values, session, maxTimeMS: options.maxTimeMS});
             else if (c.operation === 'find') value = await model.find(filter, null, options).sort(c.sortField ? {[c.sortField]: c.sortDirection === 'desc' ? -1 : 1} : {_id: 1}).skip((page - 1) * c.limit).limit(c.limit).lean();
             else if (c.operation === 'findOne') value = await model.findOne(filter, null, options).lean();

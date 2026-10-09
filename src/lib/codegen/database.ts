@@ -181,6 +181,17 @@ export function databaseCompose(
         "        condition: service_healthy",
       );
     lines.push("    restart: unless-stopped");
+    if (service.blocks.some(b => b.type === "submission_notification")) {
+      const prefix = slug.replaceAll("-", "_").toUpperCase();
+      const workerEnvironment = {
+        [config.connectionEnv]: environment[config.connectionEnv],
+        NODE_ENV: "production",
+        ...Object.fromEntries(["SUBMISSION_EMAIL_FROM", "SUBMISSION_EMAIL_TO", "SUBMISSION_PUBLIC_ORIGIN", "RESEND_API_KEY"].map(key => [key, "${" + prefix + "_" + key + ":-}"])),
+      };
+      const workerName = allocate(`${slug}-submission-worker`, serviceNames);
+      lines.push(`  ${workerName}:`, `    build: ./${slug}`, '    profiles: ["notifications"]', '    command: ["npm", "run", "worker:submissions"]', "    environment:", ...Object.entries(workerEnvironment).map(([key, value]) => `      ${key}: ${JSON.stringify(value)}`), "    restart: unless-stopped");
+      if (local) lines.push("    depends_on:", `      ${dbService}:`, "        condition: service_healthy");
+    }
     if (local && !volumes.includes(volume)) volumes.push(volume);
   }
   if (volumes.length)

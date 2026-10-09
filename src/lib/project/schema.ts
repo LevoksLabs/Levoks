@@ -6,6 +6,7 @@ import { customDefinitionSchema } from "@/lib/elements/custom";
 import { validateFiles } from "@/lib/codegen/files";
 import { programConfigs, controlSchema } from "@/lib/backend/program-schema";
 import { healthSchema } from "@/lib/backend/health-schema";
+import { submissionNotificationSchema } from "@/lib/backend/submission-notification-schema";
 import { errorHandlerSchema, auditLogSchema } from "@/lib/backend/observability-schema";
 
 const id = z
@@ -162,6 +163,7 @@ const blockBase = z.object({
   connections: z.array(id).max(1000),
 });
 export const backendBlockSchema = z.discriminatedUnion("type", [
+  blockBase.extend({type: z.literal("submission_notification"), config: submissionNotificationSchema}),
   blockBase.extend({ type: z.literal("credential_lookup"), config: programConfigs.credential_lookup }),
   blockBase.extend({ type: z.literal("password_verify"), config: programConfigs.password_verify }),
   blockBase.extend({ type: z.literal("session_issue"), config: programConfigs.session_issue }),

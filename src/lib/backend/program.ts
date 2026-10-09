@@ -12,6 +12,7 @@ import type {
 import type { IRDiagnostic } from "@/types/ir";
 import { controlSchema, programConfigs } from "./program-schema";
 import { PROGRAM_RUNTIME } from "@/lib/codegen/program-runtime";
+import { serviceSlug } from "@/lib/project/schema";
 
 export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
   const diagnostics: IRDiagnostic[] = [...loginDiagnostics(service)];
@@ -304,6 +305,7 @@ export function programDiagnostics(service: ServiceContainer): IRDiagnostic[] {
           "health_check",
           "error_handler",
           "audit_log",
+          "submission_notification",
           "relation",
           "middleware",
           "auth_block",
@@ -445,7 +447,10 @@ export function programFiles(
     "workflow/program.json": JSON.stringify(
       {
         version: 1,
-        blocks: service.blocks.filter(
+        blocks: service.blocks.map(b => b.type === "submission_notification" ? {
+          ...b,
+          config: {...b.config, inboxPath: `/__levoks/inbox/${serviceSlug(service.name)}/${(b.config as import("./submission-notification-schema").SubmissionNotificationConfig).inboxEndpointId}`},
+        } : b).filter(
           (b) =>
             ![
               "env_var",

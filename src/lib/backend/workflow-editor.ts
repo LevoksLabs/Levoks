@@ -35,6 +35,7 @@ export function withoutWorkflowTarget(
   };
 }
 const configuration = new Set([
+  "submission_notification",
   "rest_endpoint",
   "db_model",
   "role",

@@ -37,6 +37,7 @@ import { workflowOutputs } from "@/lib/backend/workflow-editor";
 import { relationFiles } from "./relations";
 import { relationEdges } from "@/lib/backend/relations";
 import { corsSource } from "@/lib/backend/cors";
+import { submissionNotificationFiles } from "./submission-notifications";
 
 // ─── Field type → Mongoose type ───
 function mongooseType(type: SchemaField["type"]): string {
@@ -53,7 +54,7 @@ function mongooseType(type: SchemaField["type"]): string {
 }
 
 // ─── Generate model file ───
-function generateModel(block: BackendBlock, identityModel = false): string {
+function generateModel(block: BackendBlock, identityModel = false, submissionNotifications = false): string {
     const config = block.config as DbModelConfig;
     const fields = config.fields.map((f) => {
         let fieldDef = `    ${JSON.stringify(f.name)}: {\n      type: ${mongooseType(f.type)}`;
@@ -74,7 +75,8 @@ function generateModel(block: BackendBlock, identityModel = false): string {
 
     const identityFields = identityModel && config.fields.some(f => f.name === "password") ? ",\n    authVersion: {type: Number, default: 0, select: false},\n    disabledAt: {type: Date, default: null, select: false},\n    emailVerifiedAt: {type: Date, default: null},\n" + ['authReset', 'authVerify'].map(prefix => `    ${prefix}Hash: {type: String, select: false},\n    ${prefix}ExpiresAt: {type: Date, select: false},\n    ${prefix}RequestedAt: {type: Date, select: false},\n    ${prefix}Mail: {type: mongoose.Schema.Types.Mixed, select: false}`).join(',\n') : "";
     const bootstrapField = identityFields ? ",\n    operatorBootstrap: { type: String, select: false, unique: true, sparse: true }" : "";
-    return MODEL_TEMPLATE(config.tableName, fields + identityFields + bootstrapField + (config.softDelete ? ",\n    deletedAt: { type: Date, default: null, index: true }" : "")).replace("timestamps: true", `timestamps: ${config.timestamps}`);
+    const notificationField = submissionNotifications ? ",\n    _levoksSubmissionMail: {type: mongoose.Schema.Types.Mixed, select: false}" : "";
+    return MODEL_TEMPLATE(config.tableName, fields + identityFields + bootstrapField + notificationField + (config.softDelete ? ",\n    deletedAt: { type: Date, default: null, index: true }" : "")).replace("timestamps: true", `timestamps: ${config.timestamps}`);
 }
 
 // ─── Generate route handler for an endpoint ───
@@ -236,7 +238,8 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
             const unique = relations.some(r => r.relationType === "one-to-one" && r.toModel === model.id && r.foreignKey === field.name);
             return parent ? {...field, ref: parent.tableName, indexed: field.indexed || !unique} : field;
         })}};
-        let generatedModel = sql ? `module.exports = require('../database').model(${JSON.stringify(config.tableName)});` : generateModel(referencedModel, identityModel && config.fields.some(field => field.name === "password"));
+        const notified = service.blocks.some(b => b.type === "submission_notification" && "modelId" in b.config && b.config.modelId === model.id);
+        let generatedModel = sql ? `module.exports = require('../database').model(${JSON.stringify(config.tableName)});` : generateModel(referencedModel, identityModel && config.fields.some(field => field.name === "password"), notified);
         const indexes: string[] = [];
         for (const relation of relations) {
             if (relation.relationType === "one-to-one" && relation.toModel === model.id)
@@ -246,6 +249,9 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
         }
         if (indexes.length) generatedModel = generatedModel.replace('module.exports =', indexes.join('\n') + '\nmodule.exports =');
         if (identityModel && config.fields.some(f => f.name === "password")) generatedModel = generatedModel.replace('module.exports =', ['authReset', 'authVerify'].map(prefix => `${config.tableName}Schema.index({"${prefix}Mail.status": 1, "${prefix}Mail.dueAt": 1});\n${config.tableName}Schema.index({"${prefix}Hash": 1}, {sparse: true});`).join('\n') + '\nmodule.exports =');
+        if (notified) {
+            generatedModel = generatedModel.replace('module.exports =', `${config.tableName}Schema.index({"_levoksSubmissionMail.configId": 1, "_levoksSubmissionMail.status": 1, "_levoksSubmissionMail.dueAt": 1});\n${config.tableName}Schema.set('toJSON', {transform: (doc, value) => {delete value._levoksSubmissionMail; return value;}});\nmodule.exports =`);
+        }
         files[`${servicePath}/models/${config.tableName}.js`] = generatedModel;
     });
 
@@ -328,6 +334,16 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
         manifest.scripts['worker:email'] = 'node workers/identity-email.js';
         files[`${servicePath}/package.json`] = JSON.stringify(manifest, null, 2);
     }
+    const notificationFiles = submissionNotificationFiles(service);
+    for (const [path, source] of Object.entries(notificationFiles)) files[`${servicePath}/${path}`] = source;
+    if (Object.keys(notificationFiles).length) {
+        const manifest = JSON.parse(files[`${servicePath}/package.json`]);
+        manifest.scripts['worker:submissions'] = 'node workers/submission-email.js';
+        manifest.scripts['notifications:status'] = 'node scripts/notification-status.js';
+        files[`${servicePath}/package.json`] = JSON.stringify(manifest, null, 2);
+        const names = models.filter(m => service.blocks.some(b => b.type === 'submission_notification' && 'modelId' in b.config && b.config.modelId === m.id)).map(m => (m.config as DbModelConfig).tableName);
+        files[`${servicePath}/server.js`] = files[`${servicePath}/server.js`].replace('await observability.initialize();', names.map(name => `await require('./models/${name}').init();`).join('\n    ') + '\n    await observability.initialize();');
+    }
 
     // 6. .env
     const envMap: Record<string, string> = {
@@ -354,7 +370,8 @@ export function generateServiceCode(service: ServiceContainer, allServices: Serv
     files[`${servicePath}/.env.example`] = ENV_TEMPLATE(envMap);
     if (identityModel) files[`${servicePath}/.env.example`] += '\nIDENTITY_PUBLIC_URL=\nIDENTITY_EMAIL_FROM=\nIDENTITY_EMAIL_KEYS=\nIDENTITY_EMAIL_ACTIVE_KEY=\nRESEND_API_KEY=\n';
     if (identityModel && endpoints.some(endpoint => (endpoint.config as EndpointConfig).route.endsWith('/operator-setup'))) files[`${servicePath}/.env.example`] += '\nOPERATOR_SETUP_TOKEN=\n';
-    files[`${servicePath}/.dockerignore`] = `node_modules\n.env*\n.git\ndata\n*.sqlite*\n*.db*\n`;
+
+    files[`${servicePath}/.dockerignore`] = `node_modules\n.env*\n**/.env*\n.git\ndata\n*.sqlite*\n*.db*\n`;
     files[`${servicePath}/middleware/validate.js`] = `exports.validateParameters = (contracts) => (req, res, next) => {
   for (const [location, fields] of Object.entries(contracts)) {
     if (!fields) continue;

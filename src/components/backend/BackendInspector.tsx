@@ -4,6 +4,8 @@ import { CORS_METHODS, corsList, corsProblems } from "@/lib/backend/cors";
 
 import React, { useState } from "react";
 import ProgramInspector from "./ProgramInspector";
+import SubmissionNotificationInspector from "./SubmissionNotificationInspector";
+import type { SubmissionNotificationConfig } from "@/lib/backend/submission-notification-schema";
 import RelationInspector from "./RelationInspector";
 import HealthInspector from "./HealthInspector";
 import { AuditInspector, ErrorInspector } from "./ObservabilityInspector";
@@ -313,6 +315,7 @@ const BackendInspector: React.FC = () => {
               }
             />
           )}
+          {block.type === "submission_notification" && <SubmissionNotificationInspector config={block.config as SubmissionNotificationConfig} service={services.find(s => s.id === serviceId)!} onChange={updates => updateBlockConfig(serviceId, block.id, updates)}/>}
         </div>
       </div>
     );

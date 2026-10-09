@@ -15,6 +15,7 @@ export const BACKEND_CATEGORIES = [
   "Async",
   "Real-Time",
   "Integrations",
+  "Notifications",
   "Files & Storage",
   "Caching",
   "Middleware",

@@ -31,6 +31,9 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
     if (!parsedDatabase.success) problem(service.id, "Choose a valid database engine, storage location, filename and dedicated environment variable.");
     if (service.blocks.some(b => b.type === "env_var" && b.config.key === database.connectionEnv)) problem(service.id, "Database connection values belong in the exported runtime environment, not an Environment Variable block.");
     if (service.blocks.some(b => b.type === "env_var" && b.config.key === "OPERATOR_SETUP_TOKEN")) problem(service.id, "Operator setup codes belong only in the exported runtime environment, not an Environment Variable block.");
+    if (service.blocks.some(b => b.type === "submission_notification") && service.blocks.some(b =>
+      b.type === "env_var" && ["SUBMISSION_EMAIL_FROM", "SUBMISSION_EMAIL_TO", "SUBMISSION_PUBLIC_ORIGIN", "SUBMISSION_EMAIL_TEST_ENDPOINT", "RESEND_API_KEY"].includes(b.config.key)
+    )) problem(service.id, "Submission email settings and provider keys belong only in the exported worker environment.");
     if (isSql(database)) {
       const tables = service.blocks.filter(b => b.type === "db_model").map(b => b.config.tableName.toLowerCase());
       if (new Set(tables).size !== tables.length) problem(service.id, "SQL table names must be distinct without relying on letter case.");
@@ -54,7 +57,7 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
       }
       definition.propsSchema.parse(block.config);
       if (block.type === "db_model") {
-        const reserved = ["_id", "__v", ...(block.config.timestamps ? ["createdAt", "updatedAt"] : []), ...(block.config.softDelete ? ["deletedAt"] : [])];
+        const reserved = ["_id", "__v", "_levoksSubmissionMail", ...(block.config.timestamps ? ["createdAt", "updatedAt"] : []), ...(block.config.softDelete ? ["deletedAt"] : [])];
         for (const field of block.config.fields) {
           if (field.name === "operatorBootstrap") problem(block.id, "operatorBootstrap is reserved for one-time operator enrollment.");
           if (reserved.includes(field.name)) problem(block.id, `${block.label}: ${field.name} is managed by the model.`);
@@ -70,6 +73,24 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
     }
     diagnostics.push(...programDiagnostics(service));
     diagnostics.push(...relationDiagnostics(service));
+    const notifications = service.blocks.filter(b => b.type === "submission_notification");
+    for (const block of notifications) {
+      const c = block.config;
+      const endpoint = service.blocks.find(b => b.type === "rest_endpoint" && b.id === c.endpointId);
+      const query = service.blocks.find(b => b.type === "query" && b.id === c.queryId);
+      const model = service.blocks.find(b => b.type === "db_model" && b.id === c.modelId);
+      const inbox = service.blocks.find(b => b.type === "rest_endpoint" && b.id === c.inboxEndpointId);
+      if (
+        isSql(database) || service.blocks.some(b => b.type === "relation") || block.connections.length ||
+        endpoint?.type !== "rest_endpoint" || endpoint.config.method !== "POST" || endpoint.config.authRequired ||
+        endpoint.config.policyIds?.length || endpoint.config.modelId !== c.modelId || !endpoint.connections.includes(c.queryId) ||
+        query?.type !== "query" || query.config.operation !== "create" || query.config.policyId || query.config.modelId !== c.modelId ||
+        model?.type !== "db_model" || model.config.fields.some(f => /password|secret|token/i.test(f.name)) ||
+        inbox?.type !== "rest_endpoint" || inbox.config.view !== "submissionInbox" || inbox.config.modelId !== c.modelId ||
+        notifications.filter(n => n.config.modelId === c.modelId).length !== 1
+      )
+        problem(block.id, "Submission email alerts require one configuration per MongoDB collection without relationships, a public POST with its connected create query, and a private submission inbox. They are service configuration, not workflow steps.");
+    }
     for (const type of ["error_handler", "audit_log"])
       if (service.blocks.filter((b) => b.type === type).length > 1)
         problem(

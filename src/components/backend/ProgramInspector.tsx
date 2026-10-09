@@ -197,6 +197,7 @@ function AggregateFields({
 
 type Value = string | number | boolean | null;
 const configuration = new Set([
+  "submission_notification",
   "rest_endpoint",
   "db_model",
   "role",

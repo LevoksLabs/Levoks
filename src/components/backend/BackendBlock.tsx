@@ -33,6 +33,7 @@ const METHOD_COLORS: Record<string, string> = {
 
 // Block type labels
 const BLOCK_TYPE_LABELS: Record<string, string> = {
+    submission_notification: "Submission Email",
     health_check: "Health Check",
     error_handler: "Error Handler",
     audit_log: "Audit Log",

@@ -5,6 +5,7 @@ import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
 import { useRoutingStore } from "@/store/routingStore";
 import { projectHistory } from "@/store/projectHistory";
+import { setSubmissionNotifications } from "@/lib/backend/submission-notifications";
 import {
   createSubmissionInbox,
   submissionInboxPath,
@@ -69,6 +70,12 @@ function FormDestinationSettings({ form }: { form: ElementNode }) {
     [name, setName] = useState("Form submissions"),
     [message, setMessage] = useState(""),
     [errorMessage, setErrorMessage] = useState("");
+  const notification = initial?.service.blocks.find(
+    (block) =>
+      block.type === "submission_notification" &&
+      "endpointId" in block.config &&
+      block.config.endpointId === initial.block.id,
+  );
   const [mappings, setMappings] = useState<RequestMapping[]>(
     connected?.requestMappings ||
       (initial && "requestBody" in initial.block.config
@@ -311,6 +318,63 @@ function FormDestinationSettings({ form }: { form: ElementNode }) {
             Add private submission inbox
           </button>
         ))}
+      {inbox && initial && (
+        <>
+          <label>
+            <input
+              type="checkbox"
+              checked={Boolean(
+                notification &&
+                "enabled" in notification.config &&
+                notification.config.enabled,
+              )}
+              onChange={(event) => {
+                setErrorMessage("");
+                try {
+                  setSubmissionNotifications(
+                    initial.service.id,
+                    initial.block.id,
+                    event.target.checked,
+                  );
+                  setMessage(
+                    event.target.checked
+                      ? "Email alerts enabled. Configure and run the downloaded notification worker; see NOTIFICATIONS.md."
+                      : "New email alerts disabled. Already queued alerts will finish processing.",
+                  );
+                } catch (error) {
+                  setErrorMessage(
+                    error instanceof Error
+                      ? error.message
+                      : "Email alert setup failed.",
+                  );
+                }
+              }}
+            />{" "}
+            Email alerts for new submissions
+          </label>
+          {notification && "subject" in notification.config && (
+            <label className="form-destination-field">
+              Email alert subject
+              <input
+                maxLength={160}
+                value={String(notification.config.subject)}
+                onChange={(event) =>
+                  useBackendStore
+                    .getState()
+                    .updateBlockConfig(initial.service.id, notification.id, {
+                      subject: event.target.value,
+                    })
+                }
+              />
+            </label>
+          )}
+          <p className="panel-caption">
+            Sends an inbox link through a separate worker. Submitted details
+            stay in your private inbox. Sender, recipient and provider key are
+            configured at runtime; see NOTIFICATIONS.md after download.
+          </p>
+        </>
+      )}
       <button
         type="button"
         className="insp-form-add-btn"

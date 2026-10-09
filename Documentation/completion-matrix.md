@@ -1,5 +1,25 @@
 # Levoks completion matrix
 
+## Durable submission email alerts — 2026-10-09
+
+Connected MongoDB forms with a private inbox offer **Email alerts for new submissions** and an editable subject. This adds one ordinary Submission Email configuration block; its endpoint/query/model/inbox bindings are editable in Backend. Enable/disable, undo/redo, save/reload and downloaded IR preserve the configuration. Invalid bindings, SQL/relationships, duplicate queues, reserved internal fields and provider settings in project blocks prevent executable export.
+
+The generated create query saves the record and hidden queued alert in one MongoDB document write. Validation failures create no alert; the API makes no provider requests. Disabled configurations stop new jobs while existing jobs drain. Public receipts and authenticated inbox responses omit queue metadata. Messages contain a generic notice and the authenticated inbox link, without submitted names, addresses or message contents.
+
+A separately supervised worker uses atomic 60-second leases, a 15-second HTTP timeout, stable idempotency keys, bounded retries/backoff and safe classification of 429/5xx/transient-409 versus permanent rejection. Crash-after-acceptance replay uses the same payload/key. A salted fingerprint rejects changed sender/recipient/origin settings on already attempted jobs. Five attempts and a 23-hour lifetime stay within the provider's documented [24-hour idempotency window](https://resend.com/changelog/idempotency-keys). Expiry/cancellation preserve records; soft-deleted unleased submissions cancel queued alerts. Sent records mean provider acceptance, not mailbox delivery.
+
+Runtime sender/recipient/origin/provider keys live in `notifications/.env` or the worker process environment. The API loads its own `.env`. Compose workers use an optional notifications profile, no published ports and no JWT/setup tokens. Blank worker variables do not block starting APIs. Generated Docker ignore rules exclude nested environment files; actual container execution remains a later gate. `notifications:status` reports only counts. The root ZIP includes NOTIFICATIONS.md with setup, retries and operating limits.
+
+Verification: `.verification/notifications-check.log` (127 unit tests, TypeScript/lint with 0 errors/50 existing warnings), `notifications-export.log` (actual drag/drop → form/inbox/alerts → history → save/reload → inspector editing → ZIP → fresh extraction → generated frontend/two backend builds → three real browser/Express/MongoDB/worker cases), `notifications-regression.log` (seven editor cases, including every ZIP file compared with current compilation), `notifications-integration.log` (18 serial integrations passed, three external SQL cases skipped) and `notifications-editor-build.log` (editor production build). The runtime covers unavailable/missing provider configuration, concurrent workers, 503/429/transient-409 retry, crash/restart replay, permanent rejection, retry exhaustion, expiry, soft deletion, changed settings, authenticated inbox access and hidden operational data. Email HTTP transport is replaced only by a loopback receiver. No external delivery, publishing or paid usage occurs.
+
+Initial verification found an overbroad status selector and select labels that included option text. The test selector was narrowed; the product select controls now have explicit accessible labels and use the existing padded inspector layout. No runtime assertion or retry delay was weakened; fixtures advance persisted dates to exercise retry/expiry without waiting hours.
+
+BE25–27/BE36 remain PARTIAL: this is a specific submission outbox, not general editable queues/jobs/events, scheduler execution, queue administration/replay, arbitrary email templates/attachments, multi-recipient/channel preferences, delivery webhooks/bounces, visitor confirmation, SQL/relational support or live-provider acceptance. The next business-site increment is broader form controls, then a complete site starter and wider operator/team administration.
+
+![Email alerts in the form inspector](audit-2026-10-08/notifications-editor-desktop.png)
+
+![Editable submission email configuration](audit-2026-10-08/notifications-inspector-compact.png)
+
 ## Private submission inbox and first operator — 2026-10-09
 
 The next business-site increment is implemented: connected forms offer **Add private submission inbox**. One undoable action creates a separate MongoDB identity service, an operator role and read permission, an authenticated paginated query and a generated inbox. Definitions persist through save/reload/IR/ZIP. Backend endpoint settings expose the generated view; incompatible edits block compilation. Public submission POSTs remain unauthenticated even when the service has a private read policy; authentication is inferred from reachable scoped queries rather than unrelated service policies.
@@ -193,9 +213,9 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | BE22 | Transform: data mapping, output filtering, sensitive-field removal | PARTIAL | Inspector mappings emit bounded interpreted transforms with sensitive output stripping; broader mapping semantics remain. |
 | BE23 | Functions: inputs, workflow, outputs, reusable service/app scope | PARTIAL | Service functions accept inputs and execute ordered steps/outputs; cross-service/app scope remains. |
 | BE24 | Events: names, payloads, producers, consumers | MISSING | No event execution model. |
-| BE25 | Durable queues, retries and failure handling | MISSING | No queue blocks or durable dispatcher. |
-| BE26 | Jobs: payloads, bounds, retry/backoff, failures | MISSING | No job runtime. |
-| BE27 | Workers: queue binding, concurrency, leases and failures | MISSING | No worker process/lease implementation. |
+| BE25 | Durable queues, retries and failure handling | PARTIAL | Durable submission outbox saves atomically with records and drains separately. General editable queues, producers/consumers and backpressure remain. |
+| BE26 | Jobs: payloads, bounds, retry/backoff, failures | PARTIAL | Submission alerts have persisted payload snapshots, bounds, backoff, expiry and terminal failures. General job blocks and queue administration remain. |
+| BE27 | Workers: queue binding, concurrency, leases and failures | PARTIAL | Separate submission workers use atomic leases, stable idempotency and safe retries across replicas/restarts; actual downloaded execution is verified. General editable worker/queue binding and administration remain. |
 | BE28 | Schedulers: interval/cron, timezone, jobs | MISSING | No scheduler runtime. |
 | BE29 | WebSockets: auth, schemas, endpoints, events | MISSING | Chat template contains models/HTTP endpoints only. |
 | BE30 | SSE with disconnect/backpressure and authorization | MISSING | No generated SSE runtime. |
@@ -204,7 +224,7 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | BE33 | Broadcast by channel/user/role | MISSING | No scoped broadcast runtime. |
 | BE34 | HTTP requests: contracts, auth, timeout, retry, response mapping | PARTIAL | Generated HTTP Request block supports configured origins/paths/methods, bound query/body, bearer-secret references, timeouts, bounded GET retries and public response outputs. Local HTTP execution tests pass. General headers/auth strategies, richer response contracts and live upstream acceptance remain. |
 | BE35 | Webhooks: receiving route, raw signature verification, replay safety | MISSING | No generated webhook runtime. |
-| BE36 | Email: provider, sender, recipients, templates, attachments, delivery | PARTIAL | Identity email has encrypted durable Resend delivery and real local transport tests. General Email block inspector, recipients/templates/attachments and live delivery remain missing. |
+| BE36 | Email: provider, sender, recipients, templates, attachments, delivery | PARTIAL | Identity email has encrypted durable delivery. Submission emails add an editable inbox-link alert, separate runtime settings, leased retries and local downloaded runtime tests. General Email blocks, arbitrary recipients/templates/attachments, delivery callbacks and live acceptance remain. |
 | BE37 | SMS: recipient, message, provider, delivery | MISSING | Internal adapter absent; credentials not sole blocker. |
 | BE38 | Payments: customer, amount/currency, flows, metadata, webhooks | MISSING | No implementation; provider test account needed after implementation. |
 | BE39 | Upload: types, size, authentication, names, destinations | MISSING | Editor image upload is not a generated application upload endpoint. |
