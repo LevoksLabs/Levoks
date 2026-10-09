@@ -22,6 +22,15 @@ async function formFileValue(input) {
 function formControlValue(input, form) {
   if (input.type === 'radio' && input.name) return Array.from(form.elements).find(candidate => candidate.type === 'radio' && candidate.name === input.name && candidate.checked && !candidate.disabled && !candidate.matches?.(':disabled'))?.value;
   if (input.disabled || input.matches?.(':disabled')) return undefined;
+  if (input.dataset?.checkboxGroup === 'true') {
+    const choices = Array.from(input.querySelectorAll('input[type="checkbox"]')).filter(candidate => candidate.form === form && !candidate.disabled && !candidate.matches(':disabled'));
+    const values = choices.filter(candidate => candidate.checked).map(candidate => candidate.value);
+    if (input.dataset.checkboxRequired === 'true' && !values.length) {
+      choices[0]?.focus();
+      throw new Error('Choose at least one option for ' + (input.querySelector('legend')?.textContent || input.name));
+    }
+    return values.length ? values : undefined;
+  }
   if (input.type === 'file') return formFileValue(input);
   if (input.type === 'radio') return input.checked ? input.value : undefined;
   if (input.tagName === 'SELECT' && input.multiple) return Array.from(input.selectedOptions).filter(option => !option.disabled && !option.closest('optgroup:disabled')).map(option => option.value);

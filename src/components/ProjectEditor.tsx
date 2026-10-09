@@ -124,12 +124,23 @@ export default function ProjectEditor() {
   const [navigationError, setNavigationError] = useState("");
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [compact, setCompact] = useState(false);
   const { selectElement, sidebarOpen, frontendCodePreviewOpen, assets } =
     useEditorStore();
   const { codePreviewOpen } = useBackendStore();
   const ui = useEditorUIStore();
   useEffect(() => {
-    const preview = () => setIsPreviewOpen(true);
+    const query = window.matchMedia("(max-width: 900px)");
+    const sync = () => {
+      setCompact(query.matches);
+      if (query.matches) useEditorUIStore.setState({ inspectorVisible: false, trayCollapsed: true });
+    };
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+  useEffect(() => {
+    const preview = () => { useEditorStore.getState().finishResponsiveEdit(); setIsPreviewOpen(true); };
     const home = () => { void flushWorkspace().then(() => router.push("/")).catch(error => setNavigationError(error.message)); };
     window.addEventListener("levoks:preview", preview);
     window.addEventListener("levoks:home", home);
@@ -140,6 +151,7 @@ export default function ProjectEditor() {
   const isRoutingMode = ui.canvasMode === "routes";
 
   const openPreview = () => {
+    useEditorStore.getState().finishResponsiveEdit();
     selectElement(null);
     setIsPreviewOpen(true);
   };
@@ -193,6 +205,11 @@ export default function ProjectEditor() {
 
         {/* Main area */}
         <div className="editor-body">
+          {compact && (ui.inspectorVisible || (!ui.trayCollapsed && sidebarOpen)) && <button
+            className="editor-panel-backdrop" aria-label="Close editor panels"
+            onClick={() => useEditorUIStore.setState({ inspectorVisible: false, trayCollapsed: true })} />}
+          {compact && ui.inspectorVisible && <button className="compact-inspector-close" aria-label="Close inspector"
+            onClick={() => useEditorUIStore.setState({ inspectorVisible: false })}><X size={16} /></button>}
           <Sidebar />
           {!ui.trayCollapsed && sidebarOpen && !["code", "secrets"].includes(sidebarOpen) && <PanelResizeHandle side="tray" />}
           <div className="editor-center">
@@ -237,7 +254,7 @@ export default function ProjectEditor() {
                   : "UI canvas"}
             </span>
             <button
-              onClick={() => ui.toggle("trayCollapsed")}
+              onClick={() => { if (compact) useEditorUIStore.setState({ inspectorVisible: false }); ui.toggle("trayCollapsed"); }}
               title="Toggle sub-tray (Shift+T)"
               aria-label="Toggle sub-tray"
               aria-pressed={!ui.trayCollapsed}
@@ -245,7 +262,7 @@ export default function ProjectEditor() {
               <PanelLeftClose size={14} />
             </button>
             <button
-              onClick={() => ui.toggle("inspectorVisible")}
+              onClick={() => { if (compact) useEditorUIStore.setState({ trayCollapsed: true }); ui.toggle("inspectorVisible"); }}
               title="Toggle inspector (Shift+I)"
               aria-label="Toggle inspector"
               aria-pressed={ui.inspectorVisible}

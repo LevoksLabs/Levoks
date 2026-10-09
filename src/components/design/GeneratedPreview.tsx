@@ -73,7 +73,7 @@ export default function GeneratedPreview({
     return () => window.removeEventListener("message", navigate);
   }, [editor.pages, onNavigate, pageId, result.html]);
   return (
-    <div className="generated-preview" style={{ width, maxWidth: "100%" }}>
+    <div className="generated-preview" style={{ width, flexShrink: 0 }}>
       <p>
         Generated frontend · isolated preview. Page links, widgets and
         animations work here. Use Local full-stack for generated MongoDB APIs.

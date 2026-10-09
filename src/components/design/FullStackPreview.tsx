@@ -205,7 +205,7 @@ export default function FullStackPreview({
     <section
       className="fullstack-preview"
       aria-label="Full-stack preview"
-      style={{ width, maxWidth: "100%" }}
+      style={{ width, flexShrink: 0 }}
     >
       <div className="fullstack-preview-controls">
         <div>

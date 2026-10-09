@@ -8,7 +8,7 @@ import { isTextInput, textLimits, textConfigError, textFormats } from "@/lib/bac
 import { ParameterControl } from "./ParameterControl";
 import SelectOptionsEditor from "./SelectOptionsEditor";
 import { fileLimits, fileConfigError } from "@/lib/backend/files";
-import RadioGroupEditor from "./RadioGroupEditor";
+import ChoiceGroupEditor from "./ChoiceGroupEditor";
 
 export default function ElementProperties({
   element,
@@ -160,7 +160,7 @@ export default function ElementProperties({
               .filter(
                 ([key]) =>
                     (key !== "type" || element.type === "button") &&
-                    !(definition?.id === "radioGroup" && ["name", "legend", "required"].includes(key)) &&
+                    !(["radioGroup", "checkboxGroup"].includes(definition?.id || "") && ["name", "legend", "required"].includes(key)) &&
                   !(fileInput && ["maxFileKB", "accept"].includes(key)) &&
                   !(element.type === "native" && definition?.tag === "select" && ["options", "optionLabels", "disabledValues", "optionGroups", "disabledGroups", "value", "selectedValues"].includes(key)) &&
                   !(textInput && ["pattern", "minLength", "maxLength"].includes(key)) &&
@@ -225,7 +225,7 @@ export default function ElementProperties({
                 </label>
               ))}
               {element.type === "native" && definition?.tag === "select" && <SelectOptionsEditor key={element.id} element={element}/>}
-              {definition?.id === "radioGroup" && <RadioGroupEditor key={element.id} element={element}/>}
+              {["radioGroup", "checkboxGroup"].includes(definition?.id || "") && <ChoiceGroupEditor key={element.id} element={element}/>}
             {fileInput && <>
               <label><span>Maximum file size (KiB)</span><input aria-label="Maximum file size (KiB)" type="number" min={1} max={256} step={1} value={Number(element.props.maxFileKB ?? 256)} onChange={e=>set("maxFileKB",Number(e.target.value))}/></label>
               <label><span>Allowed file extensions</span><input aria-label="Allowed file extensions" value={String(element.props.accept || "")} placeholder="Any, or .pdf, .png, .txt" onChange={e=>set("accept",e.target.value)}/></label>

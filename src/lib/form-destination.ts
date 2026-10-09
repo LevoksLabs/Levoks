@@ -23,6 +23,7 @@ import { defaultDatabase } from "@/lib/backend/database";
 import { validationChoices } from "@/lib/backend/validation";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { isTextInput, textLimits, textConfigError } from "@/lib/backend/text-validation";
+import { groupChoices, validateCheckboxGroup } from "@/lib/elements/choice-group-values";
 import { fileLimits, fileConfigError } from "@/lib/backend/files";
 import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
@@ -69,7 +70,7 @@ export function submissionFields(
   const controls = formControls(formId, elements);
   const radioNames = new Set<string>();
   const inputs = controls
-    .filter((node) => isFormInput(node) && !node.props.disabled)
+    .filter((node) => isFormInput(node, elements[node.parentId || ""]) && !node.props.disabled)
     .filter((node) => {
       const type = String(node.props.inputType || node.props.type || "");
       if (type !== "radio" || !node.props.name) return true;
@@ -80,7 +81,7 @@ export function submissionFields(
     });
   const problems: string[] = [];
   for (const group of controls.filter(node => node.definitionId === "radioGroup" && node.props.required && !node.props.disabled)) {
-    if (!formControls(group.id, elements).some(node => isFormInput(node) && !node.props.disabled && String(node.props.inputType || node.props.type) === "radio"))
+    if (!formControls(group.id, elements).some(node => isFormInput(node, elements[node.parentId || ""]) && !node.props.disabled && String(node.props.inputType || node.props.type) === "radio"))
       problems.push(`${group.props.legend || group.label || "Radio group"}: add at least one enabled radio choice for this required field.`);
   }
   if (!inputs.length)
@@ -96,7 +97,7 @@ export function submissionFields(
     problems.push("Add an enabled Submit button to this form.");
   const used = new Set<string>();
   const fields = inputs.map((input, index) => {
-    const inputType = String(
+    const inputType = input.definitionId === "checkboxGroup" ? "checkbox-group" : String(
       input.type === "input"
         ? input.props.inputType || "text"
         : input.props.type || definitionFor(input)?.tag || "text",
@@ -155,6 +156,12 @@ export function submissionFields(
       catch (error) { problems.push(`${input.label || name}: ${(error as Error).message}`); }
       choices = selectChoices(input.props).filter(choice => !choice.disabled && !choice.groupDisabled).map(choice => choice.value).join("\n");
     }
+    if (inputType === "checkbox-group") {
+      try {
+        validateCheckboxGroup(input, elements);
+        choices = groupChoices(input, elements).filter(choice => !choice.props.disabled).map(choice => String(choice.props.value)).join("\n");
+      } catch (error) { problems.push(`${input.props.legend || input.label}: ${(error as Error).message}`); }
+    }
     if (inputType === "radio") {
       const members = controls.filter(
         (node) =>
@@ -189,7 +196,7 @@ export function submissionFields(
         id: input.id,
         name,
         type:
-          inputType === "file" ? "object" : definitionFor(input)?.tag === "select" && input.props.multiple
+          inputType === "file" ? "object" : inputType === "checkbox-group" || definitionFor(input)?.tag === "select" && input.props.multiple
             ? "array"
             : ["number", "range"].includes(inputType)
               ? "number"
@@ -250,7 +257,7 @@ export function suggestedFormMappings(
   config: EndpointConfig,
 ): RequestMapping[] {
   const inputs = formControls(formId, elements).filter(
-    (node) => isFormInput(node) && !node.props.disabled,
+    (node) => isFormInput(node, elements[node.parentId || ""]) && !node.props.disabled,
   );
   return endpointFields(config).flatMap((field) => {
     const input = inputs.find(
@@ -294,7 +301,7 @@ export function connectFormDestination(
     throw new Error("Choose an existing POST, PUT or PATCH endpoint.");
   const inputs = new Set(
     formControls(formId, editor.elementsById)
-      .filter((node) => isFormInput(node) && !node.props.disabled)
+      .filter((node) => isFormInput(node, editor.elementsById[node.parentId || ""]) && !node.props.disabled)
       .map((node) => node.id),
   );
   const fields = endpointFields(endpoint.config as EndpointConfig);

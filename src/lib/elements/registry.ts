@@ -353,6 +353,11 @@ native(
   "tag",
   [320, 120],
 );
+native(
+  "checkboxGroup", "Checkbox Group", "Form / Inputs", "fieldset",
+  { ariaLabel: "Choose options", name: "", legend: "Choose options", required: false, disabled: false },
+  box, true, "tag", [320, 120],
+);
 for (const [id, name, tag] of [
   ["navbar", "Navbar", "nav"],
   ["sidebar", "Sidebar", "aside"],

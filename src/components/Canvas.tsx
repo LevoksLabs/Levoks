@@ -30,6 +30,7 @@ import { useEditorUIStore } from "@/store/editorUIStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { useCanvasNavigation } from "./useCanvasNavigation";
 import { canvasSize } from "@/lib/design";
+import ResponsiveControls from "./design/ResponsiveControls";
 
 const MIN_ZOOM = 10;
 const MAX_ZOOM = 200;
@@ -61,15 +62,12 @@ const Canvas: React.FC = () => {
     canvasSettings,
     tokens,
     updateCanvasSettings,
-    elementsById,
-    responsiveBaseline,
-    beginResponsiveEdit,
-    finishResponsiveEdit,
   } = useEditorStore();
   // ─── Transform matrix state (Figma-style) ───
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
   const [zoom, setZoom] = useState(100);
+  const [workspaceWidth, setWorkspaceWidth] = useState(320);
   const panRef = useRef({ x: 0, y: 0 });
   const scaleRef = useRef(1);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -114,12 +112,12 @@ const Canvas: React.FC = () => {
   const activePageRoute = activePage?.route || "/";
 
   const { width: canvasWidth, height: canvasHeight } = canvasSize(canvasSettings, ui.breakpoint, ui.viewportSize);
-  const responsiveChanged = responsiveBaseline !== null && JSON.stringify(elementsById) !== JSON.stringify(responsiveBaseline);
-  useEffect(() => () => useEditorStore.getState().finishResponsiveEdit(true), []);
+  useEffect(() => () => useEditorStore.getState().finishResponsiveEdit(), []);
   const canvasBackground = String(canvasSettings.backgroundColor || "#ffffff");
   const canvasHasGradient = /gradient\(/i.test(canvasBackground);
   const visibleCanvasHeight = pendingHeight ?? canvasHeight;
   const zoomScale = zoom / 100;
+  const emptyStateWidth = Math.max(120, Math.min(320, workspaceWidth - 24, canvasWidth * zoomScale - 16));
 
   // Sync refs for use in non-passive event listeners
   useEffect(() => {
@@ -203,7 +201,7 @@ const Canvas: React.FC = () => {
       availW / canvasWidth,
       availH / visibleCanvasHeight,
     );
-    const fitZoom = Math.round(fitScale * 100);
+    const fitZoom = Math.max(MIN_ZOOM, Math.round(fitScale * 100));
     const s = fitZoom / 100;
     const newPanX = (ws.clientWidth - canvasWidth * s) / 2;
     const newPanY = (ws.clientHeight - visibleCanvasHeight * s) / 2;
@@ -258,12 +256,27 @@ const Canvas: React.FC = () => {
 
   // Restore dimensions before framing the project; storage loads asynchronously.
   useEffect(() => {
-    if (!workspaceReady || centeredProject.current === `${projectId}:${ui.breakpoint}`) return;
+    if (!workspaceReady || centeredProject.current === `${projectId}:${canvasWidth}:${canvasHeight}`) return;
     const ws = workspaceRef.current;
     if (!ws) return;
-    centeredProject.current = `${projectId}:${ui.breakpoint}`;
+    centeredProject.current = `${projectId}:${canvasWidth}:${canvasHeight}`;
     fitCanvasToView();
-  }, [workspaceReady, projectId, ui.breakpoint, fitCanvasToView]);
+  }, [workspaceReady, projectId, canvasWidth, canvasHeight, fitCanvasToView]);
+
+  useEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace || !workspaceReady) return;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        setWorkspaceWidth(workspace.clientWidth);
+        fitCanvasToView();
+      });
+    });
+    observer.observe(workspace);
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [workspaceReady, fitCanvasToView]);
 
   // Drag state for moving elements
   const dragState = useRef<{
@@ -1228,20 +1241,7 @@ const Canvas: React.FC = () => {
           </button>
         </div>
         <div className="canvas-topbar-right">
-          {(ui.viewportSize || ui.breakpoint !== "base") && (
-            <div className="canvas-responsive-actions">
-              <button
-                className="canvas-responsive-toggle"
-                aria-pressed={responsiveBaseline !== null}
-                onClick={() => responsiveBaseline ? finishResponsiveEdit(true) : beginResponsiveEdit()}
-                title="Adjust this screen's layout, then save or cancel your changes"
-              >Responsive</button>
-              {responsiveChanged && <>
-                <button className="canvas-resize-save" aria-label="Save responsive changes" onClick={() => finishResponsiveEdit()}>Save</button>
-                <button className="canvas-resize-cancel" aria-label="Cancel responsive changes" onClick={() => finishResponsiveEdit(true)}>Cancel</button>
-              </>}
-            </div>
-          )}
+          <ResponsiveControls />
           <span className="page-label">
             {canvasWidth} × {canvasHeight}
           </span>
@@ -1333,7 +1333,7 @@ const Canvas: React.FC = () => {
             {rootIds.length === 0 && globalRootIds.length === 0 ? (
               <div
                 className="canvas-empty-state"
-                style={{ transform: `scale(${100 / zoom})` }}
+                style={{ transform: `scale(${100 / zoom})`, width: emptyStateWidth, marginLeft: -emptyStateWidth / 2 }}
               >
                 <div className="empty-icon">
                   <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
@@ -1457,7 +1457,7 @@ const Canvas: React.FC = () => {
             aria-label="Screen dimensions"
           >
             <strong>Screen dimensions</strong>
-            <span>Choose a screen, then click Responsive above the canvas to adjust its layout.</span>
+            <span>Choose a screen to edit its layout. Tablet changes carry down to mobile. Switching screens keeps your changes.</span>
             {[
               ["Desktop HD", 1920, 1080],
               ["Laptop", 1366, 768],

@@ -122,9 +122,17 @@ export function nativeTree(element: ElementNode): SemanticTree {
   const children: SemanticTree[] = [];
   if (d.tag === "fieldset") {
     delete attrs.required;
+    if (element.definitionId === "checkboxGroup") {
+      attrs["data-checkbox-group"] = "true";
+      attrs["data-checkbox-required"] = String(Boolean(p.required));
+    }
     if (p.legend) {
       children.push(node("legend", {}, [String(p.legend)]));
       if (!element.accessibility?.label) delete attrs["aria-label"];
+    }
+    if (element.definitionId === "checkboxGroup" && p.required) {
+      attrs["aria-describedby"] = `${element.id}-choices-help`;
+      children.push(node("small", { id: `${element.id}-choices-help` }, ["Select at least one option."]));
     }
   }
   if (d.generate === "dialog") {

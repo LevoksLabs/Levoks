@@ -89,8 +89,10 @@ export function isSubmitControl(element: ElementNode) {
       (element.type === "button" ? "submit" : "button")) === "submit"
   );
 }
-export function isFormInput(element: ElementNode) {
+export function isFormInput(element: ElementNode, parent?: ElementNode) {
+  if (parent?.definitionId === "checkboxGroup") return false;
   return (
+    element.definitionId === "checkboxGroup" ||
     element.type === "input" ||
     (element.type === "native" &&
       ["input", "textarea", "select"].includes(
@@ -106,6 +108,7 @@ export function compatibleFormField(
 ) {
   if (String(element.props.inputType || element.props.type) === "file") return field.type === "object" && field.location === "body";
   const multiple =
+    element.definitionId === "checkboxGroup" ||
     definitionFor(element)?.tag === "select" && Boolean(element.props.multiple);
   return (
     field.type !== "object" &&
@@ -163,13 +166,16 @@ export function resolveContract(
     const source = mapping.source;
     if (source.kind === "element") {
       const element = elements.find((el) => el.id === source.elementId);
+      if (element?.definitionId === "checkboxGroup" && (field.required || element.props.required) &&
+          (element.props.disabled || !elements.some(choice => choice.parentId === element.id && choice.definitionId === "checkbox" && !choice.props.disabled)))
+        error(`Field ${field.name} needs an enabled checkbox group with at least one enabled choice.`);
       if (element && !compatibleFormField(element, field))
         error(
           `Field ${field.name} requires compatible structured data; multiple selections map to an array in the request body.`,
         );
       if (
         !element ||
-        !isFormInput(element) ||
+        !isFormInput(element, elements.find(node => node.id === element.parentId)) ||
         formOwner(element, elements)?.id !== triggerId
       )
         error(

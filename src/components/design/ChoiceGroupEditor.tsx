@@ -2,19 +2,22 @@
 import { useRef, useState } from "react";
 import type { ElementNode } from "@/types";
 import { useEditorStore } from "@/store/editorStore";
-import { editRadioGroup, radioChoices } from "@/lib/elements/radio-group";
+import { editChoiceGroup } from "@/lib/elements/radio-group";
+import { groupChoices } from "@/lib/elements/choice-group-values";
 
-function RadioRow({
+function ChoiceRow({
   choice,
   index,
   count,
   apply,
+  kind,
 }: {
   choice: ElementNode;
   index: number;
   count: number;
+  kind: "Radio" | "Checkbox";
   apply: (
-    edit: Parameters<typeof editRadioGroup>[1],
+    edit: Parameters<typeof editChoiceGroup>[1],
     focus?: number,
   ) => boolean;
 }) {
@@ -25,7 +28,7 @@ function RadioRow({
       <label>
         <span>Choice {index + 1} label</span>
         <input
-          aria-label={`Radio choice ${index + 1} label`}
+          aria-label={`${kind} choice ${index + 1} label`}
           value={label}
           maxLength={200}
           onChange={(e) => setLabel(e.target.value)}
@@ -34,7 +37,7 @@ function RadioRow({
       <label>
         <span>Submitted value</span>
         <input
-          aria-label={`Radio choice ${index + 1} value`}
+          aria-label={`${kind} choice ${index + 1} value`}
           value={value}
           maxLength={10000}
           onChange={(e) => setValue(e.target.value)}
@@ -48,12 +51,12 @@ function RadioRow({
           apply({ type: "choice", id: choice.id, label, value }, index)
         }
       >
-        Apply radio choice {index + 1}
+        Apply {kind.toLowerCase()} choice {index + 1}
       </button>
       <label className="select-choice-default">
         <input
           type="checkbox"
-          aria-label={`Default radio choice: ${choice.props.label}`}
+          aria-label={`Default ${kind.toLowerCase()} choice: ${choice.props.label}`}
           checked={Boolean(choice.props.checked)}
           disabled={Boolean(choice.props.disabled)}
           onChange={(e) =>
@@ -65,7 +68,7 @@ function RadioRow({
       <label className="select-choice-default">
         <input
           type="checkbox"
-          aria-label={`Disable radio choice: ${choice.props.label}`}
+          aria-label={`Disable ${kind.toLowerCase()} choice: ${choice.props.label}`}
           checked={Boolean(choice.props.disabled)}
           onChange={(e) =>
             apply({
@@ -81,7 +84,7 @@ function RadioRow({
         <button
           type="button"
           className="insp-form-add-btn"
-          aria-label={`Move radio choice ${index + 1} up`}
+          aria-label={`Move ${kind.toLowerCase()} choice ${index + 1} up`}
           disabled={index === 0}
           onClick={() =>
             apply({ type: "move", id: choice.id, offset: -1 }, index - 1)
@@ -92,7 +95,7 @@ function RadioRow({
         <button
           type="button"
           className="insp-form-add-btn"
-          aria-label={`Move radio choice ${index + 1} down`}
+          aria-label={`Move ${kind.toLowerCase()} choice ${index + 1} down`}
           disabled={index === count - 1}
           onClick={() =>
             apply({ type: "move", id: choice.id, offset: 1 }, index + 1)
@@ -103,7 +106,7 @@ function RadioRow({
         <button
           type="button"
           className="insp-form-add-btn"
-          aria-label={`Remove radio choice ${index + 1}`}
+          aria-label={`Remove ${kind.toLowerCase()} choice ${index + 1}`}
           onClick={() => apply({ type: "remove", id: choice.id }, index)}
         >
           Remove
@@ -113,17 +116,19 @@ function RadioRow({
   );
 }
 
-export default function RadioGroupEditor({
+export default function ChoiceGroupEditor({
   element,
 }: {
   element: ElementNode;
 }) {
+  const kind = element.definitionId === "checkboxGroup" ? "Checkbox" : "Radio";
+  const lower = kind.toLowerCase();
   const nodes = useEditorStore((state) => state.elementsById);
   const updateElement = useEditorStore((state) => state.updateElement);
   let choices: ElementNode[] = [],
     configError = "";
   try {
-    choices = radioChoices(element, nodes);
+    choices = groupChoices(element, nodes);
   } catch (error) {
     configError = (error as Error).message;
   }
@@ -144,11 +149,11 @@ export default function RadioGroupEditor({
     element.props.required ?? choices.some((choice) => choice.props.required),
   );
   const apply = (
-    edit: Parameters<typeof editRadioGroup>[1],
+    edit: Parameters<typeof editChoiceGroup>[1],
     focus?: number,
   ) => {
     try {
-      editRadioGroup(element.id, edit);
+      editChoiceGroup(element.id, edit);
       setError("");
       if (focus !== undefined)
         requestAnimationFrame(() => {
@@ -167,11 +172,13 @@ export default function RadioGroupEditor({
   };
   return (
     <div className="select-options-editor" ref={root}>
-      <h4>Radio choices</h4>
+      <h4>{kind} choices</h4>
       <p className="panel-caption">
-        Choose one default, or leave all unselected. Labels can differ from
-        submitted values. Apply drafts before saving. Review connected backend
-        rules after changing choices or Required.
+        {kind === "Checkbox"
+          ? "Choose several defaults, or leave all unselected. Required asks for at least one choice."
+          : "Choose one default, or leave all unselected."}{" "}
+        Labels can differ from submitted values. Apply drafts before saving.
+        Review connected backend rules after changing choices or Required.
       </p>
       {(error || configError) && (
         <p role="alert" className="property-error">
@@ -183,7 +190,7 @@ export default function RadioGroupEditor({
           <label>
             <span>Group question</span>
             <input
-              aria-label="Radio group question"
+              aria-label={`${kind} group question`}
               value={String(element.props.legend || "")}
               maxLength={200}
               onChange={(e) =>
@@ -194,7 +201,7 @@ export default function RadioGroupEditor({
           <label>
             <span>Field name</span>
             <input
-              aria-label="Radio group field name"
+              aria-label={`${kind} group field name`}
               value={name}
               maxLength={80}
               onChange={(e) =>
@@ -207,11 +214,11 @@ export default function RadioGroupEditor({
             className="insp-form-add-btn"
             onClick={() => apply({ type: "group", name, required })}
           >
-            Apply radio field name
+            Apply {lower} field name
           </button>
           <label className="select-choice-default">
             <input
-              aria-label="Radio group required"
+              aria-label={`${kind} group required`}
               type="checkbox"
               checked={required}
               onChange={(e) =>
@@ -232,12 +239,13 @@ export default function RadioGroupEditor({
           )}
           <ol className="select-choice-list">
             {choices.map((choice, index) => (
-              <RadioRow
+              <ChoiceRow
                 key={`${choice.id}:${choice.props.label}:${choice.props.value}`}
                 choice={choice}
                 index={index}
                 count={choices.length}
                 apply={apply}
+                kind={kind}
               />
             ))}
           </ol>
@@ -245,7 +253,7 @@ export default function RadioGroupEditor({
             <span>New choice label</span>
             <input
               ref={addInput}
-              aria-label="New radio choice label"
+              aria-label={`New ${lower} choice label`}
               value={label}
               maxLength={200}
               onChange={(e) => setLabel(e.target.value)}
@@ -254,7 +262,7 @@ export default function RadioGroupEditor({
           <label>
             <span>New submitted value</span>
             <input
-              aria-label="New radio choice value"
+              aria-label={`New ${lower} choice value`}
               value={value}
               maxLength={10000}
               onChange={(e) => setValue(e.target.value)}
@@ -272,12 +280,13 @@ export default function RadioGroupEditor({
               }
             }}
           >
-            Add radio choice
+            Add {lower} choice
           </button>
           <p className="panel-caption">
-            Up to 200 unique values and 10,000 characters in total. Removing a
-            mapped choice uses another enabled choice from this group;
-            disconnect before removing the last one.
+            Up to 200 unique values and 10,000 characters in total.{" "}
+            {kind === "Checkbox"
+              ? "The group retains its mapping when choices change; disconnect before removing its last enabled choice."
+              : "Removing a mapped choice uses another enabled choice from this group; disconnect before removing the last one."}
           </p>
         </>
       )}

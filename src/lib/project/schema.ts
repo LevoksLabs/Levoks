@@ -1,3 +1,4 @@
+import { validateCheckboxGroup } from "@/lib/elements/choice-group-values";
 import { requestMappingSchema, responseMappingSchema, failureSchema } from "@/lib/contracts";
 import { z } from "zod";
 import { databaseSchema } from "@/lib/backend/database";
@@ -507,6 +508,7 @@ export function parseProject(value: unknown): ProjectDocument {
     }
   };
   Object.values(editor.elementsById).forEach(validateElement);
+  for (const node of Object.values(editor.elementsById)) if (node.definitionId === "checkboxGroup") validateCheckboxGroup(node, editor.elementsById);
   if (project.source) validateFiles(project.source.files);
   const fail = (message: string): never => {
     throw new Error(message);
@@ -516,6 +518,7 @@ export function parseProject(value: unknown): ProjectDocument {
   };
   for (const definition of Object.values(editor.components || {})) {
     Object.values(definition.nodes).forEach(validateElement);
+    for (const node of Object.values(definition.nodes)) if (node.definitionId === "checkboxGroup") validateCheckboxGroup(node, definition.nodes);
     const seen = new Set<string>();
     const walk = (key: string, parent: string | null, depth: number) => {
       const node = definition.nodes[key];

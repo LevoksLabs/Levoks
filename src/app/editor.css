@@ -38,7 +38,7 @@
 .page-search-settings p { color: var(--text-2); font-size: 11px; line-height: 1.6; }
 .editor-root {
   height: 100dvh;
-  min-width: 720px;
+  min-width: 0;
 }
 .editor-root button,
 .editor-root input,
@@ -533,6 +533,8 @@
 }
 .canvas-empty-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
   margin-top: 10px;
 }
@@ -601,6 +603,20 @@
 .canvas-responsive-toggle { border: 0; background: transparent; color: var(--text-2); opacity: 0.8; font-size: 12px; padding: 6px 4px; cursor: pointer; }
 .canvas-responsive-toggle[aria-pressed="true"] { opacity: 1; color: var(--accent); }
 .canvas-responsive-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.canvas-breakpoints { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 5px; }
+.canvas-breakpoints button { display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 30px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; color: var(--text-2); cursor: pointer; font-size: 11px; }
+.canvas-breakpoints button:hover, .canvas-breakpoints button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.canvas-topbar { height: auto; flex-wrap: wrap; gap: 8px; padding-block: 6px; }
+.canvas-url-bar { min-width: 0; }
+.canvas-url-bar .url-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.canvas-topbar-right { flex-wrap: wrap; }
+.canvas-responsive-actions { flex-wrap: wrap; }
+.editor-panel-backdrop { position: absolute; inset: var(--header-h) 0 var(--footer-h); z-index: 50; background: #0005; border: 0; cursor: pointer; }
+.compact-inspector-close { position: absolute; top: calc(var(--header-h) + 4px); right: 4px; z-index: 61; display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-panel); color: var(--text-1); cursor: pointer; }
+.site-preview-scroll { justify-content: flex-start; }
+.site-preview-scroll > * { flex-shrink: 0; margin-inline: auto; }
+.site-preview-header { height: auto; min-height: 56px; flex-wrap: wrap; gap: 8px; padding-block: 8px; }
+.site-preview-body { min-height: 0; }
 @media (max-width: 1100px) { .resolution-label { display: none; } .motion-panel header span { display: none; } .motion-tracks { width: 30%; } }
 .canvas-empty-actions button:first-child {
   background: #f0ebff;
@@ -1479,6 +1495,9 @@ kbd {
   }
 }
 @media (max-width: 900px) {
+  .sidebar-container { z-index: 60; }
+  .sidebar-flyout { position: absolute; left: var(--rail-w); top: var(--header-h); bottom: var(--footer-h); max-width: calc(100vw - var(--rail-w)); box-shadow: 8px 0 24px #0004; }
+  .panel-resize-handle { display: none; }
   .editor-body > .inspector,
   .backend-right-panel,
   .routing-right-panel {
@@ -1504,6 +1523,29 @@ kbd {
   .shortcut-columns {
     grid-template-columns: 1fr 1fr;
   }
+}
+@media (max-width: 720px) {
+  .canvas-empty-state { padding: 8px; }
+  .canvas-empty-state h3 { font-size: 16px; }
+  .canvas-empty-state .empty-icon svg { width: 32px; height: 32px; }
+  .editor-header { padding-inline: 8px; gap: 6px; }
+  .header-center { overflow: auto; scrollbar-width: thin; }
+  .workspace-actions { flex-shrink: 0; gap: 4px; }
+  .workspace-name { max-width: 100px; }
+  .canvas-topbar { padding-inline: 8px; }
+  .canvas-breakpoints button span, .canvas-route-label, .url-action-btn, .editor-context-label { display: none; }
+  .canvas-breakpoints button { min-width: 32px; min-height: 32px; }
+  .canvas-topbar-right .page-label { font-size: 10px; }
+  .canvas-zoom-bar { max-width: calc(100% - 16px); overflow-x: auto; overflow-y: visible; justify-content: flex-start; left: 8px; transform: none; }
+  .screen-picker-options { position: fixed; left: calc(var(--rail-w) + 8px); bottom: 90px; width: min(260px, calc(100vw - var(--rail-w) - 16px)); }
+  .editor-footer .breadcrumbs-bar { overflow: hidden; }
+  .editor-footer-actions { flex-shrink: 0; }
+  .editor-footer-actions button span, .editor-footer-actions kbd { display: none; }
+  .editor-body > .inspector, .backend-right-panel, .routing-right-panel { width: min(var(--inspector-w), calc(100vw - var(--rail-w))); min-width: 0; }
+  .site-preview-scroll { padding: 12px; }
+  .site-preview-header .live-preview-meta, .site-preview-header .live-preview-nav { display: none; }
+  .site-preview-header select { max-width: 100%; min-width: 0; }
+  .floating-toolbar { max-width: calc(100% - 16px); overflow-x: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   .editor-root *,

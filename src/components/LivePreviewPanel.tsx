@@ -9,7 +9,7 @@ import GeneratedPreview from "./design/GeneratedPreview";
 import FullStackPreview from "./design/FullStackPreview";
 import VectorShape from "./design/VectorShape";
 import { assetElement } from "@/lib/design-assets";
-import { canvasSize, resolveElement, fontFamily } from "@/lib/design";
+import { canvasSize, resolveElement, fontFamily, type Breakpoint } from "@/lib/design";
 import { useEditorUIStore } from "@/store/editorUIStore";
 import { useEditorStore } from "@/store/editorStore";
 import { resolveAllRoutes, simulateServiceBlock, ResolvedRoute } from "@/lib/routingEngine";
@@ -28,6 +28,7 @@ interface LivePreviewPanelProps {
 // Now works with flat-map store: children are string[] IDs
 
 interface LiveElementProps {
+    breakpoint: Breakpoint;
     elementId: string;
     isRoot: boolean;
     formData: Record<string, string>;
@@ -38,11 +39,10 @@ interface LiveElementProps {
 }
 
 const LiveElement: React.FC<LiveElementProps> = ({
-    elementId, isRoot, formData, setFormData, routeMap, onAction, pageId
+    elementId, isRoot, formData, setFormData, routeMap, onAction, pageId, breakpoint
 }) => {
     const raw = useEditorStore(s => s.elementsById[elementId]);
     const assets = useEditorStore(s => s.assets);
-    const breakpoint = useEditorUIStore(s => s.breakpoint);
     const element = raw ? assetElement(resolveElement(raw, breakpoint), assets) : undefined;
     if (!element) return null;
     if (!element.layout.visible) return null;
@@ -60,22 +60,24 @@ const LiveElement: React.FC<LiveElementProps> = ({
             position: "absolute",
             left: `${element.layout.x}px`,
             top: `${element.layout.y}px`,
-            width: widthPx,
-            minHeight: heightPx,
-            height: isTextLike ? "auto" : heightPx,
+            width: String(element.styles.width || widthPx),
+            minHeight: element.styles.minHeight || (element.styles.height ? undefined : heightPx),
+            height: isTextLike ? "auto" : String(element.styles.height || heightPx),
         }
         : {
             position: resolvedPosition,
             left: isPositionedChild ? `${element.layout.x}px` : undefined,
             top: isPositionedChild ? `${element.layout.y}px` : undefined,
             width: String(element.styles.width || widthPx),
-            minHeight: heightPx,
+            minHeight: element.styles.minHeight || (element.styles.height ? undefined : heightPx),
             height: isTextLike ? "auto" : String(element.styles.height || heightPx),
         };
 
     const mergedStyles: React.CSSProperties = {
         ...element.styles as React.CSSProperties,
         ...positionStyles,
+        ...(!isRoot && resolvedPosition === "static" ? { maxWidth: "100%", minWidth: 0, flexShrink: 0 } : {}),
+        ...(isContainer && element.children.length && !element.styles.height ? { height: "auto" } : {}),
         ...(element.type === "shape" && element.props.shapeType && element.props.shapeType !== "rectangle" ? { backgroundColor: "transparent" } : {}),
         fontFamily: fontFamily(element.styles.fontFamily),
         ...(element.type === "gallery" ? { display: "block" } : {}),
@@ -91,6 +93,7 @@ const LiveElement: React.FC<LiveElementProps> = ({
     const renderChildren = (ids = element.children) =>
         ids.map((childId) => (
             <LiveElement
+                breakpoint={breakpoint}
                 key={childId}
                 elementId={childId}
                 isRoot={false}
@@ -326,8 +329,8 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
 
     const [mode, setMode] = useState('generated');
     const generated = mode === 'generated';
-    const breakpoint = useEditorUIStore(s => s.breakpoint);
-    const viewportSize = useEditorUIStore(s => s.viewportSize);
+    const [breakpoint, setBreakpoint] = useState<Breakpoint>(() => useEditorUIStore.getState().breakpoint);
+    const [viewportSize, setViewportSize] = useState(() => useEditorUIStore.getState().viewportSize);
 
     // Current page being viewed
     const [currentPageId, setCurrentPageId] = useState(activePageId || pages[0]?.id || "");
@@ -438,7 +441,7 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
                 </div>
 
                 <select aria-label="Preview mode" value={mode} onChange={event => setMode(event.target.value)}><option value="design">Design simulation</option><option value="generated">Generated frontend</option><option value="fullstack">Local full-stack</option></select>
-                <select aria-label="Preview breakpoint" value={breakpoint} onChange={event => useEditorUIStore.getState().setBreakpoint(event.target.value as "base" | "tablet" | "mobile")}><option value="base">Desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select>
+                <select aria-label="Preview breakpoint" value={breakpoint} onChange={event => { setBreakpoint(event.target.value as Breakpoint); setViewportSize(null); }}><option value="base">Desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select>
                 {/* Page tabs */}
                 <div className="live-preview-tabs">
                     {pages.map((page) => (
@@ -472,6 +475,7 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
                         {globalRootIds.length > 0 &&
                             globalRootIds.map((id) => (
                                 <LiveElement
+                                    breakpoint={breakpoint}
                                     key={id}
                                     elementId={id}
                                     isRoot={false}
@@ -485,6 +489,7 @@ const LivePreviewPanel: React.FC<LivePreviewPanelProps> = ({ onClose }) => {
                         }
                         {pageRootIds.map((id) => (
                             <LiveElement
+                                breakpoint={breakpoint}
                                 key={id}
                                 elementId={id}
                                 isRoot={true}

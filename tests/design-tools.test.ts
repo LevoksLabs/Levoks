@@ -90,7 +90,35 @@ test("responsive adjustments are provisional, cancel restores positions, and sav
   store.updateElementPosition(id, 40, 50);
   store.updateCanvasSettings({ width: 768, height: 1024 });
   assert.equal(useEditorStore.getState().responsiveBaseline, null);
+  assert.equal(resolveElement(useEditorStore.getState().elementsById[id], "mobile").layout.x, 40);
+  store.undo();
   assert.equal(resolveElement(useEditorStore.getState().elementsById[id], "mobile").layout.x, 24);
+});
+
+test("switching breakpoint, page or canvas mode keeps responsive changes as one undo step", () => {
+  const project = emptyProject();
+  restoreProject(project);
+  const store = useEditorStore.getState();
+  const id = store.addElement(templates.button, undefined, 80, 90);
+  const otherPage = store.addPage("Other");
+  store.switchPage(project.editor.activePageId);
+  useEditorUIStore.getState().setBreakpoint("mobile");
+  for (const leave of [
+    () => useEditorUIStore.getState().setBreakpoint("tablet"),
+    () => store.switchPage(otherPage),
+    () => useEditorUIStore.setState({ canvasMode: "backend" }),
+  ]) {
+    useEditorUIStore.setState({ breakpoint: "mobile", canvasMode: "ui" });
+    store.switchPage(project.editor.activePageId);
+    store.beginResponsiveEdit();
+    store.updateElementPosition(id, 16, 20);
+    store.updateElementSize(id, 180, 50);
+    leave();
+    assert.equal(useEditorStore.getState().responsiveBaseline, null);
+    assert.equal(captureProject(project.id, project.name).editor.elementsById[id].responsive!.mobile!.layout!.x, 16);
+    store.undo();
+    assert.equal(resolveElement(useEditorStore.getState().elementsById[id], "mobile").layout.x, 80);
+  }
 });
 
 test("ungrouping preserves wrappers with compositing effects instead of silently losing appearance", () => {

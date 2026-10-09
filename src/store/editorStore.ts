@@ -696,7 +696,7 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
     },
 
     switchPage: (id) => {
-        get().finishResponsiveEdit(true);
+        get().finishResponsiveEdit();
         const state = get();
         if (id === state.activePageId) return;
         if (!state.pages.find(p => p.id === id)) return;
@@ -761,7 +761,7 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
         const ui = useEditorUIStore.getState();
         if (settings.width !== undefined || settings.height !== undefined) {
             if (settings.width !== undefined || ui.viewportSize || ui.breakpoint !== "base") {
-                if (settings.width !== undefined) get().finishResponsiveEdit(true);
+                if (settings.width !== undefined) get().finishResponsiveEdit();
                 const current = canvasSize(get().canvasSettings, ui.breakpoint, ui.viewportSize);
                 const viewportSize = { width: settings.width ?? current.width, height: settings.height ?? current.height };
                 useEditorUIStore.setState({ viewportSize, breakpoint: breakpointForWidth(viewportSize.width) });
@@ -783,5 +783,5 @@ projectHistory.subscribe(scope => {
     if (scope) useEditorUIStore.setState({ canvasMode: scope === "backend" ? "backend" : scope === "routing" ? "routes" : "ui" });
 });
 useEditorUIStore.subscribe((next, previous) => {
-    if (next.breakpoint !== previous.breakpoint) useEditorStore.getState().finishResponsiveEdit(true);
+    if (next.breakpoint !== previous.breakpoint || next.canvasMode !== previous.canvasMode) useEditorStore.getState().finishResponsiveEdit();
 });

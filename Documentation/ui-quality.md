@@ -1,5 +1,10 @@
 # Editor quality audit and verification
 
+## Checkbox groups — 10 October 2026
+
+Checkbox Group shares the existing choice-row inputs, native buttons, focus recovery and graphite/violet inspector tokens with Radio Group. Labels and submitted values are separate. Multiple defaults coexist; disabling clears only that choice's default. Required supplies visible instructions associated with the fieldset and focuses an enabled checkbox while showing the form status before a missing selection can post. Standalone required consent keeps native boolean semantics. Actual drag/drop/history/reload/preview/ZIP and downloaded production keyboard/storage/reset/retry pass. Desktop/compact inspector and mobile/desktop screenshots were reviewed; form/group bounds and wrapped labels pass at 320/768/1024/1440px. Conditional forms, nested/mixed composites and catalog-wide screen-reader/touch acceptance remain open.
+
+
 ## Native select groups â€” 10 October 2026
 
 Group assignment uses labelled optional inputs in existing choice rows and Add. Group disabling uses one accessible checkbox per name, native fieldset/legend semantics and existing inspector tokens. Defaults clear on disabling and remain cleared on enabling; undo/redo preserves recovery. Invalid edits retain the document and explain how to repair the assignment. Real browser authoring/reload/preview/export and production grouped defaults, keyboard/storage/retry/reset pass. Desktop/compact inspector and mobile/desktop generated screenshots were reviewed; form bounds pass at 320/768/1024/1440px. Adjacent runs preserve order without silently moving choices. Whole-group shortcuts, touch-picker and whole-catalog screen-reader acceptance remain open.

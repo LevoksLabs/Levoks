@@ -5,24 +5,10 @@ import { validationChoices } from "@/lib/backend/validation";
 import { elementTemplate } from "./registry";
 import type { ElementNode } from "@/types";
 
-export function radioChoices(
-  group: ElementNode,
-  nodes: Record<string, ElementNode>,
-) {
-  const choices = group.children.map((id) => nodes[id]);
-  if (
-    choices.some(
-      (node) =>
-        !node || node.definitionId !== "radioButton" || node.children.length,
-    )
-  )
-    throw new Error(
-      "This editor supports direct native radio choices. Edit nested or mixed content individually.",
-    );
-  return choices;
-}
+import { groupChoices } from "./choice-group-values";
+export { groupChoices as radioChoices } from "./choice-group-values";
 
-type RadioEdit =
+type ChoiceEdit =
   | { type: "group"; name: string; required: boolean }
   | { type: "add"; label: string; value: string }
   | { type: "choice"; id: string; label: string; value: string }
@@ -32,12 +18,16 @@ type RadioEdit =
   | { type: "disabled"; id: string; disabled: boolean };
 
 /** Ordinary children and mappings, updated together through existing project history. */
-export function editRadioGroup(groupId: string, edit: RadioEdit) {
+export function editChoiceGroup(groupId: string, edit: ChoiceEdit) {
   const store = useEditorStore.getState(),
     group = store.elementsById[groupId];
-  if (!group || group.definitionId !== "radioGroup")
-    throw new Error("Choose a radio group.");
-  const choices = radioChoices(group, store.elementsById);
+  if (
+    !group ||
+    !["radioGroup", "checkboxGroup"].includes(group.definitionId || "")
+  )
+    throw new Error("Choose a radio or checkbox group.");
+  const checkbox = group.definitionId === "checkboxGroup";
+  const choices = groupChoices(group, store.elementsById);
   if (
     [group, ...choices].some((node) =>
       store
@@ -48,7 +38,7 @@ export function editRadioGroup(groupId: string, edit: RadioEdit) {
     throw new Error("Unlock this group and its choices before editing them.");
   if ([group, ...choices].some((node) => node.component))
     throw new Error(
-      "Detach the component instance before editing its radio choices.",
+      "Detach the component instance before editing its choices.",
     );
   const name =
     edit.type === "group"
@@ -127,7 +117,7 @@ export function editRadioGroup(groupId: string, edit: RadioEdit) {
       wire.requestMappings?.some(
         (mapping) =>
           mapping.source.kind === "element" &&
-          mapping.source.elementId === selected?.id,
+          mapping.source.elementId === (checkbox ? groupId : selected?.id),
       ),
     );
   if (edit.type === "remove" && wires.length && !replacement)
@@ -153,17 +143,19 @@ export function editRadioGroup(groupId: string, edit: RadioEdit) {
         : {}),
     });
     for (const choice of choices)
-      store.updateElement(choice.id, { props: { name, required } });
+      store.updateElement(choice.id, {
+        props: { name, required: checkbox ? false : required },
+      });
     let added: string | undefined;
     if (edit.type === "add") {
-      const template = elementTemplate("radioButton");
+      const template = elementTemplate(checkbox ? "checkbox" : "radioButton");
       added = store.addElement(
         {
           ...template,
           props: {
             ...template.props,
             name,
-            required,
+            required: checkbox ? false : required,
             label: edit.label,
             value: edit.value,
           },
@@ -197,7 +189,7 @@ export function editRadioGroup(groupId: string, edit: RadioEdit) {
         throw new Error("Choose a position inside this group.");
       store.reorderElements(groupId, index, next);
     } else if (edit.type === "remove") {
-      for (const wire of wires)
+      for (const wire of checkbox ? [] : wires)
         useRoutingStore.getState().updateConnection(wire.id, {
           requestMappings: wire.requestMappings!.map((mapping) =>
             mapping.source.kind === "element" &&
@@ -215,3 +207,5 @@ export function editRadioGroup(groupId: string, edit: RadioEdit) {
     return added;
   });
 }
+
+export const editRadioGroup = editChoiceGroup;

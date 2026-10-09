@@ -72,6 +72,9 @@ function markDirty() {
   scheduleSave();
 }
 export async function flushWorkspace(label?: string): Promise<void> {
+  // An explicit project save includes the responsive layout currently on screen.
+  // Background autosave retains the baseline until Save/Cancel ends the review.
+  if (label) useEditorStore.getState().finishResponsiveEdit();
   clearTimeout(timer);
   if (writing) {
     await writing;

@@ -116,6 +116,7 @@ const TILE_ICONS: Record<string, React.ReactNode> = {
   checkbox: <CheckSquare2 size={20} />,
   radioButton: <Circle size={20} />,
   radioGroup: <ListChecks size={20} />,
+  checkboxGroup: <ListChecks size={20} />,
   switch: <ToggleLeft size={20} />,
   slider: <SlidersHorizontal size={20} />,
   range: <SlidersHorizontal size={20} />,
@@ -326,7 +327,7 @@ const Sidebar: React.FC = () => {
       <nav
         className="sidebar-rail"
         aria-label="Editor tools"
-        onClick={() => useEditorUIStore.setState({ trayCollapsed: false })}
+        onClick={() => useEditorUIStore.setState({ trayCollapsed: false, ...(window.matchMedia("(max-width: 900px)").matches ? { inspectorVisible: false } : {}) })}
       >
         <button
           className={`rail-btn ${sidebarOpen === "add" ? "rail-active" : ""}`}

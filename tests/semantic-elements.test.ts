@@ -111,7 +111,8 @@ test("semantic inspector properties, geometry, responsive styles, motion and eve
   );
   assert.match(output.files["frontend/app/page.jsx"], /navigateToPage/);
   assert.match(output.files["frontend/app/page.css"], /width: 100%/);
-  assert.match(output.files["frontend/app/page.css"], /@media[^}]+position: absolute/);
+  assert.match(output.files["frontend/app/page.css"], /@media[^}]+width: 100%/);
+  assert.match(output.files["frontend/app/page.css"], new RegExp(`\\.el-${id} \\{[^}]+position: absolute`));
   assert.match(output.files["frontend/app/page.css"], /@keyframes motion-/);
   assert.equal(snapshot.editor.elementsById[id].layout.x, 123);
   assert.match(

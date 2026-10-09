@@ -1,5 +1,16 @@
 # Full-stack contracts and executable integrations
 
+## Checkbox group submissions
+
+Checkbox Group is a native fieldset with direct native Checkbox children. Form Content and the element tray expose it. The shared choice editor authors question, field name, Required, distinct labels/values, several defaults, disabled choices and Add/Apply/Up/Down/Remove. Ordinary standalone Checkbox/Switch controls retain boolean submission and required consent rules. The group supports 1–200 unique nonempty single-line values, at most 10,000 characters total; labels are nonempty single lines up to 200 characters. Empty unconnected groups remain editable, but empty/all-disabled groups cannot create a guided destination. Mixed/nested children and malformed metadata fail import/compiler validation, including reusable definitions.
+
+A group maps its own stable element ID to one array/body field. Children are excluded from independent request sources and guided field discovery. Copies receive independent shared names. Removal/reorder retains the group mapping and backend field identity; a connected group's last enabled choice requires disconnecting/remapping before removal. Locked ancestors/choices and linked components reject composite edits atomically. Required belongs to the group, rather than requiring every checkbox. A connected required group with no enabled choices (including generic child deletion) fails compiler contract validation before export. Defaults are independent; disabling clears that choice's default and re-enabling does not restore it.
+
+The shared HTML/React/canvas tree emits fieldset/legend semantics and associated Required instructions. Generated serialization gathers checked enabled children owned by the submitting form, excludes disabled ancestors/choices and omits empty optional groups. The existing Mongoose array schema stores omitted optional groups as its native empty-array default. Missing Required shows the form status and focuses the first enabled checkbox before any POST. Native reset restores authored defaults. New guided collections snapshot enabled values into existing oneOf rules and a nonempty-array Required rule. Invalid arrays, duplicate/unknown/disabled values and boolean consent errors are rejected by the generated backend. Later edits preserve backend/routing snapshots and require explicit rule review.
+
+This accepts direct checkbox groups only. Conditional forms, minimum/maximum selection counts, nested/mixed composites, component structure overrides and catalog-wide screen-reader/touch acceptance remain open. Reproduce the real authoring ZIP and local production Next/Express/MongoDB runtime with `npm run test:checkbox-export`; external providers remain deferred.
+
+
 This builds on the existing project document, backend IR, workflow interpreter, routing ports, gateway and export pipeline. The conceptual `levoks.md` describes the broader direction; the implementations and limits below describe current behavior.
 
 ## Current architecture

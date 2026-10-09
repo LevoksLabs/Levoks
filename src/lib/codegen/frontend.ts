@@ -83,6 +83,7 @@ function flowHandler(
     if (el.type === "form" && steps.some(step => step.type === "api_call" && !step.requestMappings)) bodyLines.push(`const body = Object.fromEntries(new FormData(target).entries());
         for (const input of target.elements) {
             if (!input.name || input.disabled || input.matches?.(':disabled')) continue;
+            if (input.type === 'checkbox' && input.closest?.('[data-checkbox-group]')) continue;
             const value = await formControlValue(input, target);
             if (value !== undefined) body[input.name] = value;
             else delete body[input.name];
@@ -168,36 +169,7 @@ function semanticHandler(action: NonNullable<ElementNode["events"]>[string]) {
     return `(e) => { e.preventDefault?.(); ${action.action === "navigate" ? `navigateToPage(${JSON.stringify(action.target)});` : `document.querySelector(${JSON.stringify(".el-" + action.target)})?.scrollIntoView({behavior: "smooth"});`} }`;
 }
 
-const renderElementBody = (
-    el: ElementNode,
-    isRoot: boolean,
-    cssOut: Set<string>,
-    mode: "html" | "jsx",
-    flowMap: Map<string, Flow> = new Map(),
-    elementsById: Record<string, ElementNode> = {},
-    sources: Record<string, ResolvedDataSource> = {},
-    recordFields?: Record<string, string>
-): string => {
-
-    const className = classNameFor(el);
-    const tag = (() => {
-        if (el.type === "section") return "section";
-        if (el.type === "container" || el.type === "stack" || el.type === "columns") return "div";
-        if (el.type === "form") return "form";
-        if (el.type === "title") {
-            const lvl = Math.min(Math.max(Number(el.props?.level) || 2, 1), 6);
-            return `h${lvl}`;
-        }
-        if (el.type === "text" || el.type === "paragraph") return "p";
-        if (el.type === "button") return "button";
-        if (el.type === "image") return "img";
-        if (el.type === "video") return "video";
-        if (el.type === "menu") return "nav";
-        if (el.type === "divider") return "hr";
-        if (el.type === "frame") return "iframe";
-        return "div";
-    })();
-
+function elementStyles(el: ElementNode, isRoot: boolean): Record<string, string | number> {
     const baseStyles: Record<string, string | number> = {
         boxSizing: "border-box",
     };
@@ -206,7 +178,7 @@ const renderElementBody = (
         baseStyles.position = "absolute";
         baseStyles.left = `${el.layout.x}px`;
         baseStyles.top = `${el.layout.y}px`;
-        baseStyles.width = `min(100%, ${el.layout.w}px)`;
+        baseStyles.width = `${el.layout.w}px`;
         baseStyles.minHeight = `${el.layout.h}px`;
     } else {
         baseStyles.position = String(el.styles?.position || el.layout.position || "static");
@@ -263,14 +235,57 @@ const renderElementBody = (
     if (!["title", "text", "paragraph"].includes(el.type)) baseStyles.height = `${el.layout.h}px`;
     if (["form", "section", "container", "stack", "columns"].includes(el.type) && el.children.length) baseStyles.height = "auto";
     if (el.styles.height && !el.styles.minHeight) delete baseStyles.minHeight;
-    const mergedStyles = { ...baseStyles, ...(el.type === "image" ? { objectFit: String(el.props.objectFit || "cover"), objectPosition: String(el.props.objectPosition || "50% 50%") } : {}), ...(el.type === "button" && el.props.hoverBg ? { "--button-hover": String(el.props.hoverBg) } : {}), ...(el.styles || {}), ...(!el.layout.visible ? { display: "none" } : {}), opacity: el.layout.opacity, ...(el.layout.rotation ? { transform: `rotate(${el.layout.rotation}deg)` } : {}) };
+    return { ...baseStyles, ...(el.type === "image" ? { objectFit: String(el.props.objectFit || "cover"), objectPosition: String(el.props.objectPosition || "50% 50%") } : {}), ...(el.type === "button" && el.props.hoverBg ? { "--button-hover": String(el.props.hoverBg) } : {}), ...(el.styles || {}), ...(!el.layout.visible ? { display: "none" } : {}), opacity: el.layout.opacity, ...(el.layout.rotation ? { transform: `rotate(${el.layout.rotation}deg)` } : {}) };
+}
+
+const renderElementBody = (
+    el: ElementNode,
+    isRoot: boolean,
+    cssOut: Set<string>,
+    mode: "html" | "jsx",
+    flowMap: Map<string, Flow> = new Map(),
+    elementsById: Record<string, ElementNode> = {},
+    sources: Record<string, ResolvedDataSource> = {},
+    recordFields?: Record<string, string>
+): string => {
+
+    const className = classNameFor(el);
+    const tag = (() => {
+        if (el.type === "section") return "section";
+        if (el.type === "container" || el.type === "stack" || el.type === "columns") return "div";
+        if (el.type === "form") return "form";
+        if (el.type === "title") {
+            const lvl = Math.min(Math.max(Number(el.props?.level) || 2, 1), 6);
+            return `h${lvl}`;
+        }
+        if (el.type === "text" || el.type === "paragraph") return "p";
+        if (el.type === "button") return "button";
+        if (el.type === "image") return "img";
+        if (el.type === "video") return "video";
+        if (el.type === "menu") return "nav";
+        if (el.type === "divider") return "hr";
+        if (el.type === "frame") return "iframe";
+        return "div";
+    })();
+
+    const mergedStyles = elementStyles(el, isRoot);
     const css = cssFromStyles(mergedStyles);
     cssOut.add(`.${className} { ${css} }`);
     for (const breakpoint of ["tablet", "mobile"] as const) {
         if (!el.responsive?.[breakpoint]) continue;
-        const resolved = resolveElement(el, breakpoint), layout = resolved.layout;
-        const override = { ...resolved.styles, left: `${layout.x}px`, top: `${layout.y}px`, width: resolved.styles.width || `${layout.w}px`, position: isRoot ? "absolute" : String(resolved.styles.position || layout.position || "static"), minHeight: resolved.styles.minHeight || (resolved.styles.height ? "0" : `${layout.h}px`), ...(!["title", "text", "paragraph"].includes(el.type) ? { height: resolved.styles.height || `${layout.h}px` } : {}), opacity: layout.opacity, transform: `rotate(${layout.rotation}deg)`, display: layout.visible ? String(resolved.styles.display || baseStyles.display || "block") : "none" };
-        cssOut.add(`@media (max-width: ${breakpoint === "tablet" ? 1024 : 600}px) { .page .${className} { ${cssFromStyles(override)} } }`);
+        const current = elementStyles(resolveElement(el, breakpoint), isRoot);
+        const inherited = elementStyles(resolveElement(el, breakpoint === "mobile" ? "tablet" : "base"), isRoot);
+        const changed = new Set([...Object.keys(inherited), ...Object.keys(current)].filter(key => current[key] !== inherited[key]));
+        // CSS shorthands reset their longhands. Reapply the resolved longhands
+        // when a breakpoint changes a shorthand, even if those values inherit.
+        for (const shorthand of ["background", "border", "padding", "margin", "font"]) {
+            if (changed.has(shorthand)) Object.keys(current).filter(key => key.startsWith(shorthand)).forEach(key => changed.add(key));
+        }
+        const override = Object.fromEntries([...changed]
+            .map(key => [key, current[key] === undefined || current[key] === "" ? "initial" : current[key]]));
+        // Keep inherited styles in the cascade; changing X must not freeze font,
+        // flow height, or the other desktop/tablet properties at this breakpoint.
+        if (Object.keys(override).length) cssOut.add(`@media (max-width: ${breakpoint === "tablet" ? 1024 : 600}px) { .page .${className} { ${cssFromStyles(override)} } }`);
     }
     if (el.motion) {
         const keyframes = motionFrames(el.motion).map(frame => `${frame.offset * 100}% { opacity: ${frame.opacity}; transform: ${frame.transform}; }`).join(" ");

@@ -28,6 +28,8 @@ The application maintains three specialized stores that interact through a share
 
 The frontend editor is a high-fidelity "What You See Is What You Get" (WYSIWYG) environment.
 
+Use the Desktop, Tablet, and Mobile controls above the canvas to edit responsive layouts. See [responsive editing](Documentation/responsive-editing.md) for inheritance, save/cancel behavior, and device previews.
+
 ### Component Library
 - **Layout**: Sections, Containers, Multi-column Grids, Flex Stacks, Spacers, and Dividers.
 - **Typography**: Dynamic Titles, Paragraphs, and Text blocks with rich inline editing.

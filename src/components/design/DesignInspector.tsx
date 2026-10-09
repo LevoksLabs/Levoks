@@ -27,6 +27,7 @@ export default function DesignInspector({ element }: { element: ElementNode }) {
           </strong>
           <span>
             Layout and style changes affect this breakpoint and smaller screens.
+            {" "}Content and element structure are shared across all screens.
           </span>
           <button
             disabled={
