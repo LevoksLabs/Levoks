@@ -1,5 +1,23 @@
 # Levoks completion matrix
 
+## Select display labels and disabled choices — 2026-10-10
+
+Native Select and Multiple Select Content now separates display labels from submitted values and exposes per-choice Disabled. Defaults remain attached to values through label/value edits, reorder, removal and undo/redo. Disabling clears a choice's default and makes its default checkbox unavailable. Duplicate display labels are permitted; submitted values must be unique. Old documents without optional metadata retain their original text/value rendering. Bulk text edits are drafts until Apply text lists: unchanged values retain labels/disabled state and invalid defaults fail visibly without partial writes.
+
+Optional newline `optionLabels` and `disabledValues` properties use the existing element schema. Import/compiler validation checks metadata lengths, alignment, values, disabled membership and default selections, including elements in component definitions. Native canvas/HTML/React output shares the same choice tree. Guided destinations snapshot only enabled submitted values; existing backend models, rules and mappings remain unchanged after later edits and require explicit review. Collections with no enabled allowed values fail before backend mutation. The generated serializer omits disabled optional single selections, rejects required disabled single selections visibly before posting and excludes disabled multiple selections.
+
+Acceptance: 150 unit tests pass, TypeScript passes and lint has zero errors (49 existing warnings). Four browser cases cover the new real drag/drop select journey plus existing broad/nested forms and both radio-group workflows. The select journey verifies distinct labels/values, default retention on renames, duplicate/blank-label recovery, disabling, keyboard reorder/focus, history, bulk-list recovery, completed save/reload, preview and actual ZIP parity. Unit coverage also verifies unchanged backend/routing snapshots after edits to connected selects. All 39 downloaded files match the final compiler and production fixture; generated Next/Express and final editor production builds pass. After-build typecheck and private trace/standalone packaging checks pass.
+
+Actual downloaded production Next/Express/MongoDB execution verifies native Required and keyboard navigation past disabled options, exact scalar/array value storage, fifteen malformed/label/disabled submissions without writes, default reset, optional omission, explicit disabled-selection recovery, outage/restart/retry and reload. Form containment and non-overlap pass at 320/768/1024/1440px. Desktop/compact inspector and mobile/desktop generated screenshots were reviewed. The initial runtime harness tried selecting a deliberately disabled placeholder through Playwright; the corrected harness explicitly creates that invalid state and verifies native Required prevents a POST. The production runtime rerun passes.
+
+Evidence under `.verification/`: `select-metadata-unit-final.log`, `select-metadata-check-final.log`, `select-metadata-browser.log`, `select-metadata-extract.log`, `select-metadata-front-build.log`, `select-metadata-back-build.log`, `select-metadata-runtime-final.log`, `select-metadata-editor-build-final.log`, `select-metadata-packaging.log` and `select-metadata-parity.log`. Reproduce with `npm run test:select-metadata-export`. All execution remains local.
+
+![Select labels and submitted values](audit-2026-10-08/select-labels-inspector.png)
+![Compact select choice editor](audit-2026-10-08/select-labels-compact.png)
+![Generated mobile select form](audit-2026-10-08/select-labels-mobile.png)
+
+UX11/UX24/SEM05 remain PARTIAL. Optgroups, conditional forms, multi-checkbox composites, reusable-component structure, general nested geometry, complete site starters and whole-catalog screen-reader/touch acceptance remain. Point 4 continues; points 5–6 retain their documented work. See [select contracts](fullstack-contracts.md#visual-select-choices-and-defaults).
+
 ## Visual radio-group authoring — 2026-10-10
 
 Form Content can add Radio Group, and native group Content now edits the question, shared field name, Required, labels, distinct submitted values, disabled choices and a single default. Add/Apply/Remove/Up/Down use ordinary native radio children and existing history. Invalid names, collisions, duplicate/blank/multiline values, oversized labels, locked choices and linked component structure fail without partial document changes. Empty unconnected groups expose Add. Copied authored groups get independent names. A mapped choice can be removed using another enabled child as its source while preserving the backend field identity; removing its last enabled source requires disconnecting or remapping first.

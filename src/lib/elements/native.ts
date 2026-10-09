@@ -2,6 +2,7 @@ import type { ElementNode } from "@/types";
 import { definitionFor } from "./registry";
 import { embedAttributes } from "./embed";
 import { ICON_PATHS } from "@/lib/icon-paths";
+import { selectChoices } from "./select-options";
 
 export type SemanticTree =
   | string
@@ -177,10 +178,7 @@ export function nativeTree(element: ElementNode): SemanticTree {
     if (p.value !== undefined && !p.multiple) attrs.defaultValue = String(p.value);
     if (p.multiple) attrs.defaultValue = String(p.selectedValues || "").split("\n").filter(Boolean);
     children.push(
-      ...String(p.options || "")
-        .split("\n")
-        .filter(Boolean)
-        .map((option) => node("option", { value: option }, [option])),
+      ...selectChoices(p).map(choice => node("option", { value: choice.value, disabled: choice.disabled }, [choice.label])),
     );
   } else if (d.generate === "list") {
     children.push(

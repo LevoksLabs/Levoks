@@ -1,5 +1,9 @@
 # Editor quality audit and verification
 
+## Select labels and disabled choices — 10 October 2026
+
+Select choice rows now use labelled submitted-value/display-label inputs, explicit Apply and disabled/default checkboxes with existing inspector tokens. Disabling clears the default and prevents selecting it again. Native reorder/removal restores focus, and text-list drafts validate before an atomic Apply. Errors preserve the document and expose recovery. Actual drag/drop/history/reload/preview/export and production keyboard/Required/storage/retry/reset pass; form containment/non-overlap passes at 320/768/1024/1440px. Desktop/compact inspector and mobile/desktop generated screenshots were reviewed. Native touch-picker and whole-catalog screen-reader acceptance remain open.
+
 ## Visual radio-group authoring — 10 October 2026
 
 Radio Group Content uses labelled question/name/choice inputs, explicit Apply for drafts, default/disabled checkboxes and native Add/Up/Down/Remove buttons with the existing inspector tokens. Invalid edits show inline recovery without partial changes. Rename/reorder/removal restores row focus; applying a field name keeps button focus. Questions render as visible native legends, and browser arrows skip disabled radios. Content growth preserves wrapped labels and group/form bounds at 320/768/1024/1440px. Real history/save/reload/preview/export and production recovery/storage paths are verified; desktop/compact/mobile screenshots were reviewed. Mixed content and linked structures explain how to continue. Broader screen-reader/touch and catalog-wide acceptance remain open.

@@ -17,6 +17,7 @@ import {
 } from "@/lib/contracts";
 import type { IRDiagnostic } from "@/types/ir";
 import { definitionFor } from "@/lib/elements/registry";
+import { selectChoices, validateSelectMetadata } from "@/lib/elements/select-options";
 import { backendDefaults } from "@/lib/backend/registry";
 import { defaultDatabase } from "@/lib/backend/database";
 import { validationChoices } from "@/lib/backend/validation";
@@ -149,8 +150,11 @@ export function submissionFields(
     for (let suffix = 2; used.has(name); suffix++) name = `${base}_${suffix}`;
     used.add(name);
     let choices: string | undefined;
-    if (definitionFor(input)?.tag === "select")
-      choices = String(input.props.options || "");
+    if (definitionFor(input)?.tag === "select") {
+      try { validateSelectMetadata(input.props); }
+      catch (error) { problems.push(`${input.label || name}: ${(error as Error).message}`); }
+      choices = selectChoices(input.props).filter(choice => !choice.disabled).map(choice => choice.value).join("\n");
+    }
     if (inputType === "radio") {
       const members = controls.filter(
         (node) =>

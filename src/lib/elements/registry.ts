@@ -328,6 +328,8 @@ for (const [id, name, multiple] of [
       name: id,
       ariaLabel: name,
       options: "Option one\nOption two\nOption three",
+      optionLabels: "",
+      disabledValues: "",
       multiple,
       required: false,
       disabled: false,

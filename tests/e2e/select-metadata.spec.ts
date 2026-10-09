@@ -1,0 +1,285 @@
+import { test, expect, type Page } from "@playwright/test";
+import { mkdir, readFile } from "node:fs/promises";
+import JSZip from "jszip";
+import { openEditor } from "../helpers/open-editor";
+import { compileProject } from "../../src/lib/project/compiler";
+
+async function selectForm(page: Page) {
+  if (!(await page.locator(".layers-panel").isVisible()))
+    await page.getByRole("button", { name: "Layers", exact: true }).click();
+  await page
+    .locator(".layer-name")
+    .filter({ hasText: /^Form$/ })
+    .click();
+  await page.getByRole("button", { name: "Content", exact: true }).click();
+}
+async function addSelect(
+  page: Page,
+  kind: string,
+  name: string,
+  label: string,
+) {
+  await selectForm(page);
+  await page.getByLabel("New form control", { exact: true }).selectOption(kind);
+  await page
+    .getByLabel("Add control inside", { exact: true })
+    .selectOption({ label: "This form" });
+  await page
+    .getByRole("button", { name: "Add form control", exact: true })
+    .click();
+  await page
+    .getByRole("button", {
+      name: `Edit ${kind === "select" ? "Select" : "Multi Select"}`,
+      exact: true,
+    })
+    .last()
+    .click();
+  await page.getByLabel("Name", { exact: true }).fill(name);
+  await page.getByLabel("Label", { exact: true }).fill(label);
+  while (
+    await page
+      .getByRole("button", { name: "Remove choice 1", exact: true })
+      .count()
+  )
+    await page
+      .getByRole("button", { name: "Remove choice 1", exact: true })
+      .click();
+}
+async function addChoice(page: Page, value: string, label: string) {
+  await page.getByLabel("New choice", { exact: true }).fill(value);
+  await page.getByLabel("New choice label", { exact: true }).fill(label);
+  await page.getByRole("button", { name: "Add choice", exact: true }).click();
+}
+
+test("select labels, disabled options and defaults survive visual edits, text lists, history, reload, preview and the actual ZIP", async ({
+  page,
+}) => {
+  test.setTimeout(150000);
+  await openEditor(page);
+  await page.getByLabel("Search elements", { exact: true }).fill("Form");
+  const tile = page.getByRole("button", { name: "Add Form", exact: true }),
+    bounds = await page.locator(".canvas-page").boundingBox();
+  await tile.hover();
+  await page.mouse.down();
+  await page.mouse.move(bounds!.x + 180, bounds!.y + 45, { steps: 12 });
+  await page.mouse.up();
+  await addSelect(page, "select", "session", "Appointment session");
+  await page.getByLabel("Required", { exact: true }).check();
+  await addChoice(page, "am", "Morning appointment");
+  await addChoice(page, "pm", "Afternoon appointment");
+  await addChoice(page, "closed", "No appointments available");
+  await page.getByLabel("Default: am", { exact: true }).check();
+  await page.getByLabel("Disable choice: closed", { exact: true }).check();
+  await page
+    .getByLabel("Choice 1 label", { exact: true })
+    .fill("Morning visit");
+  await page
+    .getByRole("button", { name: "Apply choice 1", exact: true })
+    .click();
+  await expect(page.getByLabel("Choice 1 value", { exact: true })).toHaveValue(
+    "am",
+  );
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.getByLabel("Choice 1 label", { exact: true })).toHaveValue(
+    "Morning appointment",
+  );
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await page.getByLabel("Choice 1 value", { exact: true }).fill("morning");
+  await page
+    .getByRole("button", { name: "Apply choice 1", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Default: morning", { exact: true }),
+  ).toBeChecked();
+  await expect(page.getByLabel("Choice 1 label", { exact: true })).toHaveValue(
+    "Morning visit",
+  );
+  await page.getByLabel("Choice 1 value", { exact: true }).fill("pm");
+  await page
+    .getByRole("button", { name: "Apply choice 1", exact: true })
+    .click();
+  await expect(
+    page.locator(".select-options-editor").getByRole("alert"),
+  ).toContainText("unique");
+  await page.getByLabel("Choice 1 value", { exact: true }).fill("morning");
+  await page.getByLabel("Choice 1 label", { exact: true }).fill("");
+  await page
+    .getByRole("button", { name: "Apply choice 1", exact: true })
+    .click();
+  await expect(
+    page.locator(".select-options-editor").getByRole("alert"),
+  ).toContainText("display label");
+  await page
+    .getByLabel("Choice 1 label", { exact: true })
+    .fill("Morning visit");
+  await page.getByLabel("Disable choice: morning", { exact: true }).check();
+  await expect(
+    page.getByLabel("Default: morning", { exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByLabel("Default: morning", { exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(
+    page.getByLabel("Default: morning", { exact: true }),
+  ).toBeChecked();
+  await page
+    .getByRole("button", { name: "Move choice 1 down", exact: true })
+    .press("Enter");
+  await expect(
+    page.getByLabel("Choice 2 value", { exact: true }),
+  ).toBeFocused();
+  await expect(page.getByLabel("Choice 2 label", { exact: true })).toHaveValue(
+    "Morning visit",
+  );
+  await page
+    .getByRole("button", { name: "Remove choice 2", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Default: morning", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByText("Edit lists as text", { exact: true }).click();
+  await page.getByLabel("Options", { exact: true }).fill("closed\nmorning\npm");
+  await page
+    .getByRole("button", { name: "Apply text lists", exact: true })
+    .click();
+  await expect(page.getByLabel("Choice 1 label", { exact: true })).toHaveValue(
+    "No appointments available",
+  );
+  await expect(
+    page.getByLabel("Disable choice: closed", { exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByLabel("Default: morning", { exact: true }),
+  ).toBeChecked();
+  await page.getByLabel("Value", { exact: true }).fill("closed");
+  await page
+    .getByRole("button", { name: "Apply text lists", exact: true })
+    .click();
+  await expect(
+    page.locator(".select-options-editor").getByRole("alert"),
+  ).toContainText("disabled choice");
+  await expect(
+    page.getByLabel("Default: morning", { exact: true }),
+  ).toBeChecked();
+  await page.getByLabel("Value", { exact: true }).fill("morning");
+  await page
+    .getByRole("button", { name: "Apply text lists", exact: true })
+    .click();
+  await addSelect(page, "multiSelect", "topics", "Project topics");
+  await page.getByLabel("Required", { exact: true }).check();
+  for (const [value, label] of [
+    ["design", "Product design"],
+    ["automation", "Workflow automation"],
+    ["data", "Database design"],
+    ["closed", "Currently unavailable"],
+  ])
+    await addChoice(page, value, label);
+  await page.getByLabel("Default: design", { exact: true }).check();
+  await page.getByLabel("Default: data", { exact: true }).check();
+  await page.getByLabel("Disable choice: data", { exact: true }).check();
+  await expect(
+    page.getByLabel("Default: data", { exact: true }),
+  ).not.toBeChecked();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.getByLabel("Default: data", { exact: true })).toBeChecked();
+  await page.getByLabel("Disable choice: closed", { exact: true }).check();
+  await mkdir(".verification/select-metadata", { recursive: true });
+  for (const width of [1600, 1100]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page
+      .getByLabel("Choice 1 label", { exact: true })
+      .scrollIntoViewIfNeeded();
+    expect(
+      await page
+        .locator(".select-options-editor")
+        .evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: `.verification/select-metadata/inspector-${width}.png`,
+    });
+  }
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await addSelect(page, "select", "followup", "Preferred follow-up");
+  await addChoice(page, "call", "Call to discuss the project and next steps");
+  await addChoice(page, "closed", "Follow-up unavailable");
+  await page.getByLabel("Disable choice: closed", { exact: true }).check();
+  await selectForm(page);
+  await page
+    .getByLabel("Collection name", { exact: true })
+    .fill("Select enquiries");
+  await page
+    .getByRole("button", { name: "Create collection and connect", exact: true })
+    .click();
+  await page
+    .getByLabel("Clear fields after a successful save", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "Save project", exact: true }).click();
+  await expect(page.locator(".workspace-status-text")).toHaveText(
+    "Saved on this device",
+  );
+  await page.reload();
+  await selectForm(page);
+  await page
+    .getByRole("button", { name: "Edit Appointment session", exact: true })
+    .click();
+  await expect(page.getByLabel("Choice 2 value", { exact: true })).toHaveValue(
+    "morning",
+  );
+  await expect(page.getByLabel("Choice 2 label", { exact: true })).toHaveValue(
+    "Morning visit",
+  );
+  await expect(
+    page.getByLabel("Disable choice: closed", { exact: true }),
+  ).toBeChecked();
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  const frame = page.frameLocator('iframe[title="Generated frontend preview"]');
+  await expect(
+    frame.getByLabel("Appointment session", { exact: true }),
+  ).toHaveValue("morning");
+  await expect(
+    frame.getByLabel("Project topics", { exact: true }),
+  ).toHaveValues(["design", "data"]);
+  await expect(
+    frame.getByRole("option", {
+      name: "No appointments available",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await expect(
+    frame.getByLabel("Preferred follow-up", { exact: true }),
+  ).toHaveValue("");
+  await page
+    .getByRole("button", { name: "Back To Editor", exact: true })
+    .click();
+  await page.getByLabel("Deploy options", { exact: true }).click();
+  const downloaded = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Download application ZIP", exact: true })
+    .click();
+  await (await downloaded).saveAs(".verification/select-metadata-export.zip");
+  const zip = await JSZip.loadAsync(
+    await readFile(".verification/select-metadata-export.zip"),
+  );
+  const project = JSON.parse(
+    await zip.file("levoks.project.json")!.async("string"),
+  );
+  const compiled = compileProject(project);
+  expect(compiled.diagnostics.filter((d) => d.severity === "error")).toEqual(
+    [],
+  );
+  for (const [file, source] of Object.entries(compiled.files))
+    expect(await zip.file(file)!.async("string"), file).toBe(source);
+  const rules = project.backend.services[0].blocks
+    .filter((block: { type: string }) => block.type === "validation")
+    .flatMap(
+      (block: { config: { rules: { type: string; value: string }[] } }) =>
+        block.config.rules,
+    );
+  expect(
+    rules
+      .filter((rule: { type: string }) => rule.type === "oneOf")
+      .map((rule: { value: string }) => rule.value),
+  ).toEqual(["morning\npm", "design\nautomation\ndata", "call"]);
+});

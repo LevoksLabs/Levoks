@@ -162,7 +162,7 @@ export default function ElementProperties({
                     (key !== "type" || element.type === "button") &&
                     !(definition?.id === "radioGroup" && ["name", "legend", "required"].includes(key)) &&
                   !(fileInput && ["maxFileKB", "accept"].includes(key)) &&
-                  !(element.type === "native" && definition?.tag === "select" && ["options", "value", "selectedValues"].includes(key)) &&
+                  !(element.type === "native" && definition?.tag === "select" && ["options", "optionLabels", "disabledValues", "value", "selectedValues"].includes(key)) &&
                   !(textInput && ["pattern", "minLength", "maxLength"].includes(key)) &&
                   !(element.type === "native" && key === "pattern" && !textInput) &&
                   (element.type === "button"

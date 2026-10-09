@@ -26,6 +26,10 @@ function formControlValue(input, form) {
   if (input.type === 'radio') return input.checked ? input.value : undefined;
   if (input.tagName === 'SELECT' && input.multiple) return Array.from(input.selectedOptions).filter(option => !option.disabled && !option.closest('optgroup:disabled')).map(option => option.value);
   if (input.tagName === 'SELECT' && input.value === '' && !input.required) return undefined;
+  if (input.tagName === 'SELECT' && Array.from(input.selectedOptions).some(option => option.disabled || option.closest('optgroup:disabled'))) {
+    if (input.required) throw new Error('Choose an enabled option for ' + input.name);
+    return undefined;
+  }
   if (input.type === 'checkbox') return input.checked;
   if (['text', 'email', 'url', 'search', 'tel'].includes(input.type) && input.value === '' && !input.required) return undefined;
   if (input.tagName === 'TEXTAREA' && input.value === '' && !input.required) return undefined;

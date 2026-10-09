@@ -6,6 +6,7 @@ import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { textConfigError, textFormats } from "@/lib/backend/text-validation";
 import { fileConfigError } from "@/lib/backend/files";
 import { definitionFor } from "@/lib/elements/registry";
+import { validateSelectMetadata } from "@/lib/elements/select-options";
 import { customDefinitionSchema } from "@/lib/elements/custom";
 import { validateFiles } from "@/lib/codegen/files";
 import { programConfigs, controlSchema } from "@/lib/backend/program-schema";
@@ -483,6 +484,7 @@ export function parseProject(value: unknown): ProjectDocument {
         if (definition.tag === "select") {
           const options = String(node.props.options || "").split("\n").filter(Boolean), selected = String(node.props.selectedValues || "").split("\n").filter(Boolean);
           if (options.length > 200 || new Set(options).size !== options.length || selected.some(value => !options.includes(value)) || new Set(selected).size !== selected.length) throw new Error("Select options must be unique (at most 200); selected values must exist in those options.");
+          validateSelectMetadata(node.props);
         }
         // Upgrade the old 28px unlabeled choices once, in semantic state. Never
         // leave a canvas-only size/label correction that disappears on export.
