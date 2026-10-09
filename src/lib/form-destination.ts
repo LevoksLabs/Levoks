@@ -30,6 +30,7 @@ import { useBackendStore } from "@/store/backendStore";
 import { useRoutingStore } from "@/store/routingStore";
 import { projectHistory } from "@/store/projectHistory";
 import { templates } from "@/templates";
+import { fieldCondition, validateFormConditions } from "@/lib/form-conditions";
 
 /** Match native form ownership: stop at nested forms rather than collecting their controls. */
 export function formControls(
@@ -80,6 +81,8 @@ export function submissionFields(
       return true;
     });
   const problems: string[] = [];
+  try { validateFormConditions(elements); }
+  catch (error) { problems.push((error as Error).message); }
   for (const group of controls.filter(node => node.definitionId === "radioGroup" && node.props.required && !node.props.disabled)) {
     if (!formControls(group.id, elements).some(node => isFormInput(node, elements[node.parentId || ""]) && !node.props.disabled && String(node.props.inputType || node.props.type) === "radio"))
       problems.push(`${group.props.legend || group.label || "Radio group"}: add at least one enabled radio choice for this required field.`);
@@ -192,6 +195,7 @@ export function submissionFields(
       temporal,
       text,
       file,
+      condition: fieldCondition(input, elements),
       field: {
         id: input.id,
         name,
@@ -450,8 +454,9 @@ export function createSubmissionDestination(
         position: { x: 0, y: 0 },
       }) as BackendBlock;
     const validations = analysis.fields.flatMap(
-      ({ field, input, inputType, choices, temporal, text, file }) => {
+      ({ field, input, inputType, choices, temporal, text, file, condition }) => {
         const rules: ValidationRule[] = [];
+        if (condition && field.required && field.type !== "array") rules.push({type: "required", message: `Complete ${field.name} when its section is shown.`});
         if (file) rules.push({type:"file",file,message:`Choose a valid ${field.name} within the allowed file size and extensions.`});
         if (temporal && isTemporalKind(inputType)) rules.push({
           type: inputType,
@@ -511,6 +516,13 @@ export function createSubmissionDestination(
                 value: String(input.props[type]),
                 message: `${field.name} is outside the allowed range.`,
               });
+        if (condition) {
+          const controller = analysis.fields.find(item => item.input.id === condition.sourceId)!;
+          const active = block(uuid(), "validation", `Check ${field.name}`, {fieldName: field.name, rules});
+          const inactive = block(uuid(), "validation", `Omit hidden ${field.name}`, {fieldName: field.name, rules: [{type: "absent", message: `Omit ${field.name} while its section is hidden.`}]});
+          const gate = block(uuid(), "logic_if", `When ${controller.field.name} is ${condition.checked ? "checked" : "unchecked"}`, {program: {left: `$request.body.${controller.field.name}`, operator: "eq", right: condition.checked, thenSteps: [active.id], elseSteps: [inactive.id]}});
+          return [gate, active, inactive];
+        }
         return rules.length
           ? [
               block(uuid(), "validation", `Check ${field.name}`, {
@@ -521,10 +533,14 @@ export function createSubmissionDestination(
           : [];
       },
     );
+    const fields = analysis.fields.map(item => ({...item.field,
+      required: item.condition ? false : item.field.required || analysis.fields.some(other => other.condition?.sourceId === item.input.id),
+    }));
+    const branchIds = new Set(validations.flatMap(item => "program" in item.config && item.config.program ? [...(item.config.program.thenSteps || []), ...(item.config.program.elseSteps || [])] : []));
     const blocks = [
       block(modelId, "db_model", `${name} records`, {
         tableName: "Submission",
-        fields: analysis.fields.map((item) => item.field),
+        fields,
         timestamps: true,
         softDelete: true,
       }),
@@ -543,7 +559,7 @@ export function createSubmissionDestination(
         modelId,
         authRequired: false,
         middlewareIds: [limitId],
-        requestBody: analysis.fields.map((item) => item.field),
+        requestBody: fields,
         responseBody: [{ name: "message", type: "string", required: true }],
       }),
       ...validations,
@@ -579,7 +595,7 @@ export function createSubmissionDestination(
       }),
     ];
     blocks[2].connections = [
-      ...validations.map((item) => item.id),
+      ...validations.filter(item => !branchIds.has(item.id)).map((item) => item.id),
       queryId,
       transformId,
       responseId,

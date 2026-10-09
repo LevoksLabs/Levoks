@@ -1,4 +1,5 @@
 import { validateCheckboxGroup } from "@/lib/elements/choice-group-values";
+import { validateFormConditions } from "@/lib/form-conditions";
 import { requestMappingSchema, responseMappingSchema, failureSchema } from "@/lib/contracts";
 import { z } from "zod";
 import { databaseSchema } from "@/lib/backend/database";
@@ -130,6 +131,7 @@ const configs = {
         z.object({
           type: z.enum([
             "required",
+            "absent",
             "minLength",
             "maxLength",
             "min",
@@ -267,7 +269,58 @@ export const backendBlockSchema = z.discriminatedUnion("type", [
 const responsiveLayout = z.object({ x: finite, y: finite, w: finite.nonnegative(), h: finite.nonnegative(), position: z.enum(["absolute", "relative", "static", "fixed", "sticky"]), opacity: finite.min(0).max(1), rotation: finite, visible: z.boolean(), locked: z.boolean() }).partial();
 const responsiveOverride = z.object({ layout: responsiveLayout.optional(), styles: z.record(z.string(), z.union([text, finite])).optional() });
 const vectorCoordinate = finite.min(-10000).max(10000);
+const animationEffectSchema = z.object({
+      type: text,
+      trigger: z.enum([
+        "onLoad",
+        "onScroll",
+        "onHover",
+        "onClick",
+        "onPointerMove",
+        "continuous",
+      ]),
+      duration: finite.nonnegative(),
+      delay: finite,
+      easing: text,
+      iterationCount: z.union([finite, z.literal("infinite")]),
+      direction: z.enum([
+        "normal",
+        "reverse",
+        "alternate",
+        "alternate-reverse",
+      ]),
+      fillMode: z.enum(["none", "forwards", "backwards", "both"]),
+      scrollOffset: finite.optional(),
+      textSpeed: finite.optional(),
+      textStagger: finite.optional(),
+      translateDistance: finite.optional(),
+      scaleFrom: finite.optional(),
+      rotateAngle: finite.optional(),
+      intensity: finite.optional(),
+      id: id.optional(),
+      name: z.string().max(100).optional(),
+      enabled: z.boolean().optional(),
+      keyframes: z.array(z.object({
+        time: finite.min(0).max(1), x: vectorCoordinate, y: vectorCoordinate, z: vectorCoordinate,
+        scale: finite.min(0.01).max(20), rotation: finite.min(-3600).max(3600),
+        rotateX: finite.min(-3600).max(3600), rotateY: finite.min(-3600).max(3600),
+        opacity: finite.min(0).max(1), blur: finite.min(0).max(100), clip: finite.min(0).max(100),
+      })).min(2).max(100).refine(frames => {
+        const times = frames.map(frame => frame.time).sort((a, b) => a - b);
+        return times[0] === 0 && times[times.length - 1] === 1 && new Set(times).size === times.length;
+      }, "Keyframes require unique times and endpoints at 0 and 1").optional(),
+      scrollMode: z.enum(["reveal", "scrub"]).optional(),
+      scrollStart: finite.min(0).max(100).optional(),
+      scrollEnd: finite.min(0).max(100).optional(),
+      scrollReplay: z.boolean().optional(),
+      hoverMode: z.enum(["reverse", "reset", "complete"]).optional(),
+      pointerMode: z.enum(["tilt", "follow"]).optional(),
+      target: z.enum(["self", "children"]).optional(),
+      stagger: finite.min(0).max(10).optional(),
+});
+const validAnimationEffect = (effect: z.infer<typeof animationEffectSchema>) => (effect.type !== "custom" || !!effect.keyframes) && (effect.scrollMode !== "scrub" || (effect.scrollStart ?? 80) > (effect.scrollEnd ?? 20));
 export const elementSchema = z.object({
+  formCondition: z.object({ sourceId: id, checked: z.boolean() }).strict().optional(),
   dataSource: z.object({serviceId: id, endpointId: id, columns: z.array(z.object({fieldId: id, label: z.string().min(1).max(120)})).max(32), emptyMessage: z.string().max(500)}).optional(),
   dataField: id.optional(),
   definitionId: id.optional(),
@@ -324,36 +377,7 @@ export const elementSchema = z.object({
     locked: z.boolean(),
   }),
   children: z.array(id).max(5000),
-  animation: z
-    .object({
-      type: text,
-      trigger: z.enum([
-        "onLoad",
-        "onScroll",
-        "onHover",
-        "onClick",
-        "continuous",
-      ]),
-      duration: finite.nonnegative(),
-      delay: finite,
-      easing: text,
-      iterationCount: z.union([finite, z.literal("infinite")]),
-      direction: z.enum([
-        "normal",
-        "reverse",
-        "alternate",
-        "alternate-reverse",
-      ]),
-      fillMode: z.enum(["none", "forwards", "backwards", "both"]),
-      scrollOffset: finite.optional(),
-      textSpeed: finite.optional(),
-      textStagger: finite.optional(),
-      translateDistance: finite.optional(),
-      scaleFrom: finite.optional(),
-      rotateAngle: finite.optional(),
-      intensity: finite.optional(),
-    })
-    .optional(),
+  animation: animationEffectSchema.extend({ effects: z.array(animationEffectSchema.refine(validAnimationEffect, "Custom animations need keyframes and scroll start must exceed end")).max(7).optional() }).refine(validAnimationEffect, "Custom animations need keyframes and scroll start must exceed end").optional(),
   actions: z
     .object({
       type: z.enum(["submit", "redirect", "api_call", "scroll", "none"]),
@@ -508,6 +532,7 @@ export function parseProject(value: unknown): ProjectDocument {
     }
   };
   Object.values(editor.elementsById).forEach(validateElement);
+  validateFormConditions(editor.elementsById);
   for (const node of Object.values(editor.elementsById)) if (node.definitionId === "checkboxGroup") validateCheckboxGroup(node, editor.elementsById);
   if (project.source) validateFiles(project.source.files);
   const fail = (message: string): never => {
@@ -518,6 +543,7 @@ export function parseProject(value: unknown): ProjectDocument {
   };
   for (const definition of Object.values(editor.components || {})) {
     Object.values(definition.nodes).forEach(validateElement);
+    validateFormConditions(definition.nodes);
     for (const node of Object.values(definition.nodes)) if (node.definitionId === "checkboxGroup") validateCheckboxGroup(node, definition.nodes);
     const seen = new Set<string>();
     const walk = (key: string, parent: string | null, depth: number) => {

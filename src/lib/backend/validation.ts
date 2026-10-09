@@ -24,6 +24,7 @@ ${TEMPORAL_RUNTIME}
 ${TEXT_VALIDATION_RUNTIME}
 ${FILE_VALIDATION_RUNTIME}
 function validationRuleValid(rule, value, coerce = false) {
+  if (rule.type === 'absent') return value === undefined;
   if (rule.type === 'required') return value !== undefined && value !== '' && (!Array.isArray(value) || value.length > 0);
   if (rule.type === 'accepted') return value === true;
   if (value === undefined) return true;

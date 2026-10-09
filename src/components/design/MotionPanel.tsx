@@ -1,65 +1,105 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Play, Pause, X, Plus, Trash2 } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useEditorUIStore } from "@/store/editorUIStore";
 import { motionFrames } from "@/lib/design";
+import { animationTracks, animationFrames, defaultAnimation, neutralFrame, stackAnimations } from "@/lib/animation";
 import { ParameterControl } from "./ParameterControl";
 import type { ElementNode } from "@/types";
 type Motion = NonNullable<ElementNode["motion"]>;
 const initialFrame = { time: 0, x: 0, y: 0, rotation: 0, scale: 1, opacity: 1 };
+function timelineEffect(el: ElementNode) {
+  return animationTracks(el.animation).find(effect => effect.type === "custom" && effect.enabled !== false && (effect.trigger === "onLoad" || effect.trigger === "continuous"));
+}
+function timelineMotion(el: ElementNode): Motion | undefined {
+  if (el.motion) return el.motion;
+  const effect = timelineEffect(el);
+  if (!effect?.keyframes) return undefined;
+  return { duration: effect.duration, delay: effect.delay, iterations: effect.iterationCount === "infinite" ? 1 : effect.iterationCount,
+    easing: effect.easing as Motion["easing"], frames: effect.keyframes };
+}
 export default function MotionPanel() {
   const store = useEditorStore();
   const [time, setTime] = useState(0),
     [playing, setPlaying] = useState(false);
   const animations = useRef<Animation[]>([]);
-  const visible = new Set<string>();
-  const collect = (id: string) => {
-    if (visible.has(id)) return;
-    visible.add(id);
-    store.elementsById[id]?.children.forEach(collect);
-  };
-  [...store.rootIds, ...store.globalRootIds].forEach(collect);
-  const tracks = Object.values(store.elementsById).filter(
-    (el) => visible.has(el.id) && el.motion,
-  );
+  const tracks = useMemo(() => {
+    const visible = new Set<string>();
+    const collect = (id: string) => {
+      if (visible.has(id)) return;
+      visible.add(id);
+      store.elementsById[id]?.children.forEach(collect);
+    };
+    [...store.rootIds, ...store.globalRootIds].forEach(collect);
+    return Object.values(store.elementsById).filter(el => visible.has(el.id) && timelineMotion(el)).map(el => ({ ...el, motion: timelineMotion(el)! }));
+  }, [store.elementsById, store.rootIds, store.globalRootIds]);
   const length = Math.max(
     1,
     ...tracks.map(
-      (el) => el.motion!.delay + el.motion!.duration * el.motion!.iterations,
+      (el) => el.motion!.delay + el.motion!.duration * el.motion!.iterations +
+        (timelineEffect(el)?.target === "children" ? Math.max(0, el.children.length - 1) * (timelineEffect(el)?.stagger ?? 0.08) : 0),
     ),
   );
   const selected = store.selectedElementId
     ? store.elementsById[store.selectedElementId]
     : undefined;
-  const motion = selected?.motion;
+  const motion = selected && timelineMotion(selected);
   const update = (change: Partial<Motion>) => {
-    if (selected && motion)
-      store.updateElement(selected.id, { motion: { ...motion, ...change } });
+    if (!selected || !motion) return;
+    if (selected.motion) store.updateElement(selected.id, { motion: { ...motion, ...change } });
+    else {
+      const effects = animationTracks(selected.animation);
+      const effectIndex = effects.findIndex(track => track.type === "custom" && track.enabled !== false && (track.trigger === "onLoad" || track.trigger === "continuous"));
+      const effect = effects[effectIndex];
+      const { iterations, frames, ...timing } = change;
+      store.updateElement(selected.id, { animation: stackAnimations(effects.map((track, index) => index === effectIndex ? {
+        ...track, ...timing, ...(iterations !== undefined ? { iterationCount: iterations } : {}),
+        ...(frames ? { keyframes: frames.map(frame => ({ ...neutralFrame, ...effect.keyframes!.find(old => old.time === frame.time), ...frame })) } : {}),
+      } : track)) });
+    }
   };
   // Preview uses the same keyframes as generation, and never writes animated values into IR.
   useEffect(() => {
-    const current = Object.values(store.elementsById).filter((el) => el.motion);
+    const current = tracks;
+    const restores: (() => void)[] = [];
     animations.current = current.flatMap((el) => {
       const target = document.querySelector<HTMLElement>(
         `.canvas-page [data-element-id="${CSS.escape(el.id)}"]`,
       );
       if (!target || !el.motion) return [];
-      const track = target.animate(motionFrames(el.motion), {
+      target.dispatchEvent(new CustomEvent("levoks:animation-preview", { detail: true }));
+      restores.push(() => target.dispatchEvent(new CustomEvent("levoks:animation-preview", { detail: false })));
+      const effect = timelineEffect(el);
+      const options: KeyframeAnimationOptions = {
         duration: el.motion.duration * 1000,
         delay: el.motion.delay * 1000,
         iterations: el.motion.iterations,
         easing: el.motion.easing,
+        direction: effect?.direction || "normal",
         fill: "both",
+      };
+      const frames = effect ? animationFrames(effect) : motionFrames(el.motion);
+      const targets = effect?.target === "children" ? Array.from(target.children) : [target];
+      return targets.flatMap((node, i) => {
+        const staggered = { ...options, delay: (options.delay as number) + i * (effect?.stagger ?? 0.08) * 1000 };
+        const transform = node.animate(frames.map(frame => ({ offset: frame.offset, transform: frame.transform })), { ...staggered, composite: "add" });
+        const opacity = Number.parseFloat(getComputedStyle(node).opacity);
+        const channels = node.animate(frames.map(frame => {
+          const channels = { ...frame }; delete channels.transform;
+          if (effect && channels.opacity !== undefined) channels.opacity = Number(channels.opacity) * opacity;
+          return channels;
+        }), staggered);
+        transform.pause(); channels.pause();
+        return [transform, channels];
       });
-      track.pause();
-      return [track];
     });
     return () => {
       animations.current.forEach((animation) => animation.cancel());
       animations.current = [];
+      restores.forEach(restore => restore());
     };
-  }, [store.elementsById, store.activePageId]);
+  }, [tracks, store.activePageId]);
   useEffect(() => {
     animations.current.forEach((animation) => {
       animation.currentTime = time * 1000;
@@ -93,7 +133,7 @@ export default function MotionPanel() {
   ) => (
     <label key={field}>
       {field === "time" ? "Offset" : field}
-      <ParameterControl
+      {field === "time" && !selected?.motion && (frame.time === 0 || frame.time === 1) ? <output className="motion-endpoint">{frame.time} · Endpoint</output> : <ParameterControl
         label={`Keyframe ${index + 1} ${field}`}
         unit={field === "rotation" ? "°" : ["x", "y"].includes(field) ? "px" : ""}
         sensitivity={field === "scale" || field === "opacity" || field === "time" ? 0.005 : 0.5}
@@ -118,14 +158,14 @@ export default function MotionPanel() {
             ),
           });
         }}
-      />
+      />}
     </label>
   );
   return (
     <section className="motion-panel" aria-label="Motion timeline">
       <header>
         <strong>Motion</strong>
-        <span>Animate multiple objects on one timeline</span>
+        <span>Sequence page-load keyframes across objects</span>
         <button
           aria-label="Close motion timeline"
           onClick={() => useEditorUIStore.setState({ motionOpen: false })}
@@ -166,25 +206,15 @@ export default function MotionPanel() {
         <button
           disabled={
             !store.selectedElementIds.some(
-              (id) => !store.elementsById[id].motion,
+              (id) => !timelineMotion(store.elementsById[id]) && animationTracks(store.elementsById[id].animation).length < 8,
             )
           }
           onClick={() => {
             store.beginInteraction();
             store.selectedElementIds.forEach((id) => {
-              if (!store.elementsById[id].motion)
+              if (!timelineMotion(store.elementsById[id]) && animationTracks(store.elementsById[id].animation).length < 8)
                 store.updateElement(id, {
-                  animation: undefined,
-                  motion: {
-                    duration: 1,
-                    delay: 0,
-                    easing: "ease-out",
-                    iterations: 1,
-                    frames: [
-                      { ...initialFrame, opacity: 0, y: 24 },
-                      { ...initialFrame, time: 1 },
-                    ],
-                  },
+                  animation: stackAnimations([...animationTracks(store.elementsById[id].animation), { ...defaultAnimation(), duration: 1, easing: "ease-out" }]),
                 });
             });
             store.endInteraction();
@@ -277,6 +307,7 @@ export default function MotionPanel() {
                     update({ easing: event.target.value as Motion["easing"] })
                   }
                 >
+                  {!["linear", "ease-in", "ease-out", "ease-in-out"].includes(motion.easing) && <option value={motion.easing}>Custom Bézier</option>}
                   {["linear", "ease-in", "ease-out", "ease-in-out"].map(
                     (value) => (
                       <option key={value}>{value}</option>
@@ -287,7 +318,7 @@ export default function MotionPanel() {
               <button
                 aria-label="Remove animation track"
                 onClick={() =>
-                  store.updateElement(selected.id, { motion: undefined })
+                  selected.motion ? store.updateElement(selected.id, { motion: undefined }) : store.updateElement(selected.id, { animation: stackAnimations(animationTracks(selected.animation).filter(track => track.id !== timelineEffect(selected)?.id)) })
                 }
               >
                 <Trash2 size={14} />
@@ -304,7 +335,7 @@ export default function MotionPanel() {
                 {keyframeField(frame, index, "opacity", 0, 1, 0.05)}
                 <button
                   aria-label={`Delete keyframe ${index + 1}`}
-                  disabled={motion.frames.length <= 2}
+                  disabled={motion.frames.length <= 2 || (!selected.motion && (frame.time === 0 || frame.time === 1))}
                   onClick={() =>
                     update({
                       frames: motion.frames.filter((_, i) => i !== index),

@@ -40,7 +40,7 @@ export function buttonHref(element: ElementNode) {
 }
 
 /** An allowlisted tree, never raw HTML or executable project source. */
-export function nativeTree(element: ElementNode): SemanticTree {
+export function nativeTree(element: ElementNode, conditionVisible?: boolean): SemanticTree {
   if (element.type === "button") {
     const p = element.props, disabled = Boolean(p.disabled || p.loading), href = buttonHref(element);
     const attrs: Record<string, string | number | boolean> = { id: element.id, "data-button": "true", "aria-busy": Boolean(p.loading) };
@@ -122,6 +122,16 @@ export function nativeTree(element: ElementNode): SemanticTree {
   const children: SemanticTree[] = [];
   if (d.tag === "fieldset") {
     delete attrs.required;
+    if (element.formCondition) {
+      attrs["data-form-condition"] = "true";
+      attrs["data-condition-source"] = element.formCondition.sourceId;
+      attrs["data-condition-checked"] = String(element.formCondition.checked);
+      attrs["data-condition-disabled"] = String(Boolean(p.disabled));
+      if (conditionVisible !== undefined) {
+        attrs.hidden = !conditionVisible;
+        attrs.disabled = Boolean(p.disabled) || !conditionVisible;
+      }
+    }
     if (element.definitionId === "checkboxGroup") {
       attrs["data-checkbox-group"] = "true";
       attrs["data-checkbox-required"] = String(Boolean(p.required));

@@ -74,7 +74,7 @@ export function patchElement(
         )
           changed.push(`${key}.${field}`);
       }
-    for (const key of ["vector", "motion", "animation", "responsive"] as const)
+    for (const key of ["vector", "motion", "animation", "responsive", "formCondition"] as const)
       if (key in updates) changed.push(key);
     result.component = {
       ...element.component,

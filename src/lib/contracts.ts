@@ -3,6 +3,7 @@ import type { ElementNode } from "@/types";
 import type { EndpointConfig, SchemaField } from "@/types/backend";
 import { definitionFor } from "./elements/registry";
 import { buttonHref } from "./elements/native";
+import { fieldCondition } from "./form-conditions";
 
 const id = z
   .string()
@@ -139,6 +140,7 @@ export function resolveContract(
       message,
     });
   const fields = endpointFields(config);
+  const nodes = Object.fromEntries(elements.map(node => [node.id, node]));
   if (
     !connection.requestMappings &&
     config.requestHeaders?.some((field) => field.required)
@@ -166,6 +168,13 @@ export function resolveContract(
     const source = mapping.source;
     if (source.kind === "element") {
       const element = elements.find((el) => el.id === source.elementId);
+      const condition = element && fieldCondition(element, nodes);
+      if (condition) {
+        if (field.required || mapping.location !== "body") error(`Conditional field ${field.name} must map to an optional request body field. Enforce Required in its active backend branch.`);
+        const controllerMapping = connection.requestMappings?.find(item => item.source.kind === "element" && item.source.elementId === condition.sourceId && item.location === "body");
+        const controllerField = controllerMapping && fields.find(item => item.location === "body" && fieldIdentity(item) === controllerMapping.fieldId);
+        if (!controllerField || controllerField.type !== "boolean" || !controllerField.required) error(`Conditional field ${field.name} needs its controlling checkbox mapped to a required Boolean request body field.`);
+      }
       if (element?.definitionId === "checkboxGroup" && (field.required || element.props.required) &&
           (element.props.disabled || !elements.some(choice => choice.parentId === element.id && choice.definitionId === "checkbox" && !choice.props.disabled)))
         error(`Field ${field.name} needs an enabled checkbox group with at least one enabled choice.`);

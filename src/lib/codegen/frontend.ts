@@ -16,6 +16,8 @@ import { resolveElement, vectorPath, motionFrames, fontFamily } from "@/lib/desi
 import { liveDataRuntime, liveDataCSS } from "./live-data";
 import type { ResolvedDataSource } from "@/lib/live-data";
 import { formValueRuntime } from "./form-values";
+import { conditionDefault } from "@/lib/form-conditions";
+import { formConditionsCSS, formConditionsRuntime } from "./form-conditions";
 
 type FrontendCodeResult = {
     files: Record<string, string>;
@@ -147,7 +149,7 @@ function flowHandler(
 
     if (bodyLines.length === 0) return "";
 
-    const handlerBody = (el.type === "form" ? formValueRuntime : "") + bodyLines.join(" ");
+    const handlerBody = (el.type === "form" ? `if (target.querySelector?.('[data-form-condition]')) { syncFormConditions(target); if (!target.reportValidity()) return; }` + formValueRuntime : "") + bodyLines.join(" ");
 
     return `async (e) => { e.preventDefault(); const target = e.currentTarget; if (target.dataset.busy || target.disabled || target.getAttribute?.("aria-disabled") === "true") return; target.dataset.busy = "true"; target.setAttribute("aria-busy", "true"); setStatus("Working…"); let failure = {}; try { ${handlerBody} ${el.type === "form" && el.props.resetOnSuccess ? "target.reset();" : ""} setStatus(${JSON.stringify(el.type === "form" ? String(el.props.successMessage || "Done") : "Done")}); } catch (err) { setStatus(failure.message || (err instanceof Error ? err.message : "Request failed. Please try again.")); ${mode === "jsx" ? "if (failure.pageRoute) window.location.href = failure.pageRoute;" : 'if (failure.pageId) window.parent.postMessage({type: "levoks:preview:navigate", pageId: failure.pageId}, "*");'} } finally { delete target.dataset.busy; target.removeAttribute("aria-busy"); } }`;
 }
@@ -298,7 +300,7 @@ const renderElementBody = (
     }).join("");
     const clsAttr = mode === "jsx" ? "className" : "class";
 
-    if (["native", "button", "input"].includes(el.type)) { cssOut.add(choiceCSS); const native = nativeMarkup(nativeTree(el), mode, children, ` ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}`); return mode === "jsx" && recordFields ? native.replace(`id="${escapeMarkup(el.id)}"`, `id={record._id + ${JSON.stringify("-" + el.id)}}`) : native; }
+    if (["native", "button", "input"].includes(el.type)) { cssOut.add(choiceCSS); const native = nativeMarkup(nativeTree(el, conditionDefault(el, elementsById)), mode, children, ` ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}`); return mode === "jsx" && recordFields ? native.replace(`id="${escapeMarkup(el.id)}"`, `id={record._id + ${JSON.stringify("-" + el.id)}}`) : native; }
     if (el.type === "custom") {
         if (mode === "html") return `<div ${clsAttr}="${className}">${escapeMarkup(el.label)} — custom source runs in the exported application.</div>`;
         return `<div className="${className}"><${customIdentifier(el.definitionId!)} {...${JSON.stringify(el.props)}}${wiringAttr(el, flowMap, mode)}>${children}</${customIdentifier(el.definitionId!)}></div>`;
@@ -471,6 +473,7 @@ export function generateFrontendProject(
     let allElements: ElementNode[] = [];
     const safeElements = Array.isArray(elements) ? elements.map(el => assetElement(el, assets)) : [];
     allElements = [...safeElements];
+    const hasConditions = [...safeGlobal, ...allElements].some(element => element.formCondition);
 
     const htmlParts: string[] = [];
     const jsxParts: string[] = [];
@@ -546,7 +549,7 @@ ${hasResponsive ? "" : '@media (max-width: 640px) { .page { padding: 1rem; displ
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 `;
 
-    const css = `${baseCss}\n${Array.from(cssParts).join("\n")}${animationCss}`;
+    const css = `${baseCss}\n${Array.from(cssParts).join("\n")}${animationCss}${hasConditions ? "\n" + formConditionsCSS : ""}`;
 
     const body = `<div class="page">${htmlParts.join("")}<div role="status" aria-live="polite" style="position:fixed;bottom:16px;right:16px;z-index:1000;background:#fff;color:#111"></div></div>`;
     const previewHandlers = [...flowMap.keys()].flatMap(id => {
@@ -557,6 +560,7 @@ ${hasResponsive ? "" : '@media (max-width: 640px) { .page { padding: 1rem; displ
     const pageRoutes = JSON.stringify(Object.fromEntries((allPages || []).map(p => [p.id, p.route])));
     const explicitHandlers = [...safeGlobal, ...allElements].flatMap(el => Object.entries(el.events || {}).filter(([event]) => !flowMap.has(el.id) || event !== (el.type === "form" ? "onSubmit" : "onClick")).map(([event, action]) => `document.querySelectorAll(${JSON.stringify("." + classNameFor(el))}).forEach(el => el.addEventListener(${JSON.stringify(event.slice(2).toLowerCase())}, ${semanticHandler(action)}));`)).join("\n");
     const previewScript = `${widgetRuntime}; setupWidgets(document);
+${hasConditions ? formConditionsRuntime + "; setupFormConditions(document);" : ""}
 const navigateToPage = pageId => window.parent.postMessage({type: "levoks:preview:navigate", pageId}, "*");
 ${explicitHandlers}
 ${generateAnimationSetup(animJsElements)}
@@ -593,6 +597,7 @@ import "./styles.css";
 ${Object.keys(customElements).sort().map(id => `import ${customIdentifier(id)} from "./custom/${id}.jsx";`).join("\n")}
 ${apiImport}
 ${widgetRuntime}
+${hasConditions ? formConditionsRuntime : ""}
 ${hasLiveData ? liveDataRuntime : ""}
 const navigateToPage = pageId => { const route = ${pageRoutes}[pageId]; if (route) window.location.href = route; };
 export default function App() {
@@ -600,6 +605,7 @@ export default function App() {
   const [flowValues, setFlowValues] = React.useState({});
   const rootRef = React.useRef(null);
   React.useEffect(() => setupWidgets(rootRef.current), []);
+${hasConditions ? "  React.useEffect(() => setupFormConditions(rootRef.current), []);" : ""}
 ${animUseEffect}
   return (
     <div className="page" ref={rootRef}>

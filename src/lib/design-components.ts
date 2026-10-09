@@ -17,6 +17,7 @@ export function componentDefinition(
       key = canonical(id);
     const node = structuredClone(element);
     delete node.component;
+    if (node.formCondition && elements[node.formCondition.sourceId]) node.formCondition.sourceId = canonical(node.formCondition.sourceId);
     nodes[key] = {
       ...node,
       id: key,
@@ -76,6 +77,7 @@ export function componentInstance(
         overrides: publishing ? [] : old?.component?.overrides || [],
       },
     };
+    if (node.formCondition) node.formCondition.sourceId = ids[node.formCondition.sourceId] || node.formCondition.sourceId;
     for (const path of node.component!.overrides) {
       if (!old) continue;
       const [group, key] = path.split(".");
@@ -85,7 +87,7 @@ export function componentInstance(
           [key]: (old[field] as Record<string, unknown>)[key],
         });
       } else if (
-        ["responsive", "animation", "motion", "vector"].includes(group)
+        ["responsive", "animation", "motion", "vector", "formCondition"].includes(group)
       )
         Object.assign(node, { [group]: old[group as keyof ElementNode] });
     }

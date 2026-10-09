@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     ".verification/**",
     ".levoks-preview/**",
     ".next-e2e/**",
+    ".next-deployment-api/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

@@ -109,7 +109,7 @@ export async function providerResponse(
       response.status === 403 &&
         response.headers.get("x-ratelimit-remaining") === "0"
         ? 429
-        : [401, 403, 404, 409, 422, 429].includes(response.status)
+        : [400, 401, 402, 403, 404, 409, 410, 422, 429].includes(response.status)
           ? response.status
           : 502,
       `Provider request failed (${response.status}). Check your credentials, permissions, and quota.`,

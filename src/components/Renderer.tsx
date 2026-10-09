@@ -17,6 +17,8 @@ import { safeElementUrl } from "@/lib/elements/native";
 import { ICON_PATHS } from "@/lib/icon-paths";
 import VectorShape from "./design/VectorShape";
 import { useDroppable } from "@dnd-kit/core";
+import { animationTracks, resolveAnimations, usesAnimationRuntime } from "@/lib/animation";
+import { mountAnimations } from "@/lib/animation-runtime";
 
 interface RendererProps {
     elementIds: string[];
@@ -105,7 +107,8 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
 
     // ─── Animation support ───
     const anim = element.animation;
-    const hasAnim = anim && anim.type !== "none";
+    const advancedAnim = usesAnimationRuntime(anim);
+    const hasAnim = anim && anim.type !== "none" && !advancedAnim;
     const isTypewriter = hasAnim && anim.type === "typewriter";
 
     const buildAnimStr = useCallback(() => {
@@ -223,6 +226,10 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
 
     // ─── Hover, Scroll & Click animation triggers ───
     const elRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!elRef.current || !advancedAnim) return;
+        return mountAnimations(elRef.current, resolveAnimations(animationTracks(anim)));
+    }, [advancedAnim, anim, element.props.content]);
     const animStrRef = useRef(buildAnimStr);
     useEffect(() => { animStrRef.current = buildAnimStr; }, [buildAnimStr]);
 

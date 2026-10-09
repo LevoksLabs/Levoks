@@ -9,6 +9,7 @@ import { ParameterControl } from "./ParameterControl";
 import SelectOptionsEditor from "./SelectOptionsEditor";
 import { fileLimits, fileConfigError } from "@/lib/backend/files";
 import ChoiceGroupEditor from "./ChoiceGroupEditor";
+import FormConditionEditor from "./FormConditionEditor";
 
 export default function ElementProperties({
   element,
@@ -72,6 +73,7 @@ export default function ElementProperties({
     });
   return (
     <div className="semantic-properties">
+      <FormConditionEditor element={element} />
       {isEmbed && (
         <fieldset>
           <legend>Embed</legend>

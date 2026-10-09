@@ -13,7 +13,6 @@ import { canGroup } from "@/lib/grouping";
 import DesignInspector from "./design/DesignInspector";
 import { useEditorStore } from "@/store/editorStore";
 import {
-  AnimationData,
   ActionData,
   CONTAINER_TYPES,
   ElementNode,
@@ -779,8 +778,6 @@ const PropertyInspector: React.FC = () => {
     }
     updateElement(el.id, { styles: nextStyles });
   };
-  const setAnim = (anim: AnimationData) =>
-    updateElement(el.id, { animation: anim });
   const setAction = (act: ActionData) => updateElement(el.id, { actions: act, ...(el.type === "button" && act.type !== "none" ? {props: {href: ""}} : {}) });
   const startRenameElement = () => {
     setElementNameDraft(displayName);
@@ -2110,45 +2107,12 @@ const PropertyInspector: React.FC = () => {
         {/* ─── ANIMATE TAB ─── */}
         {activeTab === "animate" && (
           <AnimationPanel
+            key={el.id}
             elementId={el.id}
             elementType={el.type}
             animation={el.animation}
-            onUpdate={(anim) => setAnim(anim)}
-            onRemove={() =>
-              updateElement(el.id, {
-                animation: {
-                  type: "none",
-                  trigger: "onLoad",
-                  duration: 0.3,
-                  delay: 0,
-                  easing: "ease-out",
-                  iterationCount: 1,
-                  direction: "normal",
-                  fillMode: "none",
-                },
-              })
-            }
-            onPreview={() => {
-              const domEl = document.querySelector(
-                `[data-element-id="${el.id}"]`,
-              ) as HTMLElement | null;
-              if (domEl && el.animation && el.animation.type !== "none") {
-                const a = el.animation;
-                domEl.style.animation = "none";
-                void domEl.offsetHeight;
-                const iterCount =
-                  a.iterationCount === "infinite"
-                    ? "infinite"
-                    : String(a.iterationCount ?? 1);
-                domEl.style.animation = `${a.type} ${a.duration}s ${a.easing} ${a.delay}s ${iterCount} ${a.direction} ${a.fillMode}`;
-                setTimeout(
-                  () => {
-                    domEl.style.animation = "";
-                  },
-                  (a.duration + a.delay + 0.5) * 1000,
-                );
-              }
-            }}
+            motion={el.motion}
+            onUpdate={animation => updateElement(el.id, { animation, motion: undefined })}
           />
         )}
       </div>

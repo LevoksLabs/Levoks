@@ -41,7 +41,6 @@ import {
   MAX_PROJECT_BYTES,
   parseProjectJSON,
   redactProject,
-  serviceSlug,
   type ProjectDocument,
 } from "@/lib/project/schema";
 import {
@@ -58,6 +57,7 @@ import "./workspace.css";
 import SourceTools from "./SourceTools";
 import SecretsPanel from "./SecretsPanel";
 import GitHubPanel from "./GitHubPanel";
+import DeploymentPanel from "./DeploymentPanel";
 import PublishReadiness from "./PublishReadiness";
 import type { ReadinessTarget } from "@/lib/project/readiness";
 import { useEditorUIStore } from "@/store/editorUIStore";
@@ -186,13 +186,6 @@ export default function WorkspaceHub() {
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const lineNumbers = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
-  const [vercelToken, setVercelToken] = useState("");
-  const [origins, setOrigins] = useState<Record<string, string>>({});
-  const [deployment, setDeployment] = useState<{
-    id: string;
-    url: string;
-    state: string;
-  } | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const abort = useRef<AbortController | null>(null);
@@ -302,32 +295,6 @@ export default function WorkspaceHub() {
       }),
     [],
   );
-  useEffect(() => {
-    if (
-      !deployment ||
-      ["READY", "ERROR", "CANCELED"].includes(deployment.state) ||
-      !vercelToken
-    )
-      return;
-    const controller = new AbortController();
-    const timer = setTimeout(() => {
-      api(
-        "/api/deploy",
-        { token: vercelToken, action: "status", deploymentId: deployment.id },
-        "POST",
-        controller.signal,
-      )
-        .then(setDeployment)
-        .catch((e) => {
-          if (!controller.signal.aborted) setError(e.message);
-        });
-    }, 5000);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [deployment, vercelToken]);
-
   async function run(action: () => Promise<void>) {
     if (operation.current) return;
     operation.current = true;
@@ -1376,114 +1343,7 @@ export default function WorkspaceHub() {
                     <GitBranch size={16} /> Open GitHub Connections
                   </button>
                 </section>
-                <section>
-                  <h2>
-                    <Rocket size={20} /> Deploy frontend to Vercel
-                  </h2>
-                  <p>
-                    Create a preview deployment of the generated Next.js
-                    frontend. Backend services must be deployed on a container
-                    host; enter their HTTPS addresses below before building.
-                  </p>
-                  <label>
-                    Vercel token
-                    <input
-                      type="password"
-                      autoComplete="off"
-                      value={vercelToken}
-                      onChange={(e) => setVercelToken(e.target.value)}
-                    />
-                  </label>
-                  {backend.services.map((service) => (
-                    <label key={service.id}>
-                      {service.name} API origin
-                      <input
-                        type="url"
-                        placeholder="https://api.example.com"
-                        value={origins[`API_ORIGIN_${service.port}`] || ""}
-                        onChange={(e) =>
-                          setOrigins({
-                            ...origins,
-                            [`API_ORIGIN_${service.port}`]: e.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                  ))}
-                  <button
-                    className="primary"
-                    disabled={
-                      busy ||
-                      blocked ||
-                      !vercelToken ||
-                      backend.services.some(
-                        (s) => !origins[`API_ORIGIN_${s.port}`],
-                      )
-                    }
-                    onClick={() =>
-                      void run(async () => {
-                        const result = await api("/api/deploy", {
-                          action: "deploy",
-                          token: vercelToken,
-                          name: serviceSlug(workspace.name).slice(0, 81),
-                          files: buildFiles(),
-                          environment: origins,
-                        });
-                        setDeployment(result);
-                        setMessage(
-                          "Deployment submitted. Waiting for the provider build.",
-                        );
-                      })
-                    }
-                  >
-                    Create preview deployment
-                  </button>
-                  {deployment && (
-                    <div className="workspace-deployment">
-                      <strong>{deployment.state}</strong>
-                      <p>Deployment {deployment.id}</p>
-                      {deployment.state === "READY" &&
-                        /^[a-zA-Z0-9.-]+$/.test(deployment.url) && (
-                          <a
-                            href={`https://${deployment.url}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            Open deployed website ↗
-                          </a>
-                        )}
-                      {["ERROR", "CANCELED"].includes(deployment.state) && (
-                        <p>
-                          The build did not complete. Inspect the build logs in
-                          your Vercel dashboard.
-                        </p>
-                      )}
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          void run(async () => {
-                            setDeployment(
-                              await api("/api/deploy", {
-                                action: "status",
-                                token: vercelToken,
-                                deploymentId: deployment.id,
-                              }),
-                            );
-                          })
-                        }
-                      >
-                        Refresh status
-                      </button>
-                    </div>
-                  )}
-                  <h3>Container deployment</h3>
-                  <p>
-                    The ZIP contains Dockerfiles for the frontend and each
-                    backend service, plus backend Docker Compose. Set database
-                    and authentication secrets in your hosting provider. No
-                    provider token is included in exported source.
-                  </p>
-                </section>
+                <DeploymentPanel key={JSON.stringify([ownerId, workspace.id])} projectId={workspace.id} ownerId={ownerId} blocked={blocked} />
               </div>
             )}
           </div>

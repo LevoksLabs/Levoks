@@ -3,7 +3,7 @@
 import { readdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 
-const build = path.resolve(process.env.LEVOKS_E2E === "1" ? ".next-e2e" : ".next"),
+const build = path.resolve(process.env.LEVOKS_DEPLOYMENT_API_TEST === "1" ? ".next-deployment-api" : process.env.LEVOKS_E2E === "1" ? ".next-e2e" : ".next"),
   standalone = path.join(build, "standalone");
 const privatePath = /(?:^|\/)(?:\.levoks-preview|\.verification)(?:\/|$)/;
 let removed = 0;

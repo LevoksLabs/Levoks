@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { commitProject } from "../src/lib/server/github";
 import { readJSON } from "../src/lib/server/http";
 import { POST as generate } from "../src/app/api/ai/route";
-import { POST as deploy } from "../src/app/api/deploy/route";
 import { emptyProject } from "../src/lib/project/workspace";
 
 const request = (body: unknown) =>
@@ -225,35 +224,27 @@ test("AI incremental proposals return validated field changes and reject stale p
   assert.match((await response.json()).error, /precondition/);
 });
 
-test("Vercel receives only frontend source and reports queued state", async (t) => {
-  let payload: { files: { file: string }[] } | undefined;
-  t.mock.method(
-    globalThis,
-    "fetch",
-    async (_url: string | URL | Request, init?: RequestInit) => {
-      payload = JSON.parse(String(init?.body));
-      return Response.json({
-        id: "deployment_1",
-        url: "test.vercel.app",
-        readyState: "QUEUED",
-      });
-    },
-  );
-  const response = await deploy(
-    request({
-      token: "test-token-123",
-      action: "deploy",
-      name: "test",
-      files: {
-        "frontend/package.json": "{}",
-        "frontend/app/page.jsx": "export default function Page(){return null}",
-        "backend/server.js": "private backend",
-      },
-    }),
-  );
-  assert.equal(response.status, 200);
-  assert.equal((await response.json()).state, "QUEUED");
-  assert.ok(payload?.files.every((file) => !file.file.includes("backend")));
+test("Vercel receives only frontend source, origins and release metadata", async (t) => {
+  const { createVercelRelease } = await import("../src/lib/server/vercel");
+  let payload: { files: { file: string; data: string }[]; project: string; target?: string; meta: { levoksOperation: string } } | undefined;
+  t.mock.method(globalThis, "fetch", async (_url: string | URL | Request, init?: RequestInit) => {
+    payload = JSON.parse(String(init?.body));
+    return Response.json({ id: "deployment_1", projectId: "prj_test", meta: { levoksOperation: "operation-1" },
+      url: "test.vercel.app", readyState: "QUEUED" });
+  });
+  const result = await createVercelRelease({ token: "test-token-123", name: "test", providerProjectId: "prj_test" }, {
+    "frontend/package.json": "{}",
+    "frontend/app/page.jsx": "export default function Page(){return null}",
+    "frontend/.env.example": "PRIVATE_TOKEN=do-not-upload",
+    "backend/server.js": "private backend",
+  }, { API_ORIGIN_3001: "https://api.example.com/" }, "operation-1");
+  assert.equal(result.readyState, "QUEUED");
+  assert.equal(payload?.project, "prj_test");
+  assert.equal(payload?.target, undefined);
+  assert.equal(payload?.meta.levoksOperation, "operation-1");
+  assert.ok(payload?.files.every(file => !file.file.includes("backend") && file.file !== ".env.example"));
+  const env = payload?.files.find(file => file.file === ".env.production");
+  assert.equal(Buffer.from(env!.data, "base64").toString(), "API_ORIGIN_3001=https://api.example.com");
 });
 
 test("AI visual proposals cannot attach executable source overrides", async (t) => {

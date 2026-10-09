@@ -984,6 +984,7 @@ const ValidationEditor: React.FC<{
                 }}
               >
                 <option value="required">Required</option>
+                <option value="absent">Must be omitted</option>
                 <option value="minLength">Min Length</option>
                 <option value="maxLength">Max Length</option>
                 <option value="min">Min Value</option>
@@ -1166,7 +1167,7 @@ const ValidationEditor: React.FC<{
                 the address or grant permission to display it as a link.
               </p>
             )}
-            {!["required", "accepted", "email", "url", "text", "file"].includes(
+            {!["required", "absent", "accepted", "email", "url", "text", "file"].includes(
               rule.type,
             ) &&
               !isTemporalKind(rule.type) && (

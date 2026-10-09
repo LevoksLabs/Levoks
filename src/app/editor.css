@@ -1902,3 +1902,10 @@ kbd {
   line-height: 1.5;
   padding-left: 16px;
 }
+.motion-endpoint {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}

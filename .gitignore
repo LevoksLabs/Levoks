@@ -41,6 +41,7 @@ typecheck.log
 lint-results.json
 .verification/
 .next-e2e/
+.next-deployment-api/
 
 # vercel
 .vercel

@@ -91,9 +91,11 @@ export function deepCloneSubtree(
     newParentId: string | null = null
 ): { clonedRootId: string; allCloned: Record<string, ElementNode> } {
     const allCloned: Record<string, ElementNode> = {};
+    const clonedIds = new Map<string, string>();
 
     function cloneRecursive(el: ElementNode, parentId: string | null): string {
         const newId = generateElementId(el.type);
+        clonedIds.set(el.id, newId);
         const newChildIds: string[] = [];
 
         for (const childId of el.children) {
@@ -121,5 +123,7 @@ export function deepCloneSubtree(
     }
 
     const clonedRootId = cloneRecursive(rootElement, newParentId);
+    for (const node of Object.values(allCloned)) if (node.formCondition)
+        node.formCondition = { ...node.formCondition, sourceId: clonedIds.get(node.formCondition.sourceId) || node.formCondition.sourceId };
     return { clonedRootId, allCloned };
 }

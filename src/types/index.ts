@@ -7,6 +7,7 @@ export type AnimationTrigger =
     | "onScroll"
     | "onHover"
     | "onClick"
+    | "onPointerMove"
     | "continuous";
 
 export type AnimationEasing =
@@ -45,9 +46,38 @@ export type AnimationType =
     // Advanced — Border/Clip
     | "borderDraw" | "clipReveal" | "maskWipe"
     // None
+    | "custom"
     | "none";
 
+export interface AnimationKeyframe {
+    time: number;
+    x: number;
+    y: number;
+    z: number;
+    scale: number;
+    rotation: number;
+    rotateX: number;
+    rotateY: number;
+    opacity: number;
+    blur: number;
+    clip: number;
+}
+
 export interface AnimationData {
+    id?: string;
+    name?: string;
+    enabled?: boolean;
+    /** Additional independent effects; the first effect remains compatible with v1 projects. */
+    effects?: AnimationData[];
+    keyframes?: AnimationKeyframe[];
+    scrollMode?: "reveal" | "scrub";
+    scrollStart?: number;
+    scrollEnd?: number;
+    scrollReplay?: boolean;
+    hoverMode?: "reverse" | "reset" | "complete";
+    pointerMode?: "tilt" | "follow";
+    target?: "self" | "children";
+    stagger?: number;
     type: AnimationType;
     trigger: AnimationTrigger;
     duration: number;
@@ -128,6 +158,7 @@ export interface ElementLayout {
 }
 
 export interface ElementNode {
+    formCondition?: { sourceId: string; checked: boolean };
     dataSource?: { serviceId: string; endpointId: string; columns: { fieldId: string; label: string }[]; emptyMessage: string };
     dataField?: string;
     /** Missing on v1 documents: resolve the definition from type. */

@@ -142,6 +142,7 @@ export interface ValidationConfig {
 export interface ValidationRule {
   type:
     | "required"
+    | "absent"
     | "minLength"
     | "maxLength"
     | "min"
