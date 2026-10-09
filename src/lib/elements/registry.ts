@@ -283,6 +283,8 @@ for (const [id, name, type] of [
               value: type === "color" ? "#2563eb" : "",
               ...(["range", "number"].includes(type)
                 ? { min: 0, max: 100, step: 1 }
+                : ["date", "time", "datetime-local"].includes(type)
+                  ? { min: "", max: "", step: type === "date" ? "1" : "60" }
                 : {}),
             }),
     },

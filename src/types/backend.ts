@@ -148,8 +148,14 @@ export interface ValidationRule {
     | "max"
     | "regex"
     | "email"
+    | "oneOf"
+    | "accepted"
+    | "date"
+    | "time"
+    | "datetime-local"
     | "custom";
   value?: string | number;
+  temporal?: import("@/lib/backend/temporal").TemporalLimits;
   message: string;
 }
 

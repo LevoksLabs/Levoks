@@ -129,6 +129,13 @@ test(
       const remote = page.getByLabel("Remote", { exact: true }),
         onsite = page.getByLabel("In person", { exact: true });
       const date = page.getByLabel("Visit date", { exact: true });
+      const time = page.getByLabel("Visit time", { exact: true }),
+        appointment = page.getByLabel("Appointment", { exact: true });
+      await expect(time).toHaveValue("22:30");
+      await expect(appointment).toHaveValue("");
+      const consent = page.getByLabel("Accept workshop terms", { exact: true });
+      const followup = page.getByLabel("Preferred follow-up", { exact: true });
+      await expect(followup).toHaveValue("");
       const submit = page.getByRole("button", { name: "Submit", exact: true });
       await expect(topics).toHaveValues(["Design", "Automation"]);
       await expect(session).toHaveValue("Afternoon");
@@ -165,6 +172,45 @@ test(
       );
       await topics.selectOption(["Automation", "Databases"]);
       await session.selectOption("Morning");
+      await submit.click();
+      assert.equal(
+        posts,
+        0,
+        "a required unchecked checkbox must not send a request",
+      );
+      assert.equal(
+        await consent.evaluate(
+          (node) => (node as HTMLInputElement).validity.valueMissing,
+        ),
+        true,
+      );
+      await consent.check();
+      for (const [control, value, reason] of [
+        [date, "2026-10-13", "rangeUnderflow"],
+        [date, "2026-10-23", "rangeOverflow"],
+        [date, "2026-10-16", "stepMismatch"],
+        [time, "12:00", "rangeUnderflow"],
+        [time, "22:15", "stepMismatch"],
+        [appointment, "2026-10-15T09:30", "stepMismatch"],
+      ] as const) {
+        const previous = await control.inputValue();
+        await control.fill(value);
+        assert.equal(
+          await control.evaluate(
+            (node, flag) => (node as HTMLInputElement).validity[flag],
+            reason,
+          ),
+          true,
+        );
+        await submit.click();
+        assert.equal(
+          posts,
+          0,
+          "invalid temporal controls must not send a request",
+        );
+        await control.fill(previous);
+      }
+      await appointment.fill("2026-10-15T09:45");
       const response = page.waitForResponse(
         (r) =>
           r.request().method() === "POST" &&
@@ -178,16 +224,26 @@ test(
       assert.deepEqual(body.topics, ["Automation", "Databases"]);
       assert.equal(body.session, "Morning");
       assert.equal(body.visit_date, "2026-10-15");
+      assert.equal(body.visit_time, "22:30");
+      assert.equal(body.appointment, "2026-10-15T09:45");
+      assert.equal(body.consent, true);
+      assert.equal(body.followup, undefined);
       await expect(page.getByRole("status")).toHaveText("Done");
       await expect.poll(() => records.countDocuments()).toBe(1);
       const record = await records.findOne({ attendance: "in_person" });
       assert.ok(record);
       assert.deepEqual(record.topics, ["Automation", "Databases"]);
       assert.equal(record.session, "Morning");
+      assert.equal(record.consent, true);
+      assert.equal(record.followup, undefined);
+      assert.equal(record.visit_date, "2026-10-15");
+      assert.equal(record.visit_time, "22:30");
+      assert.equal(record.appointment, "2026-10-15T09:45");
       await expect(topics).toHaveValues(["Design", "Automation"]);
       await expect(session).toHaveValue("Afternoon");
       await expect(remote).not.toBeChecked();
       await expect(onsite).not.toBeChecked();
+      await expect(consent).not.toBeChecked();
       await remote.evaluate((node) => {
         (node as HTMLInputElement).disabled = false;
       });
@@ -199,6 +255,22 @@ test(
         { ...body, topics: [] },
         { ...body, topics: "Design" },
         { ...body, attendance: undefined },
+        { ...body, attendance: "forged" },
+        { ...body, session: "forged" },
+        { ...body, topics: ["Unknown"] },
+        { ...body, topics: ["Automation", "Automation"] },
+        { ...body, topics: ["Automation", false] },
+        { ...body, consent: false },
+        { ...body, consent: "true" },
+        { ...body, consent: undefined },
+        { ...body, followup: "forged" },
+        { ...body, visit_date: "2026-02-29" },
+        { ...body, visit_date: "2026-10-13" },
+        { ...body, visit_date: "2026-10-23" },
+        { ...body, visit_date: "2026-10-16" },
+        { ...body, visit_time: "12:00" },
+        { ...body, visit_time: "22:15" },
+        { ...body, appointment: "2026-10-15T09:45Z" },
       ]) {
         const rejected = await fetch(`${apiOrigin}/api/submissions`, {
           method: "POST",
@@ -215,12 +287,18 @@ test(
         .getByPlaceholder("Your email", { exact: true })
         .fill("retry@example.test");
       await remote.check();
+      await consent.check();
+      await followup.selectOption("Phone");
       await topics.selectOption(["Databases"]);
+      await time.fill("");
       await stop(backend);
       await submit.click();
       await expect(page.getByRole("status")).not.toHaveText(/Working|Done/);
       await expect(topics).toHaveValues(["Databases"]);
       await expect(remote).toBeChecked();
+      await expect(consent).toBeChecked();
+      await expect(followup).toHaveValue("Phone");
+      await expect(time).toHaveValue("");
       await expect(
         page.getByPlaceholder("Your name", { exact: true }),
       ).toHaveValue("Retry visitor");
@@ -242,13 +320,21 @@ test(
       const retried = await retryResponse;
       assert.equal(retried.status(), 201);
       assert.equal(retried.request().postDataJSON().visit_date, undefined);
+      assert.equal(retried.request().postDataJSON().visit_time, undefined);
+      assert.equal(retried.request().postDataJSON().appointment, undefined);
       await expect.poll(() => records.countDocuments()).toBe(2);
       const retriedRecord = await records.findOne({ attendance: "remote" });
       assert.deepEqual(retriedRecord!.topics, ["Databases"]);
       assert.equal(retriedRecord!.visit_date, undefined);
+      assert.equal(retriedRecord!.consent, true);
+      assert.equal(retriedRecord!.followup, "Phone");
+      assert.equal(retriedRecord!.visit_time, undefined);
+      assert.equal(retriedRecord!.appointment, undefined);
       await page.reload();
       await expect(topics).toHaveValues(["Design", "Automation"]);
       await expect(date).toHaveValue("2026-10-15");
+      await expect(consent).not.toBeChecked();
+      await expect(followup).toHaveValue("");
       assert.equal(await records.countDocuments(), 2);
 
       await mkdir(".verification/form-controls", { recursive: true });

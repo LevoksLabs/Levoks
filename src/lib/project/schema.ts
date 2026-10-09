@@ -1,6 +1,8 @@
 import { requestMappingSchema, responseMappingSchema, failureSchema } from "@/lib/contracts";
 import { z } from "zod";
 import { databaseSchema } from "@/lib/backend/database";
+import { validationChoices } from "@/lib/backend/validation";
+import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { definitionFor } from "@/lib/elements/registry";
 import { customDefinitionSchema } from "@/lib/elements/custom";
 import { validateFiles } from "@/lib/codegen/files";
@@ -130,11 +132,28 @@ const configs = {
             "max",
             "regex",
             "email",
+            "oneOf",
+            "accepted",
+            "date",
+            "time",
+            "datetime-local",
             "custom",
           ]),
           value: z.union([text, finite]).optional(),
+          temporal: z.object({
+            min: z.string().max(40).optional(),
+            max: z.string().max(40).optional(),
+            step: z.string().max(40).optional(),
+            base: z.string().max(40).optional(),
+          }).optional(),
           message: text,
-        }),
+        }).refine(rule => {
+          if (isTemporalKind(rule.type)) return !temporalConfigError(rule.type, rule.temporal);
+          if (rule.temporal) return false;
+          if (rule.type !== "oneOf") return true;
+          try { validationChoices(rule.value); return true; }
+          catch { return false; }
+        }, "Check allowed values or date/time limits: bounds must be valid, date ranges ordered, and step positive (at least one millisecond) or any."),
       )
       .max(100),
   }),

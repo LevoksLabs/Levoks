@@ -288,6 +288,7 @@ function FormDestinationSettings({ form }: { form: ElementNode }) {
           saves in the downloaded application.
         </p>
       )}
+      {connected && <p className="panel-caption">Field and option edits do not update existing storage rules. Review the connected service&apos;s Validation blocks in Backend.</p>}
       {initial &&
         (inbox ? (
           <p className="panel-caption">

@@ -4,6 +4,7 @@ import type {
   BackendBlock,
   EndpointConfig,
   SchemaField,
+  ValidationRule,
 } from "@/types/backend";
 import type { RequestMapping } from "@/lib/contracts";
 import {
@@ -18,6 +19,8 @@ import type { IRDiagnostic } from "@/types/ir";
 import { definitionFor } from "@/lib/elements/registry";
 import { backendDefaults } from "@/lib/backend/registry";
 import { defaultDatabase } from "@/lib/backend/database";
+import { validationChoices } from "@/lib/backend/validation";
+import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
 import { useRoutingStore } from "@/store/routingStore";
@@ -95,6 +98,16 @@ export function submissionFields(
       problems.push(
         `${input.label || "Field " + (index + 1)} needs a dedicated workflow for passwords or uploads.`,
       );
+    const temporal = isTemporalKind(inputType) ? {
+      min: String(input.props.min ?? ""),
+      max: String(input.props.max ?? ""),
+      step: String(input.props.step ?? ""),
+      base: String(input.props.value ?? ""),
+    } : undefined;
+    if (temporal && isTemporalKind(inputType)) {
+      const error = temporalConfigError(inputType, temporal);
+      if (error) problems.push(`${input.label || "Field " + (index + 1)}: ${error}`);
+    }
     let name = String(input.props.name || `field_${index + 1}`)
       .replace(/[^A-Za-z0-9_]/g, "_")
       .slice(0, 80);
@@ -116,8 +129,37 @@ export function submissionFields(
     const base = name;
     for (let suffix = 2; used.has(name); suffix++) name = `${base}_${suffix}`;
     used.add(name);
+    let choices: string | undefined;
+    if (definitionFor(input)?.tag === "select")
+      choices = String(input.props.options || "");
+    if (inputType === "radio") {
+      const members = controls.filter(
+        (node) =>
+          isFormInput(node) &&
+          !node.props.disabled &&
+          String(node.props.inputType || node.props.type) === "radio" &&
+          (input.props.name
+            ? node.props.name === input.props.name
+            : node.id === input.id),
+      );
+      const values = members.map((node) => String(node.props.value ?? "on"));
+      if (values.some((value) => /[\r\n]/.test(value)))
+        problems.push(
+          `${input.label || name}: radio values must fit on one line.`,
+        );
+      choices = [...new Set(values)].join("\n");
+    }
+    if (choices !== undefined) {
+      try {
+        validationChoices(choices);
+      } catch (error) {
+        problems.push(`${input.label || name}: ${(error as Error).message}`);
+      }
+    }
     return {
       input,
+      choices,
+      temporal,
       field: {
         id: input.id,
         name,
@@ -376,8 +418,24 @@ export function createSubmissionDestination(
         position: { x: 0, y: 0 },
       }) as BackendBlock;
     const validations = analysis.fields.flatMap(
-      ({ field, input, inputType }) => {
-        const rules: { type: string; value?: string; message: string }[] = [];
+      ({ field, input, inputType, choices, temporal }) => {
+        const rules: ValidationRule[] = [];
+        if (temporal && isTemporalKind(inputType)) rules.push({
+          type: inputType,
+          temporal,
+          message: `Enter a valid ${field.name} within the allowed limits.`,
+        });
+        if (choices !== undefined)
+          rules.push({
+            type: "oneOf",
+            value: choices,
+            message: `Choose a valid ${field.name} option.`,
+          });
+        if (inputType === "checkbox" && field.required)
+          rules.push({
+            type: "accepted",
+            message: `Confirm ${field.name} before submitting.`,
+          });
         if (field.type === "array" && field.required)
           rules.push({
             type: "required",

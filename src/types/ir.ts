@@ -43,7 +43,7 @@ export interface AuthStep {
 
 export interface ValidateStep {
     type: "validate";
-    rules: { fieldName: string; ruleType: string; value?: string | number; message: string }[];
+    rules: { fieldName: string; ruleType: string; value?: string | number; temporal?: import("@/lib/backend/temporal").TemporalLimits; message: string }[];
     blockId: string;
 }
 

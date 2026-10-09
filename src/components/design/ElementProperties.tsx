@@ -3,6 +3,7 @@ import type { ElementNode } from "@/types";
 import { definitionFor, type PropertyField } from "@/lib/elements/registry";
 import { useEditorStore } from "@/store/editorStore";
 import { embedError } from "@/lib/elements/embed";
+import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { ParameterControl } from "./ParameterControl";
 
 export default function ElementProperties({
@@ -26,6 +27,11 @@ export default function ElementProperties({
   const events =
     element.type === "custom" ? custom?.events || [] : definition?.events || [];
   const isEmbed = definition?.generate === "iframe" || element.type === "frame";
+  const inputType = String(element.props.type || element.props.inputType || "");
+  const temporalError = isTemporalKind(inputType) ? temporalConfigError(inputType, {
+    min: String(element.props.min ?? ""), max: String(element.props.max ?? ""),
+    step: String(element.props.step ?? ""), base: String(element.props.value ?? ""),
+  }) : "";
   const set = (key: string, value: string | number | boolean) =>
     updateElement(element.id, {
       props: { [key]: value },
@@ -197,13 +203,16 @@ export default function ElementProperties({
                   ) : (
                     <input
                       aria-label={field.label}
-                      type="text"
+                      type={isTemporalKind(inputType) && ["min", "max", "value"].includes(key) ? inputType : "text"}
+                      step={isTemporalKind(inputType) && ["min", "max", "value"].includes(key) ? "any" : undefined}
                       value={String(element.props[key] ?? "")}
                       onChange={(e) => set(key, e.target.value)}
                     />
                   )}
                 </label>
               ))}
+            {isTemporalKind(inputType) && <p className="panel-caption">Step is in {inputType === "date" ? "days" : "seconds"}. Use any to allow every value. Time limits can cross midnight. Creating a collection copies these limits into its backend rules.</p>}
+            {temporalError && <p role="alert" className="property-error">{temporalError}</p>}
             {element.type === "custom" && (
               <p className="panel-caption">
                 Source is included in export. It does not run inside this

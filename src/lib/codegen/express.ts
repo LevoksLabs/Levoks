@@ -38,6 +38,7 @@ import { relationFiles } from "./relations";
 import { relationEdges } from "@/lib/backend/relations";
 import { corsSource } from "@/lib/backend/cors";
 import { submissionNotificationFiles } from "./submission-notifications";
+import { VALIDATION_RUNTIME } from "@/lib/backend/validation";
 
 // ─── Field type → Mongoose type ───
 function mongooseType(type: SchemaField["type"]): string {
@@ -414,6 +415,7 @@ exports.validateBody = (fields) => (req, res, next) => {
   req.body = clean;
   next();
 };
+${VALIDATION_RUNTIME}
 const validations = ${JSON.stringify(service.blocks.filter(b => b.type === "validation" && !workflowTargets.has(b.id)).map(b => b.config))};
 exports.validateRules = (req, res, next) => {
   if (['GET', 'DELETE'].includes(req.method)) return next();
@@ -421,7 +423,7 @@ exports.validateRules = (req, res, next) => {
     const value = req.body[validation.fieldName];
     for (const rule of validation.rules) {
       if (req.method === 'PATCH' && value === undefined) continue;
-      const valid = rule.type === 'required' ? value !== undefined && value !== '' && (!Array.isArray(value) || value.length > 0) : value === undefined ? true : rule.type === 'email' ? typeof value === 'string' && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value) : rule.type === 'minLength' ? String(value).length >= Number(rule.value) : rule.type === 'maxLength' ? String(value).length <= Number(rule.value) : rule.type === 'min' ? Number(value) >= Number(rule.value) : rule.type === 'max' ? Number(value) <= Number(rule.value) : false;
+      const valid = validationRuleValid(rule, value, true);
       if (!valid) return res.status(400).json({ error: rule.message || 'Validation failed' });
     }
   }

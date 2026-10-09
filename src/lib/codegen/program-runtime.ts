@@ -1,7 +1,9 @@
 import { RESPONSE_HEADERS_RUNTIME } from "@/lib/backend/response-headers";
+import { VALIDATION_RUNTIME } from "@/lib/backend/validation";
 
 /** Emitted as a standalone CommonJS module. Interprets validated data, never JavaScript expressions. */
 export const PROGRAM_RUNTIME = String.raw`
+${VALIDATION_RUNTIME}
 class WorkflowError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -266,7 +268,7 @@ exports.createWorkflow = (program, models, database, observability, identity, re
           } else if (block.type === 'validation') {
             const value = context.request.body[c.fieldName];
             for (const rule of c.rules) {
-              const valid = rule.type === 'required' ? value !== undefined && value !== '' && (!Array.isArray(value) || value.length > 0) : value === undefined ? true : rule.type === 'email' ? typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) : rule.type === 'minLength' ? typeof value === 'string' && value.length >= Number(rule.value) : rule.type === 'maxLength' ? typeof value === 'string' && value.length <= Number(rule.value) : rule.type === 'min' ? typeof value === 'number' && value >= Number(rule.value) : rule.type === 'max' ? typeof value === 'number' && value <= Number(rule.value) : false;
+              const valid = validationRuleValid(rule, value);
               if (!valid) throw new WorkflowError(400, rule.message || 'Validation failed');
             }
           } else throw new WorkflowError(422, 'Block is not executable: ' + block.type);

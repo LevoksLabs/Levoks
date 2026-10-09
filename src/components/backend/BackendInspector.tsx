@@ -1,4 +1,6 @@
 "use client";
+import { validationChoices } from "@/lib/backend/validation";
+import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { headerContractProblems } from "@/lib/backend/header-contracts";
 import { CORS_METHODS, corsList, corsProblems } from "@/lib/backend/cors";
 
@@ -945,49 +947,180 @@ const ValidationEditor: React.FC<{
       />
     </FieldRow>
     <div className="bi-rules-list">
-      {config.rules.map((rule, idx) => (
-        <div key={idx} className="bi-rule-item">
-          <select
-            className="bi-select bi-select-sm"
-            value={rule.type}
-            onChange={(e) => {
-              const newRules = [...config.rules];
-              newRules[idx] = {
-                ...rule,
-                type: e.target.value as typeof rule.type,
-              };
-              onChange({ rules: newRules });
-            }}
-          >
-            <option value="required">Required</option>
-            <option value="minLength">Min Length</option>
-            <option value="maxLength">Max Length</option>
-            <option value="min">Min Value</option>
-            <option value="max">Max Value</option>
-            <option value="regex">Regex</option>
-            <option value="email">Email</option>
-            <option value="custom">Custom</option>
-          </select>
-          <input
-            className="bi-input bi-input-sm"
-            value={rule.message}
-            onChange={(e) => {
-              const newRules = [...config.rules];
-              newRules[idx] = { ...rule, message: e.target.value };
-              onChange({ rules: newRules });
-            }}
-            placeholder="message"
-          />
-          <button
-            className="bi-remove-field-btn"
-            onClick={() =>
-              onChange({ rules: config.rules.filter((_, i) => i !== idx) })
-            }
-          >
-            <X size={10} />
-          </button>
-        </div>
-      ))}
+      {config.rules.map((rule, idx) => {
+        let choiceError = "";
+        if (isTemporalKind(rule.type))
+          choiceError = temporalConfigError(rule.type, rule.temporal);
+        if (rule.type === "oneOf") {
+          try {
+            validationChoices(rule.value);
+          } catch (error) {
+            choiceError = (error as Error).message;
+          }
+        }
+        return (
+          <div key={idx}>
+            <div className="bi-rule-item">
+              <select
+                className="bi-select bi-select-sm"
+                aria-label={`Rule ${idx + 1} type`}
+                value={rule.type}
+                onChange={(e) => {
+                  const newRules = [...config.rules];
+                  newRules[idx] = {
+                    ...rule,
+                    type: e.target.value as typeof rule.type,
+                    temporal: isTemporalKind(e.target.value)
+                      ? rule.temporal
+                      : undefined,
+                  };
+                  onChange({ rules: newRules });
+                }}
+              >
+                <option value="required">Required</option>
+                <option value="minLength">Min Length</option>
+                <option value="maxLength">Max Length</option>
+                <option value="min">Min Value</option>
+                <option value="max">Max Value</option>
+                <option value="regex">Regex</option>
+                <option value="email">Email</option>
+                <option value="oneOf">Allowed values</option>
+                <option value="accepted">Must be checked</option>
+                <option value="date">Date</option>
+                <option value="time">Time</option>
+                <option value="datetime-local">Local date and time</option>
+                <option value="custom">Custom</option>
+              </select>
+              <button
+                className="bi-remove-field-btn"
+                aria-label={`Remove rule ${idx + 1}`}
+                onClick={() =>
+                  onChange({ rules: config.rules.filter((_, i) => i !== idx) })
+                }
+              >
+                <X size={10} />
+              </button>
+            </div>
+            {isTemporalKind(rule.type) && (
+              <>
+                {(["min", "max", "step", "base"] as const).map((key) => (
+                  <FieldRow
+                    key={key}
+                    label={`Rule ${idx + 1} ${key === "base" ? "initial value" : key}`}
+                  >
+                    <input
+                      className="bi-input"
+                      type={key === "step" ? "text" : rule.type}
+                      step="any"
+                      value={rule.temporal?.[key] || ""}
+                      placeholder={
+                        key === "step"
+                          ? rule.type === "date"
+                            ? "1"
+                            : "60"
+                          : undefined
+                      }
+                      onChange={(e) =>
+                        onChange({
+                          rules: config.rules.map((item, i) =>
+                            i === idx
+                              ? {
+                                  ...item,
+                                  temporal: {
+                                    ...item.temporal,
+                                    [key]: e.target.value,
+                                  },
+                                }
+                              : item,
+                          ),
+                        })
+                      }
+                    />
+                  </FieldRow>
+                ))}
+                <p className="panel-caption">
+                  Step is in {rule.type === "date" ? "days" : "seconds"}, or
+                  any. The minimum sets the step base; otherwise the initial
+                  value does. Blank values are optional; add Required to make
+                  this mandatory. Local values have no timezone.
+                </p>
+              </>
+            )}
+            {!["required", "accepted", "email"].includes(rule.type) &&
+              !isTemporalKind(rule.type) && (
+                <FieldRow
+                  label={
+                    rule.type === "oneOf"
+                      ? `Rule ${idx + 1} allowed values`
+                      : `Rule ${idx + 1} value`
+                  }
+                >
+                  {rule.type === "oneOf" ? (
+                    <textarea
+                      className="bi-textarea"
+                      rows={3}
+                      value={String(rule.value ?? "")}
+                      onChange={(e) =>
+                        onChange({
+                          rules: config.rules.map((item, i) =>
+                            i === idx
+                              ? { ...item, value: e.target.value }
+                              : item,
+                          ),
+                        })
+                      }
+                    />
+                  ) : (
+                    <input
+                      className="bi-input"
+                      value={String(rule.value ?? "")}
+                      onChange={(e) =>
+                        onChange({
+                          rules: config.rules.map((item, i) =>
+                            i === idx
+                              ? { ...item, value: e.target.value }
+                              : item,
+                          ),
+                        })
+                      }
+                    />
+                  )}
+                </FieldRow>
+              )}
+            {rule.type === "oneOf" && (
+              <p className="panel-caption">
+                One allowed text value per line. Multiple selections must use
+                unique values from this list.
+              </p>
+            )}
+            <FieldRow label={`Rule ${idx + 1} message`}>
+              <input
+                className="bi-input"
+                value={rule.message}
+                onChange={(e) =>
+                  onChange({
+                    rules: config.rules.map((item, i) =>
+                      i === idx ? { ...item, message: e.target.value } : item,
+                    ),
+                  })
+                }
+                placeholder="Validation message"
+              />
+            </FieldRow>
+            {choiceError && (
+              <p className="property-error" role="alert">
+                {choiceError}
+              </p>
+            )}
+            {rule.type === "accepted" && (
+              <p className="panel-caption">
+                The submitted value must be true. Use this for a required
+                checkbox or switch.
+              </p>
+            )}
+          </div>
+        );
+      })}
       <button
         className="bi-add-field-btn"
         onClick={() =>

@@ -72,6 +72,38 @@ test("broader and nested form controls persist, reorder, validate and export thr
   await page.getByLabel("Name", { exact: true }).fill("visit_date");
   await page.getByLabel("Label", { exact: true }).fill("Visit date");
   await page.getByLabel("Value", { exact: true }).fill("2026-10-15");
+  await page.getByLabel("Min", { exact: true }).fill("2026-10-15");
+  await page.getByLabel("Max", { exact: true }).fill("2026-10-21");
+  await page.getByLabel("Step", { exact: true }).fill("0");
+  await expect(
+    page.locator(".semantic-properties").getByRole("alert"),
+  ).toContainText("Step");
+  await page.getByLabel("Step", { exact: true }).fill("2");
+  await expect(
+    page.locator(".semantic-properties").getByRole("alert"),
+  ).toHaveCount(0);
+  await add(page, "timeInput", "Time Input", "Form Field");
+  await page.getByLabel("Name", { exact: true }).fill("visit_time");
+  await page.getByLabel("Label", { exact: true }).fill("Visit time");
+  await page.getByLabel("Value", { exact: true }).fill("22:30");
+  await page.getByLabel("Min", { exact: true }).fill("22:00");
+  await page.getByLabel("Max", { exact: true }).fill("02:00");
+  await page.getByLabel("Step", { exact: true }).fill("1800");
+  await add(page, "dateTimeInput", "DateTime Input", "Form Field");
+  await page.getByLabel("Name", { exact: true }).fill("appointment");
+  await page.getByLabel("Label", { exact: true }).fill("Appointment");
+  await page.getByLabel("Min", { exact: true }).fill("2026-10-15T09:15");
+  await page.getByLabel("Max", { exact: true }).fill("2026-10-15T17:15");
+  await page.getByLabel("Step", { exact: true }).fill("1800");
+  await add(page, "checkbox", "Checkbox", "Form Field");
+  await page.getByLabel("Name", { exact: true }).fill("consent");
+  await page.getByLabel("Label", { exact: true }).fill("Accept workshop terms");
+  await page.getByLabel("Required", { exact: true }).check();
+  await add(page, "select", "Select", "Form Field");
+  await page.getByLabel("Name", { exact: true }).fill("followup");
+  await page.getByLabel("Options", { exact: true }).fill("Email\nPhone");
+  await page.getByLabel("Value", { exact: true }).fill("");
+  await page.getByLabel("Label", { exact: true }).fill("Preferred follow-up");
   await selectForm(page);
   const dateLayer = page.getByRole("treeitem", {
     name: "Date Input",
@@ -157,8 +189,136 @@ test("broader and nested form controls persist, reorder, validate and export thr
       .getByLabel("Form value for body.topics", { exact: true })
       .locator("option:checked"),
   ).not.toBeDisabled();
+  const selectValidation = async (name: string) => {
+    await page.getByRole("button", { name: "Backend", exact: true }).click();
+    await page
+      .locator(".backend-block")
+      .filter({
+        has: page.locator(".backend-block-label", {
+          hasText: new RegExp(`^Check ${name}$`),
+        }),
+      })
+      .click();
+  };
+  await selectValidation("topics");
+  const choices = page.getByLabel("Rule 1 allowed values", { exact: true });
+  await expect(choices).toHaveValue("Design\nAutomation\nDatabases");
+  await choices.fill("Design\nDesign");
+  await expect(page.locator(".bi-rules-list").getByRole("alert")).toContainText(
+    "unique",
+  );
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(choices).toHaveValue("Design\nAutomation\nDatabases");
+  await expect(page.locator(".bi-rules-list").getByRole("alert")).toHaveCount(
+    0,
+  );
+  await choices.fill("Databases\nAutomation\nDesign");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(choices).toHaveValue("Design\nAutomation\nDatabases");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(choices).toHaveValue("Databases\nAutomation\nDesign");
+  await page
+    .getByLabel("Rule 1 message", { exact: true })
+    .fill("Choose listed topics.");
+  await page.getByRole("button", { name: "General", exact: true }).click();
+  await mkdir(".verification/form-constraints", { recursive: true });
+  for (const [width, name] of [
+    [1600, "desktop"],
+    [1100, "compact"],
+  ] as const) {
+    await page.setViewportSize({ width, height: 1000 });
+    await choices.scrollIntoViewIfNeeded();
+    expect(
+      await page
+        .locator(".bi-rules-list")
+        .evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+    expect(await choices.evaluate((node) => node.clientHeight >= 60)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: `.verification/form-constraints/inspector-${name}.png`,
+    });
+  }
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await selectValidation("session");
+  await expect(page.getByLabel("Rule 2 value", { exact: true })).toHaveValue(
+    "2000",
+  );
+  await page.getByLabel("Rule 2 value", { exact: true }).fill("80");
+  await selectValidation("consent");
+  await expect(page.getByLabel("Rule 1 type", { exact: true })).toHaveValue(
+    "accepted",
+  );
+  await selectValidation("visit_date");
+  await expect(page.getByLabel("Rule 1 type", { exact: true })).toHaveValue(
+    "date",
+  );
+  await expect(page.getByLabel("Rule 1 min", { exact: true })).toHaveValue(
+    "2026-10-15",
+  );
+  await expect(page.getByLabel("Rule 1 max", { exact: true })).toHaveValue(
+    "2026-10-21",
+  );
+  await page.getByLabel("Rule 1 step", { exact: true }).fill("0");
+  await expect(page.locator(".bi-rules-list").getByRole("alert")).toContainText(
+    "Step",
+  );
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.getByLabel("Rule 1 step", { exact: true })).toHaveValue(
+    "2",
+  );
+  await page
+    .getByLabel("Rule 1 message", { exact: true })
+    .fill("Choose an available visit date.");
+  await mkdir(".verification/temporal", { recursive: true });
+  for (const width of [1600, 1100]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page
+      .getByLabel("Rule 1 min", { exact: true })
+      .scrollIntoViewIfNeeded();
+    expect(
+      await page
+        .locator(".bi-rules-list")
+        .evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: `.verification/temporal/inspector-${width}.png`,
+    });
+  }
+  await page.setViewportSize({ width: 1600, height: 1000 });
   await page.getByRole("button", { name: "Save project", exact: true }).click();
   await page.reload();
+  await selectValidation("topics");
+  await expect(choices).toHaveValue("Databases\nAutomation\nDesign");
+  await expect(page.getByLabel("Rule 1 message", { exact: true })).toHaveValue(
+    "Choose listed topics.",
+  );
+  await selectValidation("session");
+  await expect(page.getByLabel("Rule 2 value", { exact: true })).toHaveValue(
+    "80",
+  );
+  await selectValidation("visit_date");
+  await expect(page.getByLabel("Rule 1 step", { exact: true })).toHaveValue(
+    "2",
+  );
+  await expect(page.getByLabel("Rule 1 message", { exact: true })).toHaveValue(
+    "Choose an available visit date.",
+  );
+  await selectValidation("visit_time");
+  await expect(page.getByLabel("Rule 1 type", { exact: true })).toHaveValue(
+    "time",
+  );
+  await expect(page.getByLabel("Rule 1 max", { exact: true })).toHaveValue(
+    "02:00",
+  );
+  await selectValidation("appointment");
+  await expect(page.getByLabel("Rule 1 type", { exact: true })).toHaveValue(
+    "datetime-local",
+  );
+  await expect(page.getByLabel("Rule 1 min", { exact: true })).toHaveValue(
+    "2026-10-15T09:15",
+  );
   await selectForm(page);
   await page.getByRole("button", { name: "Edit Topics", exact: true }).click();
   await expect(page.getByLabel("Selected Values", { exact: true })).toHaveValue(
@@ -217,11 +377,22 @@ test("broader and nested form controls persist, reorder, validate and export thr
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.getByRole("button", { name: "Preview", exact: true }).click();
   const frame = page.frameLocator('iframe[title="Generated frontend preview"]');
+  await expect(frame.getByLabel("Visit date", { exact: true })).toHaveAttribute(
+    "step",
+    "2",
+  );
+  await expect(frame.getByLabel("Visit time", { exact: true })).toHaveValue(
+    "22:30",
+  );
+  await expect(
+    frame.getByLabel("Appointment", { exact: true }),
+  ).toHaveAttribute("min", "2026-10-15T09:15");
   await expect(frame.getByLabel("Topics", { exact: true })).toHaveValues([
     "Design",
     "Automation",
   ]);
   await frame.getByLabel("In person", { exact: true }).check();
+  await frame.getByLabel("Accept workshop terms", { exact: true }).check();
   await expect(frame.getByLabel("Remote", { exact: true })).not.toBeChecked();
   await frame
     .getByPlaceholder("Your name", { exact: true })

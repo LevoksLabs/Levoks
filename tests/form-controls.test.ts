@@ -23,6 +23,7 @@ import { compatibleFormField } from "../src/lib/contracts";
 import { formValueRuntime } from "../src/lib/codegen/form-values";
 import { generateServiceCode } from "../src/lib/codegen/express";
 import { useBackendStore } from "../src/store/backendStore";
+import type { ValidationConfig } from "../src/types/backend";
 
 test("nested radio groups and multiple selections retain field identities, compatible mappings and required validation", () => {
   const project = emptyProject();
@@ -199,6 +200,11 @@ test("nested radio groups and multiple selections retain field identities, compa
   );
   for (const block of legacyService.blocks)
     block.connections = block.connections.filter((id) => !validations.has(id));
+  for (const block of legacyService.blocks)
+    if (block.type === "validation") {
+      const config = block.config as ValidationConfig;
+      config.rules = config.rules.filter(rule => rule.type === "required");
+    }
   const files = generateServiceCode(legacyService);
   const exports: {
     validateRules?: (
@@ -263,6 +269,7 @@ test("native values select the checked radio, preserve zero/false and omit disab
   assert.equal(run({ type: "number", value: "0", valueAsNumber: 0 }), 0);
   assert.equal(run({ type: "checkbox", checked: false }), false);
   assert.equal(run({ type: "number", value: "" }), undefined);
+  assert.equal(run({ tagName: "SELECT", value: "", required: false }), undefined);
   assert.equal(run({ value: "hidden", matches: () => true }), undefined);
   assert.throws(
     () => run({ type: "number", value: "oops", valueAsNumber: NaN }),

@@ -240,6 +240,7 @@ export function resolveGraph(input: GraphResolverInput): FlowGraph {
                   fieldName: config.fieldName,
                   ruleType: r.type,
                   value: r.value,
+                  ...(r.temporal ? {temporal: r.temporal} : {}),
                   message: r.message,
                 })),
                 blockId: block.id,
