@@ -119,6 +119,13 @@ export function nativeTree(element: ElementNode): SemanticTree {
     ]);
   }
   const children: SemanticTree[] = [];
+  if (d.tag === "fieldset") {
+    delete attrs.required;
+    if (p.legend) {
+      children.push(node("legend", {}, [String(p.legend)]));
+      if (!element.accessibility?.label) delete attrs["aria-label"];
+    }
+  }
   if (d.generate === "dialog") {
     attrs["data-levoks-dialog"] = "true";
     children.push(

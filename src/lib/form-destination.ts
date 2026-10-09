@@ -78,6 +78,10 @@ export function submissionFields(
       return true;
     });
   const problems: string[] = [];
+  for (const group of controls.filter(node => node.definitionId === "radioGroup" && node.props.required && !node.props.disabled)) {
+    if (!formControls(group.id, elements).some(node => isFormInput(node) && !node.props.disabled && String(node.props.inputType || node.props.type) === "radio"))
+      problems.push(`${group.props.legend || group.label || "Radio group"}: add at least one enabled radio choice for this required field.`);
+  }
   if (!inputs.length)
     problems.push("Add at least one enabled input to this form.");
   if (inputs.length > 200)

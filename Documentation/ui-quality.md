@@ -1,5 +1,9 @@
 # Editor quality audit and verification
 
+## Visual radio-group authoring — 10 October 2026
+
+Radio Group Content uses labelled question/name/choice inputs, explicit Apply for drafts, default/disabled checkboxes and native Add/Up/Down/Remove buttons with the existing inspector tokens. Invalid edits show inline recovery without partial changes. Rename/reorder/removal restores row focus; applying a field name keeps button focus. Questions render as visible native legends, and browser arrows skip disabled radios. Content growth preserves wrapped labels and group/form bounds at 320/768/1024/1440px. Real history/save/reload/preview/export and production recovery/storage paths are verified; desktop/compact/mobile screenshots were reviewed. Mixed content and linked structures explain how to continue. Broader screen-reader/touch and catalog-wide acceptance remain open.
+
 ## Submission attachments — 9 October 2026
 
 File Upload Content exposes labelled maximum size and allowed extensions, inline invalid-configuration recovery, Required and native selection behavior. Backend Validation exposes byte limits, extensions and messages with undo/save/reload. Existing editor tokens and native controls retain visible focus; desktop/compact inspector containment passes. Actual generated forms retain file and sibling bounds at 320/768/1024/1440px, preserve selection on failed saves and clear it after success. Private inbox download buttons show filenames/sizes, hide denied records and remain keyboard reachable in the mobile table scroll region. Reviewed inspector/form/inbox screenshots appear in the completion matrix. Whole-editor screen-reader/touch and whole-catalog responsiveness remain open.

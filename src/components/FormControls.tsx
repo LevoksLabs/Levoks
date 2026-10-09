@@ -27,6 +27,7 @@ const choices = [
   "checkbox",
   "switch",
   "radioButton",
+  "radioGroup",
   "fileUpload",
   "formField",
 ];
@@ -63,12 +64,12 @@ export default function FormControls({ form }: { form: ElementNode }) {
         ...template,
         props: {
           ...template.props,
-          ...(!choice && kind !== "formField" ? { label: template.label } : {}),
+          ...(!choice && !["formField", "radioGroup"].includes(kind) ? { label: template.label } : {}),
         },
         styles: {
           ...template.styles,
           width: "100%",
-          ...(kind === "formField" ? { height: "auto" } : {}),
+          ...(["formField", "radioGroup"].includes(kind) ? { height: "auto" } : {}),
         },
         layout: {
           ...template.layout,
@@ -79,7 +80,7 @@ export default function FormControls({ form }: { form: ElementNode }) {
             ? 36
             : ["textarea", "multiSelect"].includes(kind)
               ? 156
-              : kind === "formField"
+              : ["formField", "radioGroup"].includes(kind)
                 ? 140
                 : 84,
         },

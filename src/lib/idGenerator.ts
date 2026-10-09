@@ -110,6 +110,12 @@ export function deepCloneSubtree(
             parentId,
             children: newChildIds,
         };
+        if (el.definitionId === "radioGroup" && el.props.name) {
+            const name = `choice_${newId}`;
+            allCloned[newId].props = {...el.props, name};
+            for (const childId of newChildIds) if (allCloned[childId].definitionId === "radioButton")
+                allCloned[childId].props = {...allCloned[childId].props, name};
+        }
 
         return newId;
     }

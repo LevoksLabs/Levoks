@@ -343,7 +343,7 @@ native(
   "Radio Group",
   "Form / Inputs",
   "fieldset",
-  { ariaLabel: "Choose an option" },
+  { ariaLabel: "Choose an option", name: "", legend: "Choose an option", required: false, disabled: false },
   box,
   true,
   "tag",

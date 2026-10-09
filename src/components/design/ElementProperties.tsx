@@ -8,6 +8,7 @@ import { isTextInput, textLimits, textConfigError, textFormats } from "@/lib/bac
 import { ParameterControl } from "./ParameterControl";
 import SelectOptionsEditor from "./SelectOptionsEditor";
 import { fileLimits, fileConfigError } from "@/lib/backend/files";
+import RadioGroupEditor from "./RadioGroupEditor";
 
 export default function ElementProperties({
   element,
@@ -158,7 +159,8 @@ export default function ElementProperties({
             {Object.entries(fields)
               .filter(
                 ([key]) =>
-                  (key !== "type" || element.type === "button") &&
+                    (key !== "type" || element.type === "button") &&
+                    !(definition?.id === "radioGroup" && ["name", "legend", "required"].includes(key)) &&
                   !(fileInput && ["maxFileKB", "accept"].includes(key)) &&
                   !(element.type === "native" && definition?.tag === "select" && ["options", "value", "selectedValues"].includes(key)) &&
                   !(textInput && ["pattern", "minLength", "maxLength"].includes(key)) &&
@@ -222,7 +224,8 @@ export default function ElementProperties({
                   )}
                 </label>
               ))}
-            {element.type === "native" && definition?.tag === "select" && <SelectOptionsEditor key={element.id} element={element}/>}
+              {element.type === "native" && definition?.tag === "select" && <SelectOptionsEditor key={element.id} element={element}/>}
+              {definition?.id === "radioGroup" && <RadioGroupEditor key={element.id} element={element}/>}
             {fileInput && <>
               <label><span>Maximum file size (KiB)</span><input aria-label="Maximum file size (KiB)" type="number" min={1} max={256} step={1} value={Number(element.props.maxFileKB ?? 256)} onChange={e=>set("maxFileKB",Number(e.target.value))}/></label>
               <label><span>Allowed file extensions</span><input aria-label="Allowed file extensions" value={String(element.props.accept || "")} placeholder="Any, or .pdf, .png, .txt" onChange={e=>set("accept",e.target.value)}/></label>

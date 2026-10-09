@@ -1,5 +1,23 @@
 # Levoks completion matrix
 
+## Visual radio-group authoring — 2026-10-10
+
+Form Content can add Radio Group, and native group Content now edits the question, shared field name, Required, labels, distinct submitted values, disabled choices and a single default. Add/Apply/Remove/Up/Down use ordinary native radio children and existing history. Invalid names, collisions, duplicate/blank/multiline values, oversized labels, locked choices and linked component structure fail without partial document changes. Empty unconnected groups expose Add. Copied authored groups get independent names. A mapped choice can be removed using another enabled child as its source while preserving the backend field identity; removing its last enabled source requires disconnecting or remapping first.
+
+Visible questions render as native fieldset legends. Required applies to inputs, rather than an invalid fieldset attribute. Groups without an explicitly authored height grow around their choices while retaining their minimum; new choice rows grow for wrapped labels. The existing generated form serializer and allowed-value/Required server rules execute the submitted values. Backend schemas/rules remain creation-time snapshots and need review after changes.
+
+Acceptance: 148 unit tests pass, TypeScript passes and lint has zero errors (49 existing warnings). Eight distinct browser cases cover two real drag/drop group workflows plus existing broader forms, guided destinations and attachments. The main group journey verifies differing labels/values, duplicate/name recovery, defaults, disabling, keyboard reorder/focus, removal of the mapped source, undo/redo, completed save/reload, preview and exact real ZIP parity. A direct tray group verifies growth/containment in both canvas and generated preview. Initial harness assertions compared zoomed physical pixels to CSS height and attempted to click an intentionally disabled collection action; corrected assertions measure unscaled layout and check the disabled action/visible warning. Both group journeys were rerun successfully. Desktop/compact screenshots use existing inspector tokens and were reviewed.
+
+All 39 downloaded files match the final compiler and refreshed production fixture. Generated Next and Express builds pass. Actual production Next/Express/MongoDB execution verifies native Required, arrow navigation past disabled choices, storage of values rather than labels through the repaired mapping, seven forged/wrong-type/disabled submissions without writes, native reset/defaults, optional omission, outage/restart/retry and reload. Form/group containment, sibling non-overlap and wrapped-label bounds pass at 320/768/1024/1440px. Editor production build, after-build typecheck and private-output packaging checks pass.
+
+Evidence under `.verification/`: `radio-unit-final.log`, `radio-check-last.log`, `radio-browser-final.log`, `radio-browser-last.log`, `radio-refresh-final.log`, `radio-front-build-final.log`, `radio-back-build-final.log`, `radio-runtime-final.log`, `radio-editor-build-last.log`, `radio-typecheck-final.log`, `radio-packaging-final.log` and `radio-parity-final.log`. Required empty/all-disabled groups also fail guided creation before any backend mutation, verified by unit and final browser recovery checks. Reproduce the group authoring/export/runtime path with `npm run test:radio-export`. All execution remains local.
+
+![Visual radio-group choices](audit-2026-10-08/radio-inspector.png)
+![Compact radio-group inspector](audit-2026-10-08/radio-compact.png)
+![Generated mobile radio groups](audit-2026-10-08/radio-production-mobile.png)
+
+UX11/UX24/SEM05 remain PARTIAL. [Radio-group contracts](fullstack-contracts.md#visual-radio-group-authoring) limit the composite editor to direct native radio children. Mixed/nested content, reusable-component structural overrides, conditional forms, multi-choice checkbox composites, select label/value separation, general nested geometry, complete site starters and catalog-wide accessibility acceptance remain. Point 4 continues; points 5–6 retain their documented internal/provider work.
+
 ## Submission attachments — 2026-10-09
 
 Native File Upload now authors a size limit and comma-separated extensions, with inline configuration errors. Guided collections support one enabled attachment field and one file, up to 256 KiB. Creation snapshots an ordinary editable Submission attachment validation rule and an object/body mapping. Required remains separate; optional empty file inputs are omitted. Strict shared validation checks filename, canonical encoded bytes, exact size and extension before saving bytes atomically with the submission. Successful reset clears selection; read/request failures preserve it for retry.
