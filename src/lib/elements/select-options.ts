@@ -1,6 +1,12 @@
 import { validationChoices } from "@/lib/backend/validation";
 
-export type SelectChoice = { value: string; label: string; disabled: boolean };
+export type SelectChoice = {
+  value: string;
+  label: string;
+  disabled: boolean;
+  group?: string;
+  groupDisabled?: boolean;
+};
 
 /** Old documents have no label list: their display text remains their value. */
 export function selectChoices(props: Record<string, unknown>): SelectChoice[] {
@@ -12,6 +18,14 @@ export function selectChoices(props: Record<string, unknown>): SelectChoice[] {
       .split("\n")
       .filter(Boolean),
   );
+  const groups = props.optionGroups
+    ? String(props.optionGroups).split("\n")
+    : [];
+  const disabledGroups = new Set(
+    String(props.disabledGroups || "")
+      .split("\n")
+      .filter(Boolean),
+  );
   return String(props.options || "")
     .split("\n")
     .filter(Boolean)
@@ -19,21 +33,80 @@ export function selectChoices(props: Record<string, unknown>): SelectChoice[] {
       value,
       label: labels[index] ?? value,
       disabled: disabled.has(value),
+      ...(groups.length
+        ? {
+            group: groups[index] || "",
+            groupDisabled: disabledGroups.has(groups[index]),
+          }
+        : {}),
     }));
 }
 
 /** Validate optional metadata at the import/compiler boundary, including component definitions. */
 export function validateSelectMetadata(props: Record<string, unknown>) {
   const choices = selectChoices(props);
-  if (props.optionLabels || props.disabledValues) {
+  if (
+    props.optionLabels ||
+    props.disabledValues ||
+    props.optionGroups ||
+    props.disabledGroups
+  ) {
     validationChoices(props.options);
     if (choices.some((choice) => !choice.value.trim()))
       throw new Error("Each choice needs a nonempty, single-line value.");
     const selected = props.multiple
-      ? String(props.selectedValues || "").split("\n").filter(Boolean)
+      ? String(props.selectedValues || "")
+          .split("\n")
+          .filter(Boolean)
       : [String(props.value || "")].filter(Boolean);
-    if (new Set(selected).size !== selected.length || selected.some(value => !choices.some(choice => choice.value === value)))
-      throw new Error("Default selections must be unique and exist in the choices.");
+    if (
+      new Set(selected).size !== selected.length ||
+      selected.some(
+        (value) => !choices.some((choice) => choice.value === value),
+      )
+    )
+      throw new Error(
+        "Default selections must be unique and exist in the choices.",
+      );
+  }
+  if (
+    props.optionGroups &&
+    (String(props.optionGroups).split("\n").length !== choices.length ||
+      String(props.optionGroups).length > 10000 ||
+      choices.some(
+        (choice) =>
+          choice.group &&
+          (!choice.group.trim() ||
+            /[\r\n]/.test(choice.group) ||
+            choice.group.length > 100),
+      ))
+  )
+    throw new Error(
+      "Provide one group entry per choice; leave ungrouped entries blank. Group names must be single lines, at most 100 characters each and 10,000 in total.",
+    );
+  if (props.disabledGroups) {
+    const disabled = validationChoices(props.disabledGroups);
+    if (
+      disabled.some(
+        (group) => !choices.some((choice) => choice.group === group),
+      )
+    )
+      throw new Error("Disabled groups must exist in the choices.");
+    const selected = props.multiple
+      ? String(props.selectedValues || "")
+          .split("\n")
+          .filter(Boolean)
+      : [String(props.value || "")];
+    if (
+      selected.some((value) =>
+        choices.some(
+          (choice) => choice.value === value && choice.groupDisabled,
+        ),
+      )
+    )
+      throw new Error(
+        "A choice in a disabled group cannot be selected by default. Clear its default or enable the group.",
+      );
   }
   if (props.optionLabels) {
     const labels = String(props.optionLabels).split("\n");
@@ -90,8 +163,29 @@ export function selectChoiceProps(
     throw new Error(
       "Each choice needs a nonempty, single-line display label, at most 200 characters each and 10,000 in total.",
     );
+  const groupNames = choices.map((choice) => choice.group || "");
+  if (
+    groupNames.some(
+      (group) =>
+        group && (!group.trim() || /[\r\n]/.test(group) || group.length > 100),
+    ) ||
+    groupNames.join("\n").length > 10000
+  )
+    throw new Error(
+      "Group names must be nonempty single lines of at most 100 characters, or blank for ungrouped choices; at most 10,000 characters in total.",
+    );
+  const disabledGroups = String(props.disabledGroups || "")
+    .split("\n")
+    .filter(Boolean);
+  if (disabledGroups.length) validationChoices(disabledGroups.join("\n"));
+  const retainedGroups = disabledGroups.filter((group) =>
+    groupNames.includes(group),
+  );
   const enabled = choices
-    .filter((choice) => !choice.disabled)
+    .filter(
+      (choice) =>
+        !choice.disabled && !retainedGroups.includes(choice.group || ""),
+    )
     .map((choice) => choice.value);
   const remap = (value: string) =>
     rename && value === rename[0] ? rename[1] : value;
@@ -102,6 +196,14 @@ export function selectChoiceProps(
       .filter((choice) => choice.disabled)
       .map((choice) => choice.value)
       .join("\n"),
+    ...(groupNames.some(Boolean) ||
+    props.optionGroups !== undefined ||
+    props.disabledGroups !== undefined
+      ? {
+          optionGroups: groupNames.some(Boolean) ? groupNames.join("\n") : "",
+          disabledGroups: retainedGroups.join("\n"),
+        }
+      : {}),
   };
   if (props.multiple)
     return {
@@ -127,7 +229,12 @@ export function selectOptionProps(
   options: string[],
   rename?: readonly [string, string],
 ): Record<string, string> {
-  if (!props.optionLabels && !props.disabledValues) {
+  if (
+    !props.optionLabels &&
+    !props.disabledValues &&
+    !props.optionGroups &&
+    !props.disabledGroups
+  ) {
     if (options.some((value) => !value || /[\r\n]/.test(value)))
       throw new Error("Each choice needs a nonempty, single-line value.");
     if (options.length) validationChoices(options.join("\n"));
@@ -165,6 +272,7 @@ export function selectOptionProps(
         value,
         label: old && props.optionLabels ? old.label : value,
         disabled: old?.disabled || false,
+        ...(old?.group !== undefined ? { group: old.group } : {}),
       };
     }),
     rename,

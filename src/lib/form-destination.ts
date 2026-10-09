@@ -153,7 +153,7 @@ export function submissionFields(
     if (definitionFor(input)?.tag === "select") {
       try { validateSelectMetadata(input.props); }
       catch (error) { problems.push(`${input.label || name}: ${(error as Error).message}`); }
-      choices = selectChoices(input.props).filter(choice => !choice.disabled).map(choice => choice.value).join("\n");
+      choices = selectChoices(input.props).filter(choice => !choice.disabled && !choice.groupDisabled).map(choice => choice.value).join("\n");
     }
     if (inputType === "radio") {
       const members = controls.filter(

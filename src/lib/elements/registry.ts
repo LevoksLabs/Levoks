@@ -330,6 +330,8 @@ for (const [id, name, multiple] of [
       options: "Option one\nOption two\nOption three",
       optionLabels: "",
       disabledValues: "",
+      optionGroups: "",
+      disabledGroups: "",
       multiple,
       required: false,
       disabled: false,

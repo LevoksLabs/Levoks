@@ -45,13 +45,21 @@ async function addSelect(
       .getByRole("button", { name: "Remove choice 1", exact: true })
       .click();
 }
-async function addChoice(page: Page, value: string, label: string) {
+async function addChoice(page: Page, value: string, label: string, group = "") {
   await page.getByLabel("New choice", { exact: true }).fill(value);
   await page.getByLabel("New choice label", { exact: true }).fill(label);
+  await page.getByLabel("New choice group", { exact: true }).fill(group);
   await page.getByRole("button", { name: "Add choice", exact: true }).click();
 }
 
-test("select labels, disabled options and defaults survive visual edits, text lists, history, reload, preview and the actual ZIP", async ({
+async function assignGroup(page: Page, index: number, group: string) {
+  await page.getByLabel(`Choice ${index} group`, { exact: true }).fill(group);
+  await page
+    .getByRole("button", { name: `Apply choice ${index}`, exact: true })
+    .click();
+}
+
+test("select labels, option groups, disabled options and defaults survive visual edits, text lists, history, reload, preview and the actual ZIP", async ({
   page,
 }) => {
   test.setTimeout(150000);
@@ -167,6 +175,54 @@ test("select labels, disabled options and defaults survive visual edits, text li
   await page
     .getByRole("button", { name: "Apply text lists", exact: true })
     .click();
+  await assignGroup(page, 1, "Unavailable");
+  await assignGroup(page, 2, "Schedule");
+  await assignGroup(page, 3, "Schedule");
+  await page.getByLabel("Disable choice: closed", { exact: true }).uncheck();
+  await page.getByLabel("Disable group: Unavailable", { exact: true }).check();
+  await page.getByLabel("Choice 1 group", { exact: true }).fill(" ");
+  await page
+    .getByRole("button", { name: "Apply choice 1", exact: true })
+    .click();
+  await expect(
+    page.locator(".select-options-editor").getByRole("alert"),
+  ).toContainText("Group names");
+  await page.getByLabel("Choice 1 group", { exact: true }).fill("Unavailable");
+  await page.getByLabel("Options", { exact: true }).fill("pm\nmorning\nclosed");
+  await page
+    .getByRole("button", { name: "Apply text lists", exact: true })
+    .click();
+  await expect(page.getByLabel("Choice 1 group", { exact: true })).toHaveValue(
+    "Schedule",
+  );
+  await expect(page.getByLabel("Choice 3 group", { exact: true })).toHaveValue(
+    "Unavailable",
+  );
+  await expect(
+    page.getByLabel("Disable group: Unavailable", { exact: true }),
+  ).toBeChecked();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.getByLabel("Choice 1 group", { exact: true })).toHaveValue(
+    "Unavailable",
+  );
+  await page.getByLabel("Disable group: Schedule", { exact: true }).check();
+  await expect(
+    page.getByLabel("Default: morning", { exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByLabel("Default: morning", { exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(
+    page.getByLabel("Default: morning", { exact: true }),
+  ).toBeChecked();
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await page.getByLabel("Disable group: Schedule", { exact: true }).uncheck();
+  await expect(
+    page.getByLabel("Default: morning", { exact: true }),
+  ).not.toBeChecked();
+  await page.getByLabel("Default: morning", { exact: true }).check();
+
   await addSelect(page, "multiSelect", "topics", "Project topics");
   await page.getByLabel("Required", { exact: true }).check();
   for (const [value, label] of [
@@ -185,11 +241,22 @@ test("select labels, disabled options and defaults survive visual edits, text li
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.getByLabel("Default: data", { exact: true })).toBeChecked();
   await page.getByLabel("Disable choice: closed", { exact: true }).check();
+  await assignGroup(page, 1, "Creative");
+  await assignGroup(page, 2, "Creative");
+  await assignGroup(page, 4, "Unavailable");
+  await page.getByLabel("Disable choice: closed", { exact: true }).uncheck();
+  await page.getByLabel("Disable group: Unavailable", { exact: true }).check();
+  await page.getByLabel("Disable group: Creative", { exact: true }).check();
+  await expect(
+    page.getByLabel("Default: design", { exact: true }),
+  ).not.toBeChecked();
+  await expect(page.getByLabel("Default: data", { exact: true })).toBeChecked();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
   await mkdir(".verification/select-metadata", { recursive: true });
   for (const width of [1600, 1100]) {
     await page.setViewportSize({ width, height: 1000 });
     await page
-      .getByLabel("Choice 1 label", { exact: true })
+      .getByLabel("Disable group: Creative", { exact: true })
       .scrollIntoViewIfNeeded();
     expect(
       await page
@@ -197,14 +264,19 @@ test("select labels, disabled options and defaults survive visual edits, text li
         .evaluate((node) => node.scrollWidth <= node.clientWidth),
     ).toBe(true);
     await page.screenshot({
-      path: `.verification/select-metadata/inspector-${width}.png`,
+      path: `.verification/select-metadata/groups-inspector-${width}.png`,
     });
   }
   await page.setViewportSize({ width: 1600, height: 1000 });
   await addSelect(page, "select", "followup", "Preferred follow-up");
-  await addChoice(page, "call", "Call to discuss the project and next steps");
-  await addChoice(page, "closed", "Follow-up unavailable");
-  await page.getByLabel("Disable choice: closed", { exact: true }).check();
+  await addChoice(
+    page,
+    "call",
+    "Call to discuss the project and next steps",
+    "Support",
+  );
+  await addChoice(page, "closed", "Follow-up unavailable", "Unavailable");
+  await page.getByLabel("Disable group: Unavailable", { exact: true }).check();
   await selectForm(page);
   await page
     .getByLabel("Collection name", { exact: true })
@@ -231,10 +303,31 @@ test("select labels, disabled options and defaults survive visual edits, text li
     "Morning visit",
   );
   await expect(
-    page.getByLabel("Disable choice: closed", { exact: true }),
+    page.getByLabel("Disable group: Unavailable", { exact: true }),
   ).toBeChecked();
+  await expect(
+    page.getByLabel("Disable choice: closed", { exact: true }),
+  ).not.toBeChecked();
+  await expect(page.getByLabel("Choice 2 group", { exact: true })).toHaveValue(
+    "Schedule",
+  );
   await page.getByRole("button", { name: "Preview", exact: true }).click();
   const frame = page.frameLocator('iframe[title="Generated frontend preview"]');
+  await expect(
+    frame
+      .getByLabel("Appointment session", { exact: true })
+      .locator("optgroup"),
+  ).toHaveCount(2);
+  await expect(
+    frame
+      .getByLabel("Project topics", { exact: true })
+      .locator('optgroup[label="Creative"]'),
+  ).toHaveCount(1);
+  await expect(
+    frame
+      .getByLabel("Project topics", { exact: true })
+      .locator('optgroup[label="Unavailable"]'),
+  ).toHaveAttribute("disabled", "");
   await expect(
     frame.getByLabel("Appointment session", { exact: true }),
   ).toHaveValue("morning");

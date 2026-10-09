@@ -1,5 +1,23 @@
 # Levoks completion matrix
 
+## Native select option groups — 2026-10-10
+
+Select and Multiple Select choices now expose an optional Group in Add and Apply rows. Group names produce native optgroup headings; a single checkbox disables all runs of that named group. Disabling clears affected defaults atomically, prevents selecting them as defaults and retains each choice's separate Disabled setting. Re-enabling does not silently restore cleared defaults. Assignments follow values through rename, reorder, removal, bulk lists, history and completed save/reload; removed groups lose their disabled metadata. Ungrouped choices remain ordinary options, and authored order is preserved. Adjacent matching names share a heading; separated runs intentionally render another heading rather than moving choices silently.
+
+Optional newline `optionGroups` metadata aligns with option values, retaining blank entries for ungrouped choices. `disabledGroups` contains existing unique group names. Names are single lines of at most 100 UTF-16 units, with at most 10,000 characters per list. Invalid alignment, whitespace-only/oversized names, unknown/duplicate disabled groups and disabled-group defaults fail import/compiler validation, including reusable definitions. No new element, dependency or saved-project migration is added. Native HTML defaults now also select options inside groups, matching the shared React/canvas tree.
+
+Acceptance: all 152 unit tests, TypeScript and lint pass (zero errors; 49 existing warnings). Four browser cases pass: the expanded actual drag/drop select journey and existing broader forms plus both radio journeys. Group assignment/error recovery, bulk reorder retention, disabling/default clearing, undo/redo, re-enabling, desktop/compact containment, completed save/reload, frontend preview and actual ZIP parity are verified. All 39 downloaded files match the final compiler and production fixture; generated Next/Express builds and final editor production build pass, as do after-build typecheck and private-output packaging checks.
+
+Actual downloaded production Next/Express/MongoDB execution verifies native optgroups with disabled parents and enabled child attributes, grouped/ungrouped default selection, Required and keyboard navigation past disabled groups, scalar/array storage of submitted values, fifteen forged/wrong-type/label/disabled submissions without writes, native reset, optional omission, visible disabled-selection recovery, outage/restart/retry and reload. Four-width form containment/non-overlap passes at 320/768/1024/1440px. Desktop/compact/mobile screenshots were reviewed. New guided collections exclude values in disabled groups; existing backend models/rules and routing identities remain unchanged after later edits and require explicit rule review. All-disabled collections fail before backend mutation.
+
+Evidence under `.verification/`: `optgroups-unit.log`, `optgroups-check-final.log`, `optgroups-browser.log`, `optgroups-refresh.log`, `optgroups-front-build.log`, `optgroups-back-build.log`, `optgroups-runtime.log`, `optgroups-editor-build.log`, `optgroups-typecheck-final.log`, `optgroups-packaging.log` and `optgroups-parity.log`. `npm run test:select-metadata-export` now reproduces the expanded grouped workflow. The initial lint check caught an unescaped apostrophe in new help text; it was corrected before the passing full check. All execution remains local.
+
+![Native group settings and choice assignment](audit-2026-10-08/select-groups-inspector.png)
+![Compact group inspector](audit-2026-10-08/select-groups-compact.png)
+![Generated grouped mobile form](audit-2026-10-08/select-groups-mobile.png)
+
+UX11/UX24/SEM05 remain PARTIAL. Conditional forms, multi-checkbox composites, whole-group editing shortcuts, reusable-component structure, general nested geometry, complete site starters and catalog-wide screen-reader/touch acceptance remain. Point 4 continues; points 5–6 retain their documented work. See [group contracts](fullstack-contracts.md#native-select-option-groups).
+
 ## Select display labels and disabled choices — 2026-10-10
 
 Native Select and Multiple Select Content now separates display labels from submitted values and exposes per-choice Disabled. Defaults remain attached to values through label/value edits, reorder, removal and undo/redo. Disabling clears a choice's default and makes its default checkbox unavailable. Duplicate display labels are permitted; submitted values must be unique. Old documents without optional metadata retain their original text/value rendering. Bulk text edits are drafts until Apply text lists: unchanged values retain labels/disabled state and invalid defaults fail visibly without partial writes.

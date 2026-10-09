@@ -1,5 +1,9 @@
 # Editor quality audit and verification
 
+## Native select groups — 10 October 2026
+
+Group assignment uses labelled optional inputs in existing choice rows and Add. Group disabling uses one accessible checkbox per name, native fieldset/legend semantics and existing inspector tokens. Defaults clear on disabling and remain cleared on enabling; undo/redo preserves recovery. Invalid edits retain the document and explain how to repair the assignment. Real browser authoring/reload/preview/export and production grouped defaults, keyboard/storage/retry/reset pass. Desktop/compact inspector and mobile/desktop generated screenshots were reviewed; form bounds pass at 320/768/1024/1440px. Adjacent runs preserve order without silently moving choices. Whole-group shortcuts, touch-picker and whole-catalog screen-reader acceptance remain open.
+
 ## Select labels and disabled choices — 10 October 2026
 
 Select choice rows now use labelled submitted-value/display-label inputs, explicit Apply and disabled/default checkboxes with existing inspector tokens. Disabling clears the default and prevents selecting it again. Native reorder/removal restores focus, and text-list drafts validate before an atomic Apply. Errors preserve the document and expose recovery. Actual drag/drop/history/reload/preview/export and production keyboard/Required/storage/retry/reset pass; form containment/non-overlap passes at 320/768/1024/1440px. Desktop/compact inspector and mobile/desktop generated screenshots were reviewed. Native touch-picker and whole-catalog screen-reader acceptance remain open.

@@ -31,6 +31,7 @@ function ChoiceRow({
 }) {
   const [value, setValue] = useState(choice.value);
   const [label, setLabel] = useState(choice.label);
+  const [group, setGroup] = useState(choice.group || "");
   return (
     <li className="select-choice-row">
       <label>
@@ -51,11 +52,24 @@ function ChoiceRow({
           maxLength={200}
         />
       </label>
+      <label>
+        <span>Group (optional)</span>
+        <input
+          aria-label={`Choice ${index + 1} group`}
+          value={group}
+          onChange={(e) => setGroup(e.target.value)}
+          maxLength={100}
+        />
+      </label>
       <button
         type="button"
         className="insp-form-add-btn"
-        disabled={value === choice.value && label === choice.label}
-        onClick={() => onEdit({ ...choice, value, label })}
+        disabled={
+          value === choice.value &&
+          label === choice.label &&
+          group === (choice.group || "")
+        }
+        onClick={() => onEdit({ ...choice, value, label, group })}
       >
         Apply choice {index + 1}
       </button>
@@ -64,7 +78,7 @@ function ChoiceRow({
           type="checkbox"
           aria-label={`Default: ${choice.value}`}
           checked={selected}
-          disabled={choice.disabled}
+          disabled={choice.disabled || choice.groupDisabled}
           onChange={(e) => onDefault(e.target.checked)}
         />
         <span>Selected by default</span>
@@ -209,18 +223,119 @@ function TextLists({
   );
 }
 
+function AddChoice({
+  onAdd,
+  disabled,
+}: {
+  onAdd: (choice: SelectChoice) => boolean;
+  disabled: boolean;
+}) {
+  const [value, setValue] = useState("");
+  const [label, setLabel] = useState("");
+  const [group, setGroup] = useState("");
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <label>
+        <span>New submitted value</span>
+        <input
+          ref={input}
+          aria-label="New choice"
+          value={value}
+          maxLength={10000}
+          onChange={(e) => setValue(e.target.value)}
+        />
+      </label>
+      <label>
+        <span>Display label (optional)</span>
+        <input
+          aria-label="New choice label"
+          value={label}
+          maxLength={200}
+          onChange={(e) => setLabel(e.target.value)}
+        />
+      </label>
+      <label>
+        <span>Group (optional)</span>
+        <input
+          aria-label="New choice group"
+          value={group}
+          maxLength={100}
+          onChange={(e) => setGroup(e.target.value)}
+        />
+      </label>
+      <button
+        type="button"
+        className="insp-form-add-btn"
+        disabled={disabled}
+        onClick={() => {
+          if (onAdd({ value, label: label || value, group, disabled: false })) {
+            setValue("");
+            setLabel("");
+            setGroup("");
+            input.current?.focus();
+          }
+        }}
+      >
+        Add choice
+      </button>
+    </>
+  );
+}
+
+function SelectGroups({
+  choices,
+  disabled,
+  onDisable,
+}: {
+  choices: SelectChoice[];
+  disabled: string[];
+  onDisable: (group: string, checked: boolean) => void;
+}) {
+  const groups = [
+    ...new Set(
+      choices
+        .map((choice) => choice.group)
+        .filter((group): group is string => Boolean(group)),
+    ),
+  ];
+  return (
+    groups.length > 0 && (
+      <fieldset>
+        <legend>Option groups</legend>
+        <p className="panel-caption">
+          Adjacent choices with the same group share a heading. Leave the group
+          blank to keep it ungrouped. Disabling a group clears its defaults;
+          review connected backend rules.
+        </p>
+        {groups.map((group) => (
+          <label className="select-choice-default" key={group}>
+            <input
+              type="checkbox"
+              aria-label={`Disable group: ${group}`}
+              checked={disabled.includes(group)}
+              onChange={(e) => onDisable(group, e.target.checked)}
+            />
+            <span>Disable {group}</span>
+          </label>
+        ))}
+      </fieldset>
+    )
+  );
+}
+
 export default function SelectOptionsEditor({
   element,
 }: {
   element: ElementNode;
 }) {
   const updateElement = useEditorStore((state) => state.updateElement);
-  const [newValue, setNewValue] = useState("");
-  const [newLabel, setNewLabel] = useState("");
   const [error, setError] = useState("");
-  const addInput = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const choices = selectChoices(element.props);
+  const disabledGroups = String(element.props.disabledGroups || "")
+    .split("\n")
+    .filter(Boolean);
   const multiple = Boolean(element.props.multiple);
   const selected = multiple
     ? String(element.props.selectedValues || "")
@@ -249,12 +364,16 @@ export default function SelectOptionsEditor({
     next: SelectChoice[],
     rename?: readonly [string, string],
     defaults?: string[],
+    nextDisabledGroups?: string[],
   ) => {
     try {
       updateElement(element.id, {
         props: selectChoiceProps(
           {
             ...element.props,
+            ...(nextDisabledGroups
+              ? { disabledGroups: nextDisabledGroups.join("\n") }
+              : {}),
             ...(defaults
               ? { [multiple ? "selectedValues" : "value"]: defaults.join("\n") }
               : {}),
@@ -275,7 +394,10 @@ export default function SelectOptionsEditor({
       const rows =
         root.current?.querySelectorAll<HTMLLIElement>(".select-choice-row");
       rows?.[Math.min(index, rows.length - 1)]?.querySelector("input")?.focus();
-      if (!rows?.length) addInput.current?.focus();
+      if (!rows?.length)
+        root.current
+          ?.querySelector<HTMLInputElement>('input[aria-label="New choice"]')
+          ?.focus();
     });
   return (
     <div className="select-options-editor" ref={root}>
@@ -296,10 +418,24 @@ export default function SelectOptionsEditor({
       {!choices.length && (
         <p className="panel-caption">No choices yet. Add a choice below.</p>
       )}
+      <SelectGroups
+        choices={choices}
+        disabled={disabledGroups}
+        onDisable={(group, checked) =>
+          apply(
+            choices,
+            undefined,
+            undefined,
+            checked
+              ? [...disabledGroups, group]
+              : disabledGroups.filter((item) => item !== group),
+          )
+        }
+      />
       <ol className="select-choice-list">
         {choices.map((choice, index) => (
           <ChoiceRow
-            key={`${index}:${choice.value}:${choice.label}`}
+            key={`${index}:${choice.value}:${choice.label}:${choice.group || ""}`}
             choice={choice}
             index={index}
             count={choices.length}
@@ -336,44 +472,10 @@ export default function SelectOptionsEditor({
           />
         ))}
       </ol>
-      <label>
-        <span>New submitted value</span>
-        <input
-          ref={addInput}
-          aria-label="New choice"
-          value={newValue}
-          maxLength={10000}
-          onChange={(e) => setNewValue(e.target.value)}
-        />
-      </label>
-      <label>
-        <span>Display label (optional)</span>
-        <input
-          aria-label="New choice label"
-          value={newLabel}
-          maxLength={200}
-          onChange={(e) => setNewLabel(e.target.value)}
-        />
-      </label>
-      <button
-        type="button"
-        className="insp-form-add-btn"
+      <AddChoice
         disabled={choices.length >= 200}
-        onClick={() => {
-          if (
-            apply([
-              ...choices,
-              { value: newValue, label: newLabel || newValue, disabled: false },
-            ])
-          ) {
-            setNewValue("");
-            setNewLabel("");
-            addInput.current?.focus();
-          }
-        }}
-      >
-        Add choice
-      </button>
+        onAdd={(choice) => apply([...choices, choice])}
+      />
       <p className="panel-caption">
         Up to 200 unique submitted values and 10,000 characters per list. Labels
         are at most 200 characters each.
@@ -387,6 +489,8 @@ export default function SelectOptionsEditor({
             element.props.selectedValues,
             element.props.optionLabels,
             element.props.disabledValues,
+            element.props.optionGroups,
+            element.props.disabledGroups,
           ])}
           element={element}
           apply={(patch) => {

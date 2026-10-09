@@ -177,9 +177,17 @@ export function nativeTree(element: ElementNode): SemanticTree {
     if (p.placeholder) children.push(node("option", { value: "", disabled: true }, [String(p.placeholder)]));
     if (p.value !== undefined && !p.multiple) attrs.defaultValue = String(p.value);
     if (p.multiple) attrs.defaultValue = String(p.selectedValues || "").split("\n").filter(Boolean);
-    children.push(
-      ...selectChoices(p).map(choice => node("option", { value: choice.value, disabled: choice.disabled }, [choice.label])),
-    );
+    let group: Extract<SemanticTree, { tag: string }> | undefined;
+    for (const choice of selectChoices(p)) {
+      const option = node("option", { value: choice.value, disabled: choice.disabled }, [choice.label]);
+      if (choice.group) {
+        if (group?.attrs.label !== choice.group) {
+          group = { tag: "optgroup", attrs: { label: choice.group, disabled: Boolean(choice.groupDisabled) }, children: [] };
+          children.push(group);
+        }
+        group.children.push(option);
+      } else { group = undefined; children.push(option); }
+    }
   } else if (d.generate === "list") {
     children.push(
       ...String(p.items || "")
@@ -265,7 +273,12 @@ export function nativeMarkup(
     .join("");
   if (voidTags.has(tree.tag)) return `<${tree.tag}${attrs}${rootAttributes} />`;
   const selected = Array.isArray(tree.attrs.defaultValue) ? tree.attrs.defaultValue : [String(tree.attrs.defaultValue)];
-  const children = tree.tag === "select" && mode === "html" && tree.attrs.defaultValue !== undefined ? tree.children.map(child => typeof child === "object" && "tag" in child && child.tag === "option" ? { ...child, attrs: { ...child.attrs, selected: selected.includes(String(child.attrs.value)) } } : child) : tree.children;
+  const selectDefaults = (child: SemanticTree): SemanticTree => {
+    if (typeof child !== "object" || !("tag" in child)) return child;
+    if (child.tag === "option") return { ...child, attrs: { ...child.attrs, selected: selected.includes(String(child.attrs.value)) } };
+    return child.tag === "optgroup" ? { ...child, children: child.children.map(selectDefaults) } : child;
+  };
+  const children = tree.tag === "select" && mode === "html" && tree.attrs.defaultValue !== undefined ? tree.children.map(selectDefaults) : tree.children;
   const content =
     tree.tag === "textarea" && mode === "html"
       ? escapeMarkup(tree.attrs.defaultValue)

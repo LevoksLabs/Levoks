@@ -32,7 +32,7 @@ async function stop(child: ChildProcess) {
 }
 
 test(
-  "downloaded select choices store values, exclude disabled options and recover with native defaults and responsive bounds",
+  "downloaded grouped select choices store values, exclude disabled groups and recover with native defaults and responsive bounds",
   { timeout: 120000 },
   async () => {
     process.env.PLAYWRIGHT_BROWSERS_PATH ||= path.resolve(
@@ -117,6 +117,28 @@ test(
       await expect(session).toHaveValue("morning");
       await expect(topics).toHaveValues(["design", "data"]);
       await expect(followup).toHaveValue("");
+      await expect(session.locator("optgroup")).toHaveCount(2);
+      await expect(
+        session.locator('optgroup[label="Schedule"] option'),
+      ).toHaveCount(2);
+      await expect(
+        topics.locator('optgroup[label="Creative"] option'),
+      ).toHaveCount(2);
+      assert.equal(
+        await topics
+          .locator('option[value="data"]')
+          .evaluate((node) => node.parentElement!.tagName),
+        "SELECT",
+      );
+      assert.equal(
+        await session
+          .locator('option[value="closed"]')
+          .evaluate((node) => (node as HTMLOptionElement).disabled),
+        false,
+      );
+      await expect(
+        session.locator('optgroup[label="Unavailable"]'),
+      ).toHaveJSProperty("disabled", true);
       await expect(
         session.getByRole("option", {
           name: "No appointments available",
@@ -143,7 +165,9 @@ test(
         )
           posts++;
       });
-      await session.evaluate(node => { (node as HTMLSelectElement).value = ""; });
+      await session.evaluate((node) => {
+        (node as HTMLSelectElement).value = "";
+      });
       await submit.click();
       assert.equal(posts, 0);
       await session.selectOption("morning");
