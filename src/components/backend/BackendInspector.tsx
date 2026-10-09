@@ -1,6 +1,7 @@
 "use client";
 import { validationChoices } from "@/lib/backend/validation";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
+import { textConfigError, textFormats } from "@/lib/backend/text-validation";
 import { headerContractProblems } from "@/lib/backend/header-contracts";
 import { CORS_METHODS, corsList, corsProblems } from "@/lib/backend/cors";
 
@@ -949,6 +950,7 @@ const ValidationEditor: React.FC<{
     <div className="bi-rules-list">
       {config.rules.map((rule, idx) => {
         let choiceError = "";
+        if (rule.type === "text") choiceError = textConfigError(rule.text);
         if (isTemporalKind(rule.type))
           choiceError = temporalConfigError(rule.type, rule.temporal);
         if (rule.type === "oneOf") {
@@ -973,6 +975,7 @@ const ValidationEditor: React.FC<{
                     temporal: isTemporalKind(e.target.value)
                       ? rule.temporal
                       : undefined,
+                    text: e.target.value === "text" ? rule.text : undefined,
                   };
                   onChange({ rules: newRules });
                 }}
@@ -984,6 +987,8 @@ const ValidationEditor: React.FC<{
                 <option value="max">Max Value</option>
                 <option value="regex">Regex</option>
                 <option value="email">Email</option>
+                <option value="text">Text limits and format</option>
+                <option value="url">Absolute URL</option>
                 <option value="oneOf">Allowed values</option>
                 <option value="accepted">Must be checked</option>
                 <option value="date">Date</option>
@@ -1046,7 +1051,89 @@ const ValidationEditor: React.FC<{
                 </p>
               </>
             )}
-            {!["required", "accepted", "email"].includes(rule.type) &&
+            {rule.type === "text" && (
+              <>
+                {(["minLength", "maxLength"] as const).map((key) => (
+                  <FieldRow
+                    key={key}
+                    label={`Rule ${idx + 1} ${key === "minLength" ? "minimum length" : "maximum length"}`}
+                  >
+                    <input
+                      className="bi-input"
+                      type="number"
+                      min={0}
+                      max={10000}
+                      step={1}
+                      value={rule.text?.[key] ?? ""}
+                      placeholder={key === "maxLength" ? "10000" : "0"}
+                      onChange={(e) =>
+                        onChange({
+                          rules: config.rules.map((item, i) =>
+                            i === idx
+                              ? {
+                                  ...item,
+                                  text: {
+                                    ...item.text,
+                                    [key]:
+                                      e.target.value === ""
+                                        ? undefined
+                                        : Number(e.target.value),
+                                  },
+                                }
+                              : item,
+                          ),
+                        })
+                      }
+                    />
+                  </FieldRow>
+                ))}
+                <FieldRow label={`Rule ${idx + 1} text format`}>
+                  <select
+                    className="bi-select"
+                    value={rule.text?.pattern || ""}
+                    onChange={(e) =>
+                      onChange({
+                        rules: config.rules.map((item, i) =>
+                          i === idx
+                            ? {
+                                ...item,
+                                text: { ...item.text, pattern: e.target.value },
+                              }
+                            : item,
+                        ),
+                      })
+                    }
+                  >
+                    {textFormats.map((format) => (
+                      <option key={format.pattern} value={format.pattern}>
+                        {format.label}
+                      </option>
+                    ))}
+                    {!textFormats.some(
+                      (format) => format.pattern === (rule.text?.pattern || ""),
+                    ) && (
+                      <option value={rule.text?.pattern}>
+                        Custom pattern (review required)
+                      </option>
+                    )}
+                  </select>
+                </FieldRow>
+                <p className="panel-caption">
+                  Lengths use UTF-16 units. Blank values are optional; add
+                  Required to make them mandatory. Formats match the entire
+                  value. Unset maximum allows up to 10,000 units.
+                </p>
+              </>
+            )}
+            {rule.type === "url" && (
+              <p className="panel-caption">
+                Requires an absolute URL. This checks syntax and does not fetch
+                the address or grant permission to display it as a link.
+              </p>
+            )}
+            {!["required", "accepted", "email", "url", "text"].includes(
+              rule.type,
+            ) &&
               !isTemporalKind(rule.type) && (
                 <FieldRow
                   label={

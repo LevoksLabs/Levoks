@@ -135,6 +135,12 @@ test(
       await expect(appointment).toHaveValue("");
       const consent = page.getByLabel("Accept workshop terms", { exact: true });
       const followup = page.getByLabel("Preferred follow-up", { exact: true });
+      const reference = page.getByLabel("Reference code", { exact: true }),
+        website = page.getByLabel("Website", { exact: true }),
+        notes = page.getByLabel("Notes", { exact: true });
+      await expect(reference).toHaveValue("alpha-1");
+      await expect(website).toHaveValue("");
+      await expect(notes).toHaveValue("");
       await expect(followup).toHaveValue("");
       const submit = page.getByRole("button", { name: "Submit", exact: true });
       await expect(topics).toHaveValues(["Design", "Automation"]);
@@ -145,8 +151,9 @@ test(
         if (
           request.method() === "POST" &&
           request.url().endsWith("/api/submissions")
-        )
+        ) {
           posts++;
+        }
       });
       await submit.click();
       assert.equal(posts, 0, "native invalid forms must not send a request");
@@ -211,6 +218,65 @@ test(
         await control.fill(previous);
       }
       await appointment.fill("2026-10-15T09:45");
+      await reference.fill("a");
+      await reference.pressSequentially("b");
+      assert.equal(
+        await reference.evaluate(
+          (node) => (node as HTMLInputElement).validity.tooShort,
+        ),
+        true,
+      );
+      await submit.click();
+      assert.equal(posts, 0, "minimum length blocks a user-edited short value");
+      await reference.fill("alpha--1");
+      assert.equal(
+        await reference.evaluate(
+          (node) => (node as HTMLInputElement).validity.patternMismatch,
+        ),
+        true,
+      );
+      await submit.click();
+      assert.equal(posts, 0, "text format blocks invalid values");
+      await reference.fill("alpha-1");
+      await website.fill("example.test");
+      assert.equal(
+        await website.evaluate(
+          (node) => (node as HTMLInputElement).validity.typeMismatch,
+        ),
+        true,
+      );
+      await submit.click();
+      assert.equal(posts, 0, "URL input blocks relative addresses");
+      await website.fill("http://a b");
+      assert.equal(
+        await website.evaluate((node) =>
+          (node as HTMLInputElement).checkValidity(),
+        ),
+        true,
+        "native URL validation is permissive here",
+      );
+      await submit.click();
+      assert.equal(
+        posts,
+        0,
+        "shared URL parser blocks malformed host before requesting storage",
+      );
+      await expect(page.getByRole("status")).toContainText(
+        "valid absolute URL",
+      );
+      await expect(website).toHaveValue("http://a b");
+      await website.fill("https://example.test/workshop");
+      await notes.fill("h");
+      await notes.pressSequentially("i");
+      assert.equal(
+        await notes.evaluate(
+          (node) => (node as HTMLTextAreaElement).validity.tooShort,
+        ),
+        true,
+      );
+      await submit.click();
+      assert.equal(posts, 0, "textarea minimum blocks short notes");
+      await notes.fill("Workshop enquiry.");
       const response = page.waitForResponse(
         (r) =>
           r.request().method() === "POST" &&
@@ -226,6 +292,9 @@ test(
       assert.equal(body.visit_date, "2026-10-15");
       assert.equal(body.visit_time, "22:30");
       assert.equal(body.appointment, "2026-10-15T09:45");
+      assert.equal(body.reference, "alpha-1");
+      assert.equal(body.website, "https://example.test/workshop");
+      assert.equal(body.notes, "Workshop enquiry.");
       assert.equal(body.consent, true);
       assert.equal(body.followup, undefined);
       await expect(page.getByRole("status")).toHaveText("Done");
@@ -239,6 +308,9 @@ test(
       assert.equal(record.visit_date, "2026-10-15");
       assert.equal(record.visit_time, "22:30");
       assert.equal(record.appointment, "2026-10-15T09:45");
+      assert.equal(record.reference, "alpha-1");
+      assert.equal(record.website, "https://example.test/workshop");
+      assert.equal(record.notes, "Workshop enquiry.");
       await expect(topics).toHaveValues(["Design", "Automation"]);
       await expect(session).toHaveValue("Afternoon");
       await expect(remote).not.toBeChecked();
@@ -280,6 +352,40 @@ test(
         assert.equal(rejected.status, 400);
       }
       assert.equal(await records.countDocuments(), 1);
+      // Keep the real public quota: the first success plus 19 invalid requests exhaust it.
+      const limited = await fetch(`${apiOrigin}/api/submissions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      assert.equal(limited.status, 429);
+      await stop(backend);
+      backend = startBackend();
+      await healthy();
+      for (const patch of [
+        { reference: "ab" },
+        { reference: "abcdefghijklmn" },
+        { reference: "alpha--1" },
+        { reference: 22 },
+        { website: "/relative" },
+        { website: "https://" },
+        { website: "http://a b" },
+        { website: "https://example.test/" + "a".repeat(200) },
+        { notes: "hi" },
+        { notes: "a".repeat(101) },
+      ]) {
+        const rejected = await fetch(`${apiOrigin}/api/submissions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...body, ...patch }),
+        });
+        assert.equal(rejected.status, 400, JSON.stringify(patch));
+      }
+      assert.equal(
+        await records.countDocuments(),
+        1,
+        "text and URL rejections must not create records",
+      );
       await page
         .getByPlaceholder("Your name", { exact: true })
         .fill("Retry visitor");
@@ -291,6 +397,7 @@ test(
       await followup.selectOption("Phone");
       await topics.selectOption(["Databases"]);
       await time.fill("");
+      await reference.fill("");
       await stop(backend);
       await submit.click();
       await expect(page.getByRole("status")).not.toHaveText(/Working|Done/);
@@ -299,6 +406,7 @@ test(
       await expect(consent).toBeChecked();
       await expect(followup).toHaveValue("Phone");
       await expect(time).toHaveValue("");
+      await expect(reference).toHaveValue("");
       await expect(
         page.getByPlaceholder("Your name", { exact: true }),
       ).toHaveValue("Retry visitor");
@@ -322,6 +430,9 @@ test(
       assert.equal(retried.request().postDataJSON().visit_date, undefined);
       assert.equal(retried.request().postDataJSON().visit_time, undefined);
       assert.equal(retried.request().postDataJSON().appointment, undefined);
+      assert.equal(retried.request().postDataJSON().reference, undefined);
+      assert.equal(retried.request().postDataJSON().website, undefined);
+      assert.equal(retried.request().postDataJSON().notes, undefined);
       await expect.poll(() => records.countDocuments()).toBe(2);
       const retriedRecord = await records.findOne({ attendance: "remote" });
       assert.deepEqual(retriedRecord!.topics, ["Databases"]);
@@ -330,11 +441,15 @@ test(
       assert.equal(retriedRecord!.followup, "Phone");
       assert.equal(retriedRecord!.visit_time, undefined);
       assert.equal(retriedRecord!.appointment, undefined);
+      assert.equal(retriedRecord!.reference, undefined);
+      assert.equal(retriedRecord!.website, undefined);
+      assert.equal(retriedRecord!.notes, undefined);
       await page.reload();
       await expect(topics).toHaveValues(["Design", "Automation"]);
       await expect(date).toHaveValue("2026-10-15");
       await expect(consent).not.toBeChecked();
       await expect(followup).toHaveValue("");
+      await expect(reference).toHaveValue("alpha-1");
       assert.equal(await records.countDocuments(), 2);
 
       await mkdir(".verification/form-controls", { recursive: true });
@@ -365,7 +480,7 @@ test(
             right: bounds.right,
             bottom: bounds.bottom,
             fields: Array.from(
-              form.querySelectorAll("input,select,button,fieldset"),
+              form.querySelectorAll("input,select,textarea,button,fieldset"),
             ).map((node) => {
               const r = node.getBoundingClientRect();
               return {

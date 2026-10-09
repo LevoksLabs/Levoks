@@ -153,9 +153,12 @@ export interface ValidationRule {
     | "date"
     | "time"
     | "datetime-local"
+    | "text"
+    | "url"
     | "custom";
   value?: string | number;
   temporal?: import("@/lib/backend/temporal").TemporalLimits;
+  text?: import("@/lib/backend/text-validation").TextLimits;
   message: string;
 }
 

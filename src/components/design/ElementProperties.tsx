@@ -4,6 +4,7 @@ import { definitionFor, type PropertyField } from "@/lib/elements/registry";
 import { useEditorStore } from "@/store/editorStore";
 import { embedError } from "@/lib/elements/embed";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
+import { isTextInput, textLimits, textConfigError, textFormats } from "@/lib/backend/text-validation";
 import { ParameterControl } from "./ParameterControl";
 
 export default function ElementProperties({
@@ -27,11 +28,13 @@ export default function ElementProperties({
   const events =
     element.type === "custom" ? custom?.events || [] : definition?.events || [];
   const isEmbed = definition?.generate === "iframe" || element.type === "frame";
-  const inputType = String(element.props.type || element.props.inputType || "");
+  const inputType = String(element.props.type || element.props.inputType || definition?.tag || "");
   const temporalError = isTemporalKind(inputType) ? temporalConfigError(inputType, {
     min: String(element.props.min ?? ""), max: String(element.props.max ?? ""),
     step: String(element.props.step ?? ""), base: String(element.props.value ?? ""),
   }) : "";
+  const textInput = element.type !== "custom" && isTextInput(inputType);
+  const textError = textInput ? textConfigError(textLimits(element.props)) : "";
   const set = (key: string, value: string | number | boolean) =>
     updateElement(element.id, {
       props: { [key]: value },
@@ -152,6 +155,8 @@ export default function ElementProperties({
               .filter(
                 ([key]) =>
                   (key !== "type" || element.type === "button") &&
+                  !(textInput && ["pattern", "minLength", "maxLength"].includes(key)) &&
+                  !(element.type === "native" && key === "pattern" && !textInput) &&
                   (element.type === "button"
                     ? !["label"].includes(key)
                     : element.type === "input"
@@ -211,6 +216,19 @@ export default function ElementProperties({
                   )}
                 </label>
               ))}
+            {textInput && <>
+              {(["minLength", "maxLength"] as const).map(key => <label key={key}><span>{key === "minLength" ? "Minimum length" : "Maximum length"}</span>
+                <input aria-label={key === "minLength" ? "Minimum length" : "Maximum length"} type="number" min={0} max={10000} step={1} value={String(element.props[key] ?? "")} onChange={e=>set(key,e.target.value === "" ? "" : String(Number(e.target.value)))} placeholder="Unset" />
+              </label>)}
+              {inputType !== "textarea" && <label><span>Text format</span>
+                <select aria-label="Text format" value={String(element.props.pattern || "")} onChange={e=>set("pattern",e.target.value)}>
+                  {textFormats.map(format=><option key={format.pattern} value={format.pattern}>{format.label}</option>)}
+                  {!textFormats.some(format=>format.pattern===String(element.props.pattern || "")) && <option value={String(element.props.pattern)}>Custom pattern (review required)</option>}
+                </select>
+              </label>}
+              <p className="panel-caption">Some emoji count as two characters. Blank optional fields are allowed. Guided storage copies these settings into backend rules and caps unset maximums at {Math.max(Number(element.props.minLength) || 0,inputType === "email" ? 320 : 2000)} characters. Review connected rules after edits.</p>
+              {textError && <p className="property-error" role="alert">{textError}</p>}
+            </>}
             {isTemporalKind(inputType) && <p className="panel-caption">Step is in {inputType === "date" ? "days" : "seconds"}. Use any to allow every value. Time limits can cross midnight. Creating a collection copies these limits into its backend rules.</p>}
             {temporalError && <p role="alert" className="property-error">{temporalError}</p>}
             {element.type === "custom" && (

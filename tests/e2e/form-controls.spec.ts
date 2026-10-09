@@ -30,7 +30,7 @@ async function add(page: Page, kind: string, name: string, inside?: string) {
 test("broader and nested form controls persist, reorder, validate and export through real authoring", async ({
   page,
 }) => {
-  test.setTimeout(120000);
+  test.setTimeout(180000);
   await openEditor(page);
   await page
     .getByRole("textbox", { name: "Search elements", exact: true })
@@ -104,6 +104,31 @@ test("broader and nested form controls persist, reorder, validate and export thr
   await page.getByLabel("Options", { exact: true }).fill("Email\nPhone");
   await page.getByLabel("Value", { exact: true }).fill("");
   await page.getByLabel("Label", { exact: true }).fill("Preferred follow-up");
+  await add(page, "textInput", "Text Input", "Form Field");
+  await page.getByLabel("Name", { exact: true }).fill("reference");
+  await page.getByLabel("Label", { exact: true }).fill("Reference code");
+  await page.getByLabel("Value", { exact: true }).fill("alpha-1");
+  await page.getByLabel("Minimum length", { exact: true }).fill("3");
+  await page.getByLabel("Maximum length", { exact: true }).fill("2");
+  await expect(
+    page.locator(".semantic-properties").getByRole("alert"),
+  ).toContainText("at least");
+  await page.getByLabel("Maximum length", { exact: true }).fill("12");
+  await page
+    .getByLabel("Text format", { exact: true })
+    .selectOption({ label: "Lowercase slug" });
+  await expect(
+    page.locator(".semantic-properties").getByRole("alert"),
+  ).toHaveCount(0);
+  await add(page, "urlInput", "URL Input", "Form Field");
+  await page.getByLabel("Name", { exact: true }).fill("website");
+  await page.getByLabel("Label", { exact: true }).fill("Website");
+  await page.getByLabel("Maximum length", { exact: true }).fill("200");
+  await add(page, "textarea", "Textarea", "Form Field");
+  await page.getByLabel("Name", { exact: true }).fill("notes");
+  await page.getByLabel("Label", { exact: true }).fill("Notes");
+  await page.getByLabel("Minimum length", { exact: true }).fill("5");
+  await page.getByLabel("Maximum length", { exact: true }).fill("100");
   await selectForm(page);
   const dateLayer = page.getByRole("treeitem", {
     name: "Date Input",
@@ -251,6 +276,52 @@ test("broader and nested form controls persist, reorder, validate and export thr
     "accepted",
   );
   await selectValidation("visit_date");
+  await selectValidation("reference");
+  await expect(page.getByLabel("Rule 1 type", { exact: true })).toHaveValue(
+    "text",
+  );
+  await expect(
+    page.getByLabel("Rule 1 minimum length", { exact: true }),
+  ).toHaveValue("3");
+  await page.getByLabel("Rule 1 maximum length", { exact: true }).fill("2");
+  await expect(page.locator(".bi-rules-list").getByRole("alert")).toContainText(
+    "at least",
+  );
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(
+    page.getByLabel("Rule 1 maximum length", { exact: true }),
+  ).toHaveValue("12");
+  await page
+    .getByLabel("Rule 1 text format", { exact: true })
+    .selectOption({ label: "Letters and numbers" });
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(
+    page.getByLabel("Rule 1 text format", { exact: true }),
+  ).toHaveValue("[a-z0-9]+(?:-[a-z0-9]+)*");
+  await page
+    .getByLabel("Rule 1 message", { exact: true })
+    .fill("Use a short reference code.");
+  await mkdir(".verification/text", { recursive: true });
+  for (const width of [1600, 1100]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page
+      .getByLabel("Rule 1 minimum length", { exact: true })
+      .scrollIntoViewIfNeeded();
+    expect(
+      await page
+        .locator(".bi-rules-list")
+        .evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: `.verification/text/inspector-${width}.png`,
+    });
+  }
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await selectValidation("website");
+  await expect(page.getByLabel("Rule 2 type", { exact: true })).toHaveValue(
+    "url",
+  );
+  await selectValidation("visit_date");
   await expect(page.getByLabel("Rule 1 type", { exact: true })).toHaveValue(
     "date",
   );
@@ -288,6 +359,8 @@ test("broader and nested form controls persist, reorder, validate and export thr
   }
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.getByRole("button", { name: "Save project", exact: true }).click();
+  await expect(page.getByRole("button", {name:"Save project",exact:true})).toBeEnabled();
+  await expect(page.locator(".workspace-status-text")).toHaveText("Saved on this device");
   await page.reload();
   await selectValidation("topics");
   await expect(choices).toHaveValue("Databases\nAutomation\nDesign");
@@ -319,6 +392,16 @@ test("broader and nested form controls persist, reorder, validate and export thr
   await expect(page.getByLabel("Rule 1 min", { exact: true })).toHaveValue(
     "2026-10-15T09:15",
   );
+  await selectValidation("reference");
+  await expect(
+    page.getByLabel("Rule 1 maximum length", { exact: true }),
+  ).toHaveValue("12");
+  await expect(page.getByLabel("Rule 1 message", { exact: true })).toHaveValue(
+    "Use a short reference code.",
+  );
+  await expect(
+    page.getByLabel("Rule 1 text format", { exact: true }),
+  ).toHaveValue("[a-z0-9]+(?:-[a-z0-9]+)*");
   await selectForm(page);
   await page.getByRole("button", { name: "Edit Topics", exact: true }).click();
   await expect(page.getByLabel("Selected Values", { exact: true })).toHaveValue(
@@ -377,6 +460,20 @@ test("broader and nested form controls persist, reorder, validate and export thr
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.getByRole("button", { name: "Preview", exact: true }).click();
   const frame = page.frameLocator('iframe[title="Generated frontend preview"]');
+  await expect(
+    frame.getByLabel("Reference code", { exact: true }),
+  ).toHaveAttribute("minlength", "3");
+  await expect(
+    frame.getByLabel("Reference code", { exact: true }),
+  ).toHaveAttribute("maxlength", "12");
+  await expect(frame.getByLabel("Website", { exact: true })).toHaveAttribute(
+    "type",
+    "url",
+  );
+  await expect(frame.getByLabel("Notes", { exact: true })).toHaveAttribute(
+    "maxlength",
+    "100",
+  );
   await expect(frame.getByLabel("Visit date", { exact: true })).toHaveAttribute(
     "step",
     "2",

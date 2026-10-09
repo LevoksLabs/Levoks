@@ -269,6 +269,7 @@ for (const [id, name, type] of [
       required: false,
       disabled: false,
       ...(!["checkbox", "radio", "file", "range", "color"].includes(type) ? { label: "", helperText: "", error: "", readOnly: false, pattern: "" } : {}),
+      ...(["text", "email", "url", "search", "tel", "password"].includes(type) ? {minLength:"",maxLength:""} : {}),
       ...(type === "checkbox" || type === "radio"
         ? {
             label: type === "radio" ? "Option" : name,
@@ -307,6 +308,7 @@ native(
     disabled: false,
     rows: 4,
     label: "", helperText: "", error: "", readOnly: false,
+    minLength: "", maxLength: "",
   },
   inputStyles,
   false,

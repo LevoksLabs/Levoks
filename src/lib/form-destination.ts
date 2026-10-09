@@ -21,6 +21,7 @@ import { backendDefaults } from "@/lib/backend/registry";
 import { defaultDatabase } from "@/lib/backend/database";
 import { validationChoices } from "@/lib/backend/validation";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
+import { isTextInput, textLimits, textConfigError } from "@/lib/backend/text-validation";
 import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
 import { useRoutingStore } from "@/store/routingStore";
@@ -104,6 +105,12 @@ export function submissionFields(
       step: String(input.props.step ?? ""),
       base: String(input.props.value ?? ""),
     } : undefined;
+    const text = isTextInput(inputType) ? textLimits(input.props) : undefined;
+    if (text) {
+      const error = textConfigError(text);
+      if (error) problems.push(`${input.label || "Field " + (index + 1)}: ${error}`);
+      if (inputType === "textarea" && text.pattern) problems.push("Textarea does not support native text formats.");
+    }
     if (temporal && isTemporalKind(inputType)) {
       const error = temporalConfigError(inputType, temporal);
       if (error) problems.push(`${input.label || "Field " + (index + 1)}: ${error}`);
@@ -160,6 +167,7 @@ export function submissionFields(
       input,
       choices,
       temporal,
+      text,
       field: {
         id: input.id,
         name,
@@ -418,7 +426,7 @@ export function createSubmissionDestination(
         position: { x: 0, y: 0 },
       }) as BackendBlock;
     const validations = analysis.fields.flatMap(
-      ({ field, input, inputType, choices, temporal }) => {
+      ({ field, input, inputType, choices, temporal, text }) => {
         const rules: ValidationRule[] = [];
         if (temporal && isTemporalKind(inputType)) rules.push({
           type: inputType,
@@ -441,7 +449,11 @@ export function createSubmissionDestination(
             type: "required",
             message: `Choose at least one ${field.name} option.`,
           });
-        if (field.type === "string")
+        if (text) rules.push({
+          type: "text", text: {...text, maxLength: text.maxLength ?? Math.max(text.minLength ?? 0, inputType === "email" ? 320 : 2000)},
+          message: `Enter ${field.name} in the allowed format and length.`,
+        });
+        if (field.type === "string" && !text)
           rules.push({
             type: "maxLength",
             value: String(
@@ -461,6 +473,7 @@ export function createSubmissionDestination(
             type: "email",
             message: "Enter a valid email address.",
           });
+        if (inputType === "url") rules.push({type:"url", message:"Enter a valid absolute URL."});
         if (field.type === "number")
           for (const type of ["min", "max"] as const)
             if (

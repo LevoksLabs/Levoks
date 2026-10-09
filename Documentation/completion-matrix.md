@@ -1,5 +1,21 @@
 # Levoks completion matrix
 
+## Text formats, lengths and URL validation — 2026-10-09
+
+Content now exposes bounded minimum/maximum lengths for text-like native/legacy inputs and Textarea, preserving unset values and zero. Native inputs offer five no-code text formats, including Unicode letters/numbers. New guided destinations copy ordinary editable Text and Absolute URL rules into the backend; unsupported custom patterns and invalid limits fail before creating services. Rules retain separate Required semantics, optional blank omission and creation-time snapshots. Existing destinations require rule review after field edits.
+
+The real drag/drop workshop journey verifies inline invalid-limit recovery, rule/message editing, undo/redo, completed save/reload, preview and actual ZIP download. This revealed native properties being saved as numbers although their definitions require strings; controls now persist canonical strings. Production execution also exposed permissive browser URL parsing accepting a malformed hostname that Node rejects. The shared serializer now checks parsed special-scheme hostnames for forbidden characters, preserving malformed input and showing an error before POST. The browser test executes the actual client validator in Chromium instead of injecting Node's URL implementation.
+
+Acceptance: 143 unit tests pass, TypeScript passes and lint has zero errors (49 existing warnings). Eight browser cases cover the new authoring journey, 45 native text-format comparisons, 18 URL cases executed against both browser client and server validators, 51 temporal comparisons and existing login/form-destination/nested-layer regressions. The actual downloaded production Next/Express/MongoDB app rejects short, overlong, malformed and wrong-type text/URL inputs without writes, retains the public 20-request quota, stores valid inputs, omits blank optional fields, preserves input through outage/retry and restores defaults on reset/reload. Form bounds and sibling non-overlap pass at 320/768/1024/1440px. Editor and generated production builds pass; all 39 downloaded files match both final compiler output and the built fixture. Production trace/standalone exclusions pass.
+
+Evidence under `.verification/`: `text-check-corrected.log`, `text-browser-corrected.log`, `text-parity-final.log`, `text-regression-corrected.log`, `text-refresh-corrected.log`, `text-frontend-build-corrected.log`, `text-backend-build-corrected.log`, `text-runtime-final.log`, `text-archive-parity-final.log`, `text-compiler-parity-final.log`, `text-editor-build-corrected.log`, `text-typecheck-corrected.log` and `text-packaging-corrected.log`. Reproduce the downloaded runtime through `npm run test:form-controls-export`; browser format/parser checks use `npx playwright test tests/e2e/text-validation.spec.ts`. All execution remains local.
+
+![Text validation inspector](audit-2026-10-08/text-inspector.png)
+![Compact text validation inspector](audit-2026-10-08/text-compact.png)
+![Production mobile text form](audit-2026-10-08/text-production-mobile.png)
+
+UX11/UX24/RT02/SEM05 remain PARTIAL. [Text contracts](fullstack-contracts.md#text-formats-lengths-and-url-validation) record length caps, fixed formats, URL syntax-only behavior and snapshot boundaries. Advanced/custom validation, file storage, conditional/composite controls, reusable-component structural edits, general nested geometry, full site starters and catalog-wide accessibility/responsive acceptance remain. Point 4 remains in progress; points 5–6 retain their documented internal/provider work.
+
 ## Date/time limits and server validation — 2026-10-09
 
 Native Date/Time/DateTime authoring now exposes minimum, maximum and step, with native pickers, units/help and inline configuration errors. New guided destinations snapshot ordinary editable Date/Time/Local date and time rules: strict calendar/local-time formats, inclusive ranges, midnight-spanning time ranges and native minimum/initial-value/default step bases. Blank optional fields are omitted; required contracts remain separate. Local strings retain their timezone-free storage representation. Invalid configurations fail before collection creation and at the saved-project/compiler boundary. Existing destinations are not silently rewritten after form edits.

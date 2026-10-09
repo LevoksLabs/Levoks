@@ -3,6 +3,7 @@ import { z } from "zod";
 import { databaseSchema } from "@/lib/backend/database";
 import { validationChoices } from "@/lib/backend/validation";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
+import { textConfigError, textFormats } from "@/lib/backend/text-validation";
 import { definitionFor } from "@/lib/elements/registry";
 import { customDefinitionSchema } from "@/lib/elements/custom";
 import { validateFiles } from "@/lib/codegen/files";
@@ -137,6 +138,8 @@ const configs = {
             "date",
             "time",
             "datetime-local",
+            "text",
+            "url",
             "custom",
           ]),
           value: z.union([text, finite]).optional(),
@@ -146,14 +149,21 @@ const configs = {
             step: z.string().max(40).optional(),
             base: z.string().max(40).optional(),
           }).optional(),
+          text: z.object({
+            minLength: z.number().int().min(0).max(10000).optional(),
+            maxLength: z.number().int().min(0).max(10000).optional(),
+            pattern: z.string().max(120).refine(value => textFormats.some(format => format.pattern === value)).optional(),
+          }).optional(),
           message: text,
         }).refine(rule => {
+          if (rule.type === "text") return !rule.temporal && !textConfigError(rule.text);
+          if (rule.text) return false;
           if (isTemporalKind(rule.type)) return !temporalConfigError(rule.type, rule.temporal);
           if (rule.temporal) return false;
           if (rule.type !== "oneOf") return true;
           try { validationChoices(rule.value); return true; }
           catch { return false; }
-        }, "Check allowed values or date/time limits: bounds must be valid, date ranges ordered, and step positive (at least one millisecond) or any."),
+        }, "Check allowed values, text lengths/formats or date/time limits. Lengths must be ordered; temporal bounds valid and step positive or any."),
       )
       .max(100),
   }),

@@ -1522,9 +1522,12 @@ const PropertyInspector: React.FC = () => {
                 <Field label="Max length">
                   <input
                     type="number"
-                    value={String(el.props.maxLength || "")}
+                    min={0}
+                    max={10000}
+                    step={1}
+                    value={String(el.props.maxLength ?? "")}
                     onChange={(e) =>
-                      setProp("maxLength", Number(e.target.value))
+                      setProp("maxLength", e.target.value === "" ? "" : Number(e.target.value))
                     }
                     placeholder="None"
                   />

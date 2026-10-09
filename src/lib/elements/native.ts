@@ -85,7 +85,7 @@ export function nativeTree(element: ElementNode): SemanticTree {
     "minLength",
     "maxLength",
   ]) {
-    if (key === "pattern" && !p[key]) continue;
+    if (["pattern", "minLength", "maxLength"].includes(key) && p[key] === "") continue;
     if (p[key] !== undefined) attrs[key] = p[key];
   }
   for (const key of ["src", "href"])
