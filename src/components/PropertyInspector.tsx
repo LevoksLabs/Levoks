@@ -2,6 +2,7 @@
 import { canvasSize } from "@/lib/design";
 import ElementProperties from "./design/ElementProperties";
 import FormDestination from "./FormDestination";
+import DataBinding from "./DataBinding";
 import { ParameterControl, DimensionControl, LENGTH_UNITS } from "./design/ParameterControl";
 import SpacingControl from "./design/SpacingControl";
 
@@ -1355,6 +1356,7 @@ const PropertyInspector: React.FC = () => {
         {activeTab === "content" && (
           <>
             <ElementProperties element={el} />
+            <DataBinding element={el} />
             {/* Text elements */}
             {isTextElement && (
               <Section title="Text Content">

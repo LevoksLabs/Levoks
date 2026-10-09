@@ -4,6 +4,8 @@ This follows the [8 October local audit](local-product-audit-2026-10-08.md). The
 
 ## Implemented and verified locally
 
+9 October continuation: [live database widgets](fullstack-contracts.md#live-database-widgets) now connect Tables/Collections/Repeaters to existing authorized list endpoints. Table headings/order and nested text fields persist through undo, save/reload and actual ZIP output. Native preview and the downloaded production application verify real MongoDB records, denied/revoked access, pagination, malformed responses, outages/restart, text safety and responsive bounds. The current registry adds Collection (105 definitions); historical whole-library census results are not extended to it. Fixed live-container sample heights and cramped inspector controls were repaired. Windows production packaging now removes private preview/test references and disposable standalone copies after Next's build, with the existing packaging assertion retained. Wider live-data contracts and point 4 authoring/polish remain open; see the latest [matrix evidence](completion-matrix.md#live-database-tables-collections-and-repeaters--2026-10-09).
+
 | Audit item | Result | Evidence |
 |---|---|---|
 | Default Form controls overlap | Newly created template children use normal flow when no explicit coordinates/position were supplied. Added legacy input fields precede the actual submit control. Containers with content can grow while preserving minimum dimensions and explicit height styles. | Untouched form browser test: separate controls in canvas, desktop preview and mobile preview. Unit test covers save/restore and field order. |

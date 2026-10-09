@@ -422,6 +422,7 @@ native(
   "table",
   [480, 180],
 );
+native("collection", "Collection", "Data / Display", "div", {}, {display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "16px"}, true, "tag", [600, 240]);
 for (const [id, name, tag] of [
   ["card", "Card", "article"],
   ["badge", "Badge", "span"],

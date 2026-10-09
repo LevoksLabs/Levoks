@@ -141,7 +141,15 @@ Measurements use structured `{value, unit}` values while editing and a common pa
 
 The Tabs failure involved opaque inner surfaces, independent canvas/export rules and overlapping background declarations. Shared transparent surfaces expose the saved fill; color edits clear competing shorthand, and local longhands override shorthand consistently. Token fill bindings clear obsolete local background shorthand. Native labels and controls no longer depend on placeholder geometry. Existing tiny radio controls migrate in semantic state, except projects owned by edited source.
 
-Embeds use a sandboxed iframe with no same-origin capability, no top navigation and no popup permission. Script/form permission is explicit; source is stored as content and never evaluated in the editor process. HTML and Code modes both accept HTML documents; Code is not a JSX/compiler environment. HTTPS providers may still refuse framing. Preview has no backend runtime.
+Embeds use a sandboxed iframe with no same-origin capability, no top navigation and no popup permission. Script/form permission is explicit; source is stored as content and never evaluated in the editor process. HTML and Code modes both accept HTML documents; Code is not a JSX/compiler environment. HTTPS providers may still refuse framing. Generated frontend-only preview has no backend runtime; the later Local full-stack mode runs supported generated MongoDB applications.
+
+## Live record display acceptance — 9 October 2026
+
+The original 104-definition census remains historical. A native Collection is now available in Data / Display, bringing the current registry to 105 definitions; this is not a new whole-library census. Table and Collection/Repeater templates now have persisted live sources, stable field bindings and generated backend reads. Actual Table drag/drop, editable headings/order, nested text binding, disconnect/undo, save/reload and downloaded output are verified. Local full-stack execution verifies real paginated MongoDB records and private operator policies; the downloaded production application verifies malformed-response rejection, outage/restart recovery, unique repeated DOM IDs and non-overlapping mobile roots.
+
+Tables contain their overflow and emit caption/column headers. Collections preserve a responsive grid; record counts determine runtime height. Loading/empty/401/403/error/retry states remain visible and keyboard-operable through native controls. Bindings preserve text safety and zero/false values. Static samples remain editable in the canvas and frontend-only preview does not fabricate live data.
+
+[Live widget contracts](fullstack-contracts.md#live-database-widgets) record source restrictions and unsupported record scopes/actions/formatters. This accepts the supported read/display subset; it does not promote unrelated property dimensions or the whole Table/Repeater catalog rows to fully functional. Screen-reader, broader nested editing, filtering/sorting and other element contracts remain open.
 
 ## Remaining work before library-wide completion
 

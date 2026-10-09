@@ -12,6 +12,8 @@ import { accountPageSource, ACCOUNT_CSS } from "@/lib/codegen/account-page";
 import { submissionNotificationGuide } from "@/lib/codegen/submission-notifications";
 import { submissionInboxSource, INBOX_CSS } from "@/lib/codegen/submission-inbox";
 import { validateFiles } from "@/lib/codegen/files";
+import { dataOwner, isDataText, resolveDataSource, type ResolvedDataSource } from "@/lib/live-data";
+import { definitionFor } from "@/lib/elements/registry";
 import {
   parseProject,
   redactProject,
@@ -69,6 +71,23 @@ export function compileProject(value: ProjectDocument) {
   }
   const backendIR = lowerBackend(backend);
   diagnostics.push(...validateBackendIR(backendIR));
+  const dataSources: Record<string, ResolvedDataSource> = {};
+  for (const node of Object.values(editor.elementsById)) {
+    if (node.dataSource) {
+      if (dataOwner(node, editor.elementsById)) throw new Error("Nested live sources need separate record scopes. Move this source outside its live template.");
+      dataSources[node.id] = resolveDataSource(node, backend.services);
+    }
+  }
+  for (const node of Object.values(editor.elementsById)) {
+    const owner = dataOwner(node, editor.elementsById);
+    const definition = owner ? definitionFor(node as ElementNode) : undefined;
+    if (node.dataField && (!isDataText(node) || !owner || !Object.hasOwn(dataSources[owner.id].fields, node.dataField))) throw new Error(`Record text ${node.label || node.id} references a missing live source or field.`);
+    if (owner && (node.type === "custom" || ["form", "button", "input", "tabs", "accordion", "menu", "socialbar", "repeater"].includes(node.type) || node.events && Object.keys(node.events).length || graph.flows.some(flow => flow.trigger.elementId === node.id) || node.type === "native" && (!["tag", "list", "table", "progress"].includes(definition?.generate || "") || ["input", "button", "select", "textarea", "form", "a"].includes(definition?.tag || "")))) throw new Error("Live record templates support display elements. Record-specific inputs, actions and nested repeaters need their own scoped mappings.");
+  }
+  for (const flow of graph.flows) for (const step of flow.steps) if (step.type === "api_call" && step.responseMappings?.some(mapping => {
+    const target = editor.elementsById[mapping.elementId];
+    return target && dataOwner(target, editor.elementsById);
+  })) throw new Error("Routing response mappings cannot update a repeated record template. Bind its record field instead.");
   for (const flow of graph.flows)
     for (const step of flow.steps)
       if (
@@ -107,6 +126,7 @@ export function compileProject(value: ProjectDocument) {
       editor.tokens,
       editor.assets,
       editor.customElements,
+      dataSources,
     );
     const folder = page.route === "/" ? "" : page.route.slice(1).split("/").map(segment => segment.startsWith("_") ? `%5F${segment.slice(1)}` : segment).join("/") + "/";
     const app = output.files["src/App.jsx"]

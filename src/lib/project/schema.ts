@@ -232,6 +232,8 @@ const responsiveLayout = z.object({ x: finite, y: finite, w: finite.nonnegative(
 const responsiveOverride = z.object({ layout: responsiveLayout.optional(), styles: z.record(z.string(), z.union([text, finite])).optional() });
 const vectorCoordinate = finite.min(-10000).max(10000);
 export const elementSchema = z.object({
+  dataSource: z.object({serviceId: id, endpointId: id, columns: z.array(z.object({fieldId: id, label: z.string().min(1).max(120)})).max(32), emptyMessage: z.string().max(500)}).optional(),
+  dataField: id.optional(),
   definitionId: id.optional(),
   definitionVersion: z.number().int().positive().optional(),
   events: z.record(z.string().regex(/^on[A-Z][A-Za-z0-9]*$/), z.object({ action: z.enum(["navigate", "scroll"]), target: id })).optional(),

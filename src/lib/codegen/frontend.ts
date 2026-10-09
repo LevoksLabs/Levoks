@@ -13,6 +13,8 @@ import { orderedStyles } from "@/lib/property-values";
 import { embedAttributes } from "@/lib/elements/embed";
 import { widgetRuntime } from "./widget-runtime";
 import { resolveElement, vectorPath, motionFrames, fontFamily } from "@/lib/design";
+import { liveDataRuntime, liveDataCSS } from "./live-data";
+import type { ResolvedDataSource } from "@/lib/live-data";
 
 type FrontendCodeResult = {
     files: Record<string, string>;
@@ -175,7 +177,9 @@ const renderElementBody = (
     cssOut: Set<string>,
     mode: "html" | "jsx",
     flowMap: Map<string, Flow> = new Map(),
-    elementsById: Record<string, ElementNode> = {}
+    elementsById: Record<string, ElementNode> = {},
+    sources: Record<string, ResolvedDataSource> = {},
+    recordFields?: Record<string, string>
 ): string => {
 
     const className = classNameFor(el);
@@ -278,11 +282,11 @@ const renderElementBody = (
 
     const children = (el.type === "tabs" ? [] : el.children || []).map((childId) => {
         const child = elementsById[childId];
-        return child ? renderElement(child, false, cssOut, mode, flowMap, elementsById) : "";
+        return child ? renderElement(child, false, cssOut, mode, flowMap, elementsById, sources, recordFields) : "";
     }).join("");
     const clsAttr = mode === "jsx" ? "className" : "class";
 
-    if (["native", "button", "input"].includes(el.type)) { cssOut.add(choiceCSS); return nativeMarkup(nativeTree(el), mode, children, ` ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}`); }
+    if (["native", "button", "input"].includes(el.type)) { cssOut.add(choiceCSS); const native = nativeMarkup(nativeTree(el), mode, children, ` ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}`); return mode === "jsx" && recordFields ? native.replace(`id="${escapeMarkup(el.id)}"`, `id={record._id + ${JSON.stringify("-" + el.id)}}`) : native; }
     if (el.type === "custom") {
         if (mode === "html") return `<div ${clsAttr}="${className}">${escapeMarkup(el.label)} — custom source runs in the exported application.</div>`;
         return `<div className="${className}"><${customIdentifier(el.definitionId!)} {...${JSON.stringify(el.props)}}${wiringAttr(el, flowMap, mode)}>${children}</${customIdentifier(el.definitionId!)}></div>`;
@@ -292,7 +296,7 @@ const renderElementBody = (
         case "title":
         case "text":
         case "paragraph":
-            return `<${tag} ${clsAttr}="${className}">${mode === "jsx" ? `{flowValues[${JSON.stringify(el.id)}] ?? ${JSON.stringify(String(el.props.content ?? el.props.label ?? (el.type === "title" ? "Heading" : "Text"))).replace(/</g, "\\u003c")}}` : textContent(el, el.type === "title" ? "Heading" : "Text")}</${tag}>`;
+            return `<${tag} ${clsAttr}="${className}">${mode === "jsx" && el.dataField && recordFields ? `{recordText(record, ${JSON.stringify(recordFields[el.dataField])})}` : mode === "jsx" ? `{flowValues[${JSON.stringify(el.id)}] ?? ${JSON.stringify(String(el.props.content ?? el.props.label ?? (el.type === "title" ? "Heading" : "Text"))).replace(/</g, "\\u003c")}}` : textContent(el, el.type === "title" ? "Heading" : "Text")}</${tag}>`;
         case "image":
             return `<img ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" alt="${escapeMarkup(el.props?.alt)}" />`;
         case "video":
@@ -325,7 +329,7 @@ const renderElementBody = (
         case "tabs": {
             const labels = tabLabels(el), active = widgetNumber(el.props.activeTab, 0, 0, labels.length - 1);
             cssOut.add(tabsCSS(`.${className}`));
-            return `<div ${clsAttr}="${className}" data-levoks-tabs="true" data-active-tab="${active}"><div role="tablist" aria-label="${escapeMarkup(el.label || "Content tabs")}">${labels.map((label, index) => `<button type="button" role="tab" aria-selected="${index === active}" ${mode === "jsx" ? "tabIndex" : "tabindex"}="${index === active ? 0 : -1}">${escapeMarkup(label)}</button>`).join("")}</div>${labels.map((_, index) => `<div role="tabpanel" ${mode === "jsx" ? "tabIndex" : "tabindex"}="0" ${index !== active ? "hidden" : ""}>${el.children[index] && elementsById[el.children[index]] ? renderElement(elementsById[el.children[index]], false, cssOut, mode, flowMap, elementsById) : escapeMarkup(String(el.props.tabContents || "").split("\n")[index] || "")}</div>`).join("")}</div>`;
+            return `<div ${clsAttr}="${className}" data-levoks-tabs="true" data-active-tab="${active}"><div role="tablist" aria-label="${escapeMarkup(el.label || "Content tabs")}">${labels.map((label, index) => `<button type="button" role="tab" aria-selected="${index === active}" ${mode === "jsx" ? "tabIndex" : "tabindex"}="${index === active ? 0 : -1}">${escapeMarkup(label)}</button>`).join("")}</div>${labels.map((_, index) => `<div role="tabpanel" ${mode === "jsx" ? "tabIndex" : "tabindex"}="0" ${index !== active ? "hidden" : ""}>${el.children[index] && elementsById[el.children[index]] ? renderElement(elementsById[el.children[index]], false, cssOut, mode, flowMap, elementsById, sources, recordFields) : escapeMarkup(String(el.props.tabContents || "").split("\n")[index] || "")}</div>`).join("")}</div>`;
         }
         case "gallery":
             cssOut.add(`.${className} { display:grid; grid-template-columns:repeat(${widgetNumber(el.props.columns, 3, 1, 8)}, minmax(0, 1fr)); gap:${widgetNumber(el.props.gap, 8, 0, 100)}px; } .${className} > * { position:relative !important; left:auto !important; top:auto !important; width:100%; max-width:100%; }`);
@@ -363,11 +367,29 @@ const renderElementBody = (
     }
 };
 
-function renderElement(el: ElementNode, isRoot: boolean, cssOut: Set<string>, mode: "html" | "jsx", flowMap: Map<string, Flow> = new Map(), elementsById: Record<string, ElementNode> = {}): string {
-    let markup = renderElementBody(el, isRoot, cssOut, mode, flowMap, elementsById);
+function renderElement(el: ElementNode, isRoot: boolean, cssOut: Set<string>, mode: "html" | "jsx", flowMap: Map<string, Flow> = new Map(), elementsById: Record<string, ElementNode> = {}, sources: Record<string, ResolvedDataSource> = {}, recordFields?: Record<string, string>): string {
+    let markup = renderElementBody(el, isRoot, cssOut, mode, flowMap, elementsById, sources, recordFields);
+    const attrs = (el.type === "custom" ? "" : wiringAttr(el, flowMap, mode)) + (mode === "jsx" && recordFields ? ` id={record._id + ${JSON.stringify("-" + el.id)}}` : ` id="${escapeMarkup(el.id)}"`) + (el.accessibility?.label ? ` aria-label="${escapeMarkup(el.accessibility.label)}"` : "") + (el.accessibility?.description ? ` aria-description="${escapeMarkup(el.accessibility.description)}"` : "") + (el.accessibility?.hidden ? ' aria-hidden="true"' : "");
+    if (el.dataSource) {
+        if (mode === "html") return `<div class="${classNameFor(el)}" role="status">Live records load in Local full-stack preview or the exported application.</div>`;
+        const source = sources[el.id];
+        if (!source) throw new Error("Live data source could not be resolved. Compile the complete project.");
+        cssOut.add(liveDataCSS);
+        // Record counts determine runtime height; the canvas height is only a minimum.
+        cssOut.add(`.page .${classNameFor(el)} {height:auto !important; min-height:${el.layout.h}px;}`);
+        if (el.definitionId === "collection") {
+            const grid = (node: ElementNode) => cssFromStyles({display: "grid", gridTemplateColumns: node.styles.gridTemplateColumns || "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: node.styles.gap || "16px"});
+            cssOut.add(`.${classNameFor(el)} {display:block !important;} .${classNameFor(el)}-items {${grid(el)}}`);
+            for (const bp of ["tablet", "mobile"] as const) if (el.responsive?.[bp]) cssOut.add(`@media(max-width:${bp === "tablet" ? 1024 : 600}px){.${classNameFor(el)}-items {${grid(resolveElement(el, bp))}}}`);
+        }
+        const settings = JSON.stringify(source).replaceAll("<", "\\u003c");
+        const content = el.definitionId === "table"
+            ? `<div className="live-records-table" role="region" aria-label={${JSON.stringify(source.label).replaceAll("<", "\\u003c")}} tabIndex={0}><table><caption>${escapeMarkup(el.props.caption || source.label)}</caption><thead><tr>${source.columns.map(c => `<th scope="col">${escapeMarkup(c.label)}</th>`).join("")}</tr></thead><tbody>{records.map(record => <tr key={record._id}>${source.columns.map(c => `<td>{recordText(record, ${JSON.stringify(c.name)})}</td>`).join("")}</tr>)}</tbody></table></div>`
+            : `<div className="live-records-items ${classNameFor(el)}-items"${el.props.direction === "row" ? ' style={{flexDirection:"row",flexWrap:"wrap"}}' : ""}>{records.map(record => <article key={record._id}>${el.children.map(id => elementsById[id] ? renderElement(elementsById[id], false, cssOut, mode, flowMap, elementsById, sources, source.fields) : "").join("")}</article>)}</div>`;
+        return `<div${attrs} className="${classNameFor(el)}"><LiveRecords source={${settings}}>{records => (${content})}</LiveRecords></div>`;
+    }
     if (["native", "button", "input"].includes(el.type)) return markup;
     if (el.accessibility?.label) markup = markup.replace(/^(<[^>]*?) aria-label="[^"]*"/, "$1");
-    const attrs = (el.type === "custom" ? "" : wiringAttr(el, flowMap, mode)) + ` id="${escapeMarkup(el.id)}"` + (el.accessibility?.label ? ` aria-label="${escapeMarkup(el.accessibility.label)}"` : "") + (el.accessibility?.description ? ` aria-description="${escapeMarkup(el.accessibility.description)}"` : "") + (el.accessibility?.hidden ? ' aria-hidden="true"' : "");
     return markup.replace(/^<([a-z][a-z0-9]*)/, `<$1${attrs}`);
 }
 
@@ -381,7 +403,8 @@ export function generateFrontendProject(
     flowGraph?: FlowGraph,
     tokens: Record<string, DesignToken> = {},
     assets: Record<string, DesignAsset> = {},
-    customElements: Record<string, CustomDefinition> = {}
+    customElements: Record<string, CustomDefinition> = {},
+    dataSources: Record<string, ResolvedDataSource> = {}
 ): FrontendCodeResult {
     // Build flow map keyed by trigger elementId (IR-first)
     const flowMap = new Map<string, Flow>();
@@ -448,20 +471,20 @@ export function generateFrontendProject(
 
     let expandedCount = 0;
     const countOutput = (element: ElementNode, copies: number, depth: number) => {
-        expandedCount += copies;
+        expandedCount += copies * (element.dataSource && element.definitionId === "table" ? (dataSources[element.id]?.size || 100) * ((dataSources[element.id]?.columns.length || 32) + 1) : 1);
         if (expandedCount > 10000 || depth > 100) throw new Error("This page expands beyond 10,000 rendered elements or 100 nested levels. Reduce nested repeaters or split the page.");
-        const next = copies * (element.type === "repeater" ? widgetNumber(element.props.repeatCount, 3, 1, 20) : 1);
+        const next = copies * (element.dataSource ? (dataSources[element.id]?.size || 100) : element.type === "repeater" ? widgetNumber(element.props.repeatCount, 3, 1, 20) : 1);
         element.children.forEach(id => { if (codegenElementsById[id]) countOutput(codegenElementsById[id], next, depth + 1); });
     };
     [...safeGlobal, ...allElements].filter(el => !el.parentId).forEach(el => countOutput(el, 1, 0));
 
     safeGlobal.filter(el => !el.parentId).forEach((el) => {
         htmlParts.push(renderElement(el, false, cssParts, "html", flowMap, codegenElementsById));
-        jsxParts.push(renderElement(el, false, cssParts, "jsx", flowMap, codegenElementsById));
+        jsxParts.push(renderElement(el, false, cssParts, "jsx", flowMap, codegenElementsById, dataSources));
     });
     allElements.filter(el => !el.parentId).forEach((el) => {
         htmlParts.push(renderElement(el, true, cssParts, "html", flowMap, codegenElementsById));
-        jsxParts.push(renderElement(el, true, cssParts, "jsx", flowMap, codegenElementsById));
+        jsxParts.push(renderElement(el, true, cssParts, "jsx", flowMap, codegenElementsById, dataSources));
     });
 
     // ─── Animation CSS Generation ───
@@ -547,7 +570,8 @@ document.addEventListener("submit", e => { if (!e.defaultPrevented) { e.preventD
     const hasEndpointWirings = flowGraph
         ? flowGraph.flows.some((f) => f.steps.some((s) => s.type === "api_call"))
         : wirings && wirings.some((w) => w.target.kind === "endpoint");
-    const apiImport = hasEndpointWirings ? 'import { apiFetch } from "./api.js";\n' : "";
+    const hasLiveData = Object.keys(dataSources).length > 0;
+    const apiImport = hasEndpointWirings || hasLiveData ? 'import { apiFetch } from "./api.js";\n' : "";
     // Generate animation useEffect code (inlined into App.jsx)
     const animUseEffect = generateAnimationUseEffect(animJsElements);
 
@@ -557,6 +581,7 @@ import "./styles.css";
 ${Object.keys(customElements).sort().map(id => `import ${customIdentifier(id)} from "./custom/${id}.jsx";`).join("\n")}
 ${apiImport}
 ${widgetRuntime}
+${hasLiveData ? liveDataRuntime : ""}
 const navigateToPage = pageId => { const route = ${pageRoutes}[pageId]; if (route) window.location.href = route; };
 export default function App() {
   const [status, setStatus] = React.useState("");

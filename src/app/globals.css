@@ -8664,3 +8664,12 @@ input[type="range"].editor-slider {
   font-size: 11px;
   color: var(--text-3);
 }
+
+.live-data-inspector { min-width: 0; }
+.live-data-inspector p { color: var(--text-2); font-size: 12px; line-height: 1.5; }
+.live-data-inspector select, .live-data-inspector input { min-width: 0; max-width: 100%; }
+.live-data-inspector .live-data-column { display: flex; align-items: end; gap: 4px; margin: 8px 0; }
+.live-data-column label { flex: 1; min-width: 0; }
+.live-data-inspector .live-data-column button { width: auto; flex: none; }
+.live-data-inspector button { color: var(--text-1); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; }
+.live-data-inspector button:disabled { opacity: .45; }

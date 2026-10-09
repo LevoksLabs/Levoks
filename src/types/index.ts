@@ -128,6 +128,8 @@ export interface ElementLayout {
 }
 
 export interface ElementNode {
+    dataSource?: { serviceId: string; endpointId: string; columns: { fieldId: string; label: string }[]; emptyMessage: string };
+    dataField?: string;
     /** Missing on v1 documents: resolve the definition from type. */
     definitionId?: string;
     definitionVersion?: number;

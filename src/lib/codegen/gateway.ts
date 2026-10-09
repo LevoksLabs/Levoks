@@ -158,7 +158,9 @@ export async function apiFetch(path, options = {}, port) {
     let detail; try {detail = await response.json();} catch {}
     const error = new Error(typeof detail?.error === 'string' ? detail.error : detail?.error?.message || 'Request failed (' + response.status + ')'); error.status = response.status; throw error;
   }
-  return [204, 205].includes(response.status) ? null : response.json();
+  const result = [204, 205].includes(response.status) ? null : await response.json();
+  if (typeof window !== 'undefined' && !['GET', 'HEAD'].includes((options.method || 'GET').toUpperCase())) window.dispatchEvent(new Event('levoks:records:refresh'));
+  return result;
 }
 `.trim();
 }
