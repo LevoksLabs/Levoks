@@ -5,6 +5,7 @@ import type {
   ServiceContainer,
 } from "@/types/backend";
 import { serviceSlug } from "@/lib/project/schema";
+import { FILE_VALIDATION_RUNTIME, submissionFileFields } from "@/lib/backend/files";
 
 export function submissionInboxSource(
   service: ServiceContainer,
@@ -24,6 +25,7 @@ export function submissionInboxSource(
       b.config.route.endsWith("/logout"),
   );
   const modelConfig = model.config as DbModelConfig;
+  const attachments = submissionFileFields(modelConfig, service.blocks);
   const settings = JSON.stringify({
     title: service.name,
     fields: modelConfig.fields.map((f) => f.name),
@@ -33,15 +35,25 @@ export function submissionInboxSource(
     account: `/__levoks/account/${serviceSlug(identity.name)}`,
     logout: logout ? (logout.config as EndpointConfig).route : "",
     identityPort: identity.port,
+    attachments,
+    pageSize: attachments.length ? 5 : 50,
   }).replaceAll("<", "\\u003c");
   return `"use client";
 import {useEffect, useRef, useState} from 'react';
 import {apiFetch} from '@/lib/api';
 import './inbox.css';
 const settings = ${settings};
+${FILE_VALIDATION_RUNTIME}
+function downloadAttachment(value) {
+  if (!fileRuleValid({}, value)) throw new Error('This attachment is unavailable.');
+  const bytes = Uint8Array.from(atob(value.data), character => character.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], {type: 'application/octet-stream'}));
+  const link = document.createElement('a'); link.href = url; link.download = value.name; document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 const text = value => value == null ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value);
 export default function SubmissionInbox() {
-  // ponytail: fixed 50-record pages omit total counts; a full final page may offer one empty Next page.
+  // ponytail: bounded pages omit total counts; a full final page may offer one empty Next page.
   const [records, setRecords] = useState([]), [page, setPage] = useState(1), [revision, setRevision] = useState(0);
   const [busy, setBusy] = useState(true), [error, setError] = useState(''), [status, setStatus] = useState(0), [signingOut, setSigningOut] = useState(false);
   const sequence = useRef(0);
@@ -49,7 +61,7 @@ export default function SubmissionInbox() {
     const controller = new AbortController(), current = ++sequence.current;
     setBusy(true); setRecords([]); setError(''); setStatus(0);
     apiFetch(settings.route + '?page=' + page, {signal: controller.signal}, settings.port).then(rows => {
-      if (!Array.isArray(rows) || rows.length > 50 || rows.some(row => !row || typeof row !== 'object' || !row._id)) throw new Error('The inbox returned an invalid record list.');
+      if (!Array.isArray(rows) || rows.length > settings.pageSize || rows.some(row => !row || typeof row !== 'object' || !row._id)) throw new Error('The inbox returned an invalid record list.');
       if (sequence.current === current && !controller.signal.aborted) setRecords(rows);
     }).catch(e => {if (sequence.current === current && !controller.signal.aborted) {setStatus(e.status || 0); setError(e.status === 401 ? 'Sign in to view submissions.' : e.status === 403 ? 'This account does not have operator access.' : 'Submissions could not be loaded. Please retry.');}}).finally(() => {if (sequence.current === current && !controller.signal.aborted) setBusy(false);});
     return () => controller.abort();
@@ -66,8 +78,8 @@ export default function SubmissionInbox() {
     finally {setSigningOut(false);}
   }
   return <main className="submission-inbox"><a href="/">← Back to application</a><header><div><p>{settings.title}</p><h1>Submission inbox</h1></div><nav aria-label="Inbox actions"><a href={settings.account}>Manage account</a><button disabled={busy || signingOut} onClick={() => setRevision(v => v + 1)}>Refresh submissions</button>{settings.logout && <button disabled={signingOut} onClick={signOut}>Sign out</button>}</nav></header>
-    {busy ? <p role="status">Loading submissions…</p> : error ? <section><p role="alert">{error}</p>{[401, 403].includes(status) && <a href={settings.account}>Sign in or set up operator</a>}<button onClick={() => setRevision(v => v + 1)}>Retry loading</button></section> : records.length === 0 ? <p role="status">No submissions on this page.</p> : <div className="inbox-table" role="region" aria-label="Submission records" tabIndex={0}><table><caption>Latest submissions · page {page}</caption><thead><tr>{settings.timestamps && <th scope="col">Submitted</th>}{settings.fields.map(field => <th key={field} scope="col">{field}</th>)}</tr></thead><tbody>{records.map(record => <tr key={record._id}>{settings.timestamps && <td>{record.createdAt ? new Date(record.createdAt).toLocaleString() : '—'}</td>}{settings.fields.map(field => <td key={field}>{text(record[field])}</td>)}</tr>)}</tbody></table></div>}
-    <nav className="inbox-pages" aria-label="Submission pages"><button disabled={busy || signingOut || page === 1} onClick={() => setPage(v => v - 1)}>Previous page</button><span>Page {page}</span><button disabled={busy || signingOut || !!error || records.length < 50 || page >= 10000} onClick={() => setPage(v => v + 1)}>Next page</button></nav>
+    {busy ? <p role="status">Loading submissions…</p> : error ? <section><p role="alert">{error}</p>{[401, 403].includes(status) && <a href={settings.account}>Sign in or set up operator</a>}<button onClick={() => setRevision(v => v + 1)}>Retry loading</button></section> : records.length === 0 ? <p role="status">No submissions on this page.</p> : <div className="inbox-table" role="region" aria-label="Submission records" tabIndex={0}><table><caption>Latest submissions · page {page}</caption><thead><tr>{settings.timestamps && <th scope="col">Submitted</th>}{settings.fields.map(field => <th key={field} scope="col">{field}</th>)}</tr></thead><tbody>{records.map(record => <tr key={record._id}>{settings.timestamps && <td>{record.createdAt ? new Date(record.createdAt).toLocaleString() : '—'}</td>}{settings.fields.map(field => <td key={field}>{settings.attachments.includes(field) ? record[field] == null ? '—' : fileRuleValid({}, record[field]) ? <button onClick={() => {try {downloadAttachment(record[field]);} catch(e) {setError(e.message);}}}>Download {record[field].name} ({record[field].size} bytes)</button> : 'Attachment unavailable' : text(record[field])}</td>)}</tr>)}</tbody></table></div>}
+    <nav className="inbox-pages" aria-label="Submission pages"><button disabled={busy || signingOut || page === 1} onClick={() => setPage(v => v - 1)}>Previous page</button><span>Page {page}</span><button disabled={busy || signingOut || !!error || records.length < settings.pageSize || page >= 10000} onClick={() => setPage(v => v + 1)}>Next page</button></nav>
   </main>;
 }
 `;

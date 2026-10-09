@@ -104,6 +104,7 @@ export function compatibleFormField(
   element: ElementNode,
   field: { type: SchemaField["type"]; location: RequestMapping["location"] },
 ) {
+  if (String(element.props.inputType || element.props.type) === "file") return field.type === "object" && field.location === "body";
   const multiple =
     definitionFor(element)?.tag === "select" && Boolean(element.props.multiple);
   return (

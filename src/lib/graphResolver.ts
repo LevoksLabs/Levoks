@@ -242,6 +242,7 @@ export function resolveGraph(input: GraphResolverInput): FlowGraph {
                   value: r.value,
                   ...(r.temporal ? {temporal: r.temporal} : {}),
                   ...(r.text ? {text: r.text} : {}),
+                  ...(r.file ? {file: r.file} : {}),
                   message: r.message,
                 })),
                 blockId: block.id,

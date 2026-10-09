@@ -238,7 +238,7 @@ test("nested radio groups and multiple selections retain field identities, compa
   }
 });
 
-test("native values select the checked radio, preserve zero/false and omit disabled controls", () => {
+test("native values select the checked radio, preserve zero/false and omit disabled controls", async () => {
   const run = (input: object, elements: object[] = []) =>
     runInNewContext(
       `${formValueRuntime}\nformControlValue(input, {elements})`,
@@ -275,7 +275,8 @@ test("native values select the checked radio, preserve zero/false and omit disab
     () => run({ type: "number", value: "oops", valueAsNumber: NaN }),
     /valid number/,
   );
-  assert.throws(() => run({ type: "file", files: [{}] }), /storage endpoint/);
+  await assert.rejects(run({ type: "file", files: [{size:262145}], name:"attachment" }), /allowed size/);
+  assert.equal(await run({type:"file",files:[]}),undefined);
   const options = [
     { value: "Design", closest: () => null },
     { value: "Ignored", disabled: true },

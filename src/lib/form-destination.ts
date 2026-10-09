@@ -22,6 +22,7 @@ import { defaultDatabase } from "@/lib/backend/database";
 import { validationChoices } from "@/lib/backend/validation";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { isTextInput, textLimits, textConfigError } from "@/lib/backend/text-validation";
+import { fileLimits, fileConfigError } from "@/lib/backend/files";
 import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
 import { useRoutingStore } from "@/store/routingStore";
@@ -95,10 +96,17 @@ export function submissionFields(
         ? input.props.inputType || "text"
         : input.props.type || definitionFor(input)?.tag || "text",
     );
-    if (["password", "file"].includes(inputType))
+    if (inputType === "password")
       problems.push(
-        `${input.label || "Field " + (index + 1)} needs a dedicated workflow for passwords or uploads.`,
+        `${input.label || "Field " + (index + 1)} needs an identity workflow for passwords.`,
       );
+    const file = inputType === "file" ? fileLimits(input.props) : undefined;
+    if (file) {
+      const error = fileConfigError(file);
+      if (error) problems.push(`${input.label || "Attachment"}: ${error}`);
+      if (input.props.multiple) problems.push("Submission attachments support one file per control. Turn off Multiple.");
+      if (inputs.filter(node => String(node.props.inputType || node.props.type) === "file").length > 1) problems.push("Guided submissions support one attachment field per collection.");
+    }
     const temporal = isTemporalKind(inputType) ? {
       min: String(input.props.min ?? ""),
       max: String(input.props.max ?? ""),
@@ -168,11 +176,12 @@ export function submissionFields(
       choices,
       temporal,
       text,
+      file,
       field: {
         id: input.id,
         name,
         type:
-          definitionFor(input)?.tag === "select" && input.props.multiple
+          inputType === "file" ? "object" : definitionFor(input)?.tag === "select" && input.props.multiple
             ? "array"
             : ["number", "range"].includes(inputType)
               ? "number"
@@ -426,8 +435,9 @@ export function createSubmissionDestination(
         position: { x: 0, y: 0 },
       }) as BackendBlock;
     const validations = analysis.fields.flatMap(
-      ({ field, input, inputType, choices, temporal, text }) => {
+      ({ field, input, inputType, choices, temporal, text, file }) => {
         const rules: ValidationRule[] = [];
+        if (file) rules.push({type:"file",file,message:`Choose a valid ${field.name} within the allowed file size and extensions.`});
         if (temporal && isTemporalKind(inputType)) rules.push({
           type: inputType,
           temporal,

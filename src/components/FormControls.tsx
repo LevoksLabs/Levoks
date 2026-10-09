@@ -27,6 +27,7 @@ const choices = [
   "checkbox",
   "switch",
   "radioButton",
+  "fileUpload",
   "formField",
 ];
 export default function FormControls({ form }: { form: ElementNode }) {

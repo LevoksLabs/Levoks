@@ -83,7 +83,7 @@ function flowHandler(
     if (el.type === "form" && steps.some(step => step.type === "api_call" && !step.requestMappings)) bodyLines.push(`const body = Object.fromEntries(new FormData(target).entries());
         for (const input of target.elements) {
             if (!input.name || input.disabled || input.matches?.(':disabled')) continue;
-            const value = formControlValue(input, target);
+            const value = await formControlValue(input, target);
             if (value !== undefined) body[input.name] = value;
             else delete body[input.name];
         }`);
@@ -103,7 +103,7 @@ function flowHandler(
                     else {
                       const input = Array.from(target.elements || []).find(input => input.id === mapping.source.elementId || input.id === mapping.source.elementId + "-control");
                       if (input) {
-                        value = formControlValue(input, target);
+                        value = await formControlValue(input, target);
                       }
                     }
                     if (value === undefined || value === null || value === "" || mapping.required && Array.isArray(value) && !value.length) {

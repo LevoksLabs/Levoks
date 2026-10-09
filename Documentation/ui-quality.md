@@ -1,5 +1,13 @@
 # Editor quality audit and verification
 
+## Submission attachments — 9 October 2026
+
+File Upload Content exposes labelled maximum size and allowed extensions, inline invalid-configuration recovery, Required and native selection behavior. Backend Validation exposes byte limits, extensions and messages with undo/save/reload. Existing editor tokens and native controls retain visible focus; desktop/compact inspector containment passes. Actual generated forms retain file and sibling bounds at 320/768/1024/1440px, preserve selection on failed saves and clear it after success. Private inbox download buttons show filenames/sizes, hide denied records and remain keyboard reachable in the mobile table scroll region. Reviewed inspector/form/inbox screenshots appear in the completion matrix. Whole-editor screen-reader/touch and whole-catalog responsiveness remain open.
+
+## Visual select choices — 9 October 2026
+
+Select/Multiple Select Content has labelled choice rows, explicit Apply, default checkboxes and native Add/Up/Down/Remove buttons. Duplicate/blank/oversized edits show errors without changing saved choices/defaults; empty lists provide an Add path. Rename/reorder returns focus to the affected input; removal focuses the next row or Add input. Existing graphite surfaces and button tokens replace browser-default styling, with 32px minimum button heights and visible focus. Bulk lists remain in a native disclosure. Desktop/compact containment and actual history/save/reload/export are covered; whole-editor screen-reader/touch acceptance remains open.
+
 ## Local full-stack preview — 9 October 2026
 
 The preview mode selector exposes the actual local generated application alongside frontend preview and design simulation. The local mode replaces the decorative URL/navigation toolbar with Start, Rebuild, Stop, Reload and generated account/inbox shortcuts. Controls wrap at the selected mobile width; runtime-only setup codes and captured mail use native disclosure controls. Pages stay hidden until their generated controls are ready, and Reload waits until the current route is known. Real submissions, operator sign-in, shortcut/navigation/reload, rebuild and cancellation pass browser execution. Desktop and mobile screenshots are preserved in `audit-2026-10-08/fullstack-preview-*.png`. Wider editor accessibility/touch acceptance and custom-source/container/hosted preview remain open.

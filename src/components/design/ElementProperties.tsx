@@ -6,6 +6,8 @@ import { embedError } from "@/lib/elements/embed";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { isTextInput, textLimits, textConfigError, textFormats } from "@/lib/backend/text-validation";
 import { ParameterControl } from "./ParameterControl";
+import SelectOptionsEditor from "./SelectOptionsEditor";
+import { fileLimits, fileConfigError } from "@/lib/backend/files";
 
 export default function ElementProperties({
   element,
@@ -35,6 +37,8 @@ export default function ElementProperties({
   }) : "";
   const textInput = element.type !== "custom" && isTextInput(inputType);
   const textError = textInput ? textConfigError(textLimits(element.props)) : "";
+  const fileInput = element.type === "native" && inputType === "file";
+  const fileError = fileInput ? fileConfigError(fileLimits(element.props)) : "";
   const set = (key: string, value: string | number | boolean) =>
     updateElement(element.id, {
       props: { [key]: value },
@@ -155,6 +159,8 @@ export default function ElementProperties({
               .filter(
                 ([key]) =>
                   (key !== "type" || element.type === "button") &&
+                  !(fileInput && ["maxFileKB", "accept"].includes(key)) &&
+                  !(element.type === "native" && definition?.tag === "select" && ["options", "value", "selectedValues"].includes(key)) &&
                   !(textInput && ["pattern", "minLength", "maxLength"].includes(key)) &&
                   !(element.type === "native" && key === "pattern" && !textInput) &&
                   (element.type === "button"
@@ -216,6 +222,13 @@ export default function ElementProperties({
                   )}
                 </label>
               ))}
+            {element.type === "native" && definition?.tag === "select" && <SelectOptionsEditor key={element.id} element={element}/>}
+            {fileInput && <>
+              <label><span>Maximum file size (KiB)</span><input aria-label="Maximum file size (KiB)" type="number" min={1} max={256} step={1} value={Number(element.props.maxFileKB ?? 256)} onChange={e=>set("maxFileKB",Number(e.target.value))}/></label>
+              <label><span>Allowed file extensions</span><input aria-label="Allowed file extensions" value={String(element.props.accept || "")} placeholder="Any, or .pdf, .png, .txt" onChange={e=>set("accept",e.target.value)}/></label>
+              <p className="panel-caption">Guided submissions store one attachment per collection, up to 256 KiB. Turn off Multiple. Extensions restrict filenames; they do not inspect content. Download attachments from a private inbox. Review backend file rules after edits.</p>
+              {fileError && <p role="alert" className="property-error">{fileError}</p>}
+            </>}
             {textInput && <>
               {(["minLength", "maxLength"] as const).map(key => <label key={key}><span>{key === "minLength" ? "Minimum length" : "Maximum length"}</span>
                 <input aria-label={key === "minLength" ? "Minimum length" : "Maximum length"} type="number" min={0} max={10000} step={1} value={String(element.props[key] ?? "")} onChange={e=>set(key,e.target.value === "" ? "" : String(Number(e.target.value)))} placeholder="Unset" />

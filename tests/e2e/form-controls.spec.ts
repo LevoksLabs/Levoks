@@ -27,6 +27,20 @@ async function add(page: Page, kind: string, name: string, inside?: string) {
     .last()
     .click();
 }
+async function configureChoices(page: Page, values: string[]) {
+  while (
+    await page
+      .getByRole("button", { name: "Remove choice 1", exact: true })
+      .count()
+  )
+    await page
+      .getByRole("button", { name: "Remove choice 1", exact: true })
+      .click();
+  for (const value of values) {
+    await page.getByLabel("New choice", { exact: true }).fill(value);
+    await page.getByRole("button", { name: "Add choice", exact: true }).click();
+  }
+}
 test("broader and nested form controls persist, reorder, validate and export through real authoring", async ({
   page,
 }) => {
@@ -44,8 +58,8 @@ test("broader and nested form controls persist, reorder, validate and export thr
   await page.getByRole("button", { name: "Content", exact: true }).click();
   await add(page, "select", "Select");
   await page.getByLabel("Name", { exact: true }).fill("session");
-  await page.getByLabel("Options", { exact: true }).fill("Morning\nAfternoon");
-  await page.getByLabel("Value", { exact: true }).fill("Afternoon");
+  await configureChoices(page, ["Morning", "Afternoon"]);
+  await page.getByLabel("Default: Afternoon", { exact: true }).check();
   await page.getByLabel("Label", { exact: true }).fill("Workshop session");
   await page.getByLabel("Required", { exact: true }).check();
   await add(page, "formField", "Form Field");
@@ -60,13 +74,82 @@ test("broader and nested form controls persist, reorder, validate and export thr
   await page.getByLabel("Value", { exact: true }).fill("in_person");
   await add(page, "multiSelect", "Multi Select");
   await page.getByLabel("Name", { exact: true }).fill("topics");
-  await page
-    .getByLabel("Options", { exact: true })
-    .fill("Design\nAutomation\nDatabases");
+  await configureChoices(page, ["Design", "Automation", "Databases"]);
   await page.getByLabel("Label", { exact: true }).fill("Topics");
+  await page.getByLabel("Default: Design", { exact: true }).check();
+  await page.getByLabel("Default: Automation", { exact: true }).check();
+  await page.getByLabel("Choice 1 value", { exact: true }).fill("Automation");
   await page
-    .getByLabel("Selected Values", { exact: true })
-    .fill("Design\nAutomation");
+    .getByRole("button", { name: "Apply choice 1", exact: true })
+    .click();
+  await expect(
+    page.locator(".select-options-editor").getByRole("alert"),
+  ).toContainText("unique");
+  await expect(
+    page.getByLabel("Default: Design", { exact: true }),
+  ).toBeChecked();
+  await page
+    .getByLabel("Choice 1 value", { exact: true })
+    .fill("Product design");
+  await page
+    .getByRole("button", { name: "Apply choice 1", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Default: Product design", { exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByLabel("Choice 1 value", { exact: true }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(
+    page.getByLabel("Default: Design", { exact: true }),
+  ).toBeChecked();
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(
+    page.getByLabel("Default: Product design", { exact: true }),
+  ).toBeChecked();
+  await page.getByLabel("Choice 1 value", { exact: true }).fill("Design");
+  await page
+    .getByRole("button", { name: "Apply choice 1", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Move choice 1 down", exact: true })
+    .click();
+  await expect(page.getByLabel("Choice 2 value", { exact: true })).toHaveValue(
+    "Design",
+  );
+  await expect(
+    page.getByLabel("Choice 2 value", { exact: true }),
+  ).toBeFocused();
+  await page
+    .getByRole("button", { name: "Move choice 2 up", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Remove choice 1", exact: true })
+    .click();
+  await expect(page.getByLabel("Default: Design", { exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(
+    page.getByLabel("Default: Design", { exact: true }),
+  ).toBeChecked();
+  await mkdir(".verification/options", { recursive: true });
+  for (const width of [1600, 1100]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page
+      .getByLabel("Choice 1 value", { exact: true })
+      .scrollIntoViewIfNeeded();
+    expect(
+      await page
+        .locator(".select-options-editor")
+        .evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: `.verification/options/inspector-${width}.png`,
+    });
+  }
+  await page.setViewportSize({ width: 1600, height: 1000 });
   await page.getByLabel("Required", { exact: true }).check();
   await add(page, "dateInput", "Date Input");
   await page.getByLabel("Name", { exact: true }).fill("visit_date");
@@ -101,8 +184,7 @@ test("broader and nested form controls persist, reorder, validate and export thr
   await page.getByLabel("Required", { exact: true }).check();
   await add(page, "select", "Select", "Form Field");
   await page.getByLabel("Name", { exact: true }).fill("followup");
-  await page.getByLabel("Options", { exact: true }).fill("Email\nPhone");
-  await page.getByLabel("Value", { exact: true }).fill("");
+  await configureChoices(page, ["Email", "Phone"]);
   await page.getByLabel("Label", { exact: true }).fill("Preferred follow-up");
   await add(page, "textInput", "Text Input", "Form Field");
   await page.getByLabel("Name", { exact: true }).fill("reference");
@@ -359,8 +441,12 @@ test("broader and nested form controls persist, reorder, validate and export thr
   }
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.getByRole("button", { name: "Save project", exact: true }).click();
-  await expect(page.getByRole("button", {name:"Save project",exact:true})).toBeEnabled();
-  await expect(page.locator(".workspace-status-text")).toHaveText("Saved on this device");
+  await expect(
+    page.getByRole("button", { name: "Save project", exact: true }),
+  ).toBeEnabled();
+  await expect(page.locator(".workspace-status-text")).toHaveText(
+    "Saved on this device",
+  );
   await page.reload();
   await selectValidation("topics");
   await expect(choices).toHaveValue("Databases\nAutomation\nDesign");
@@ -404,6 +490,13 @@ test("broader and nested form controls persist, reorder, validate and export thr
   ).toHaveValue("[a-z0-9]+(?:-[a-z0-9]+)*");
   await selectForm(page);
   await page.getByRole("button", { name: "Edit Topics", exact: true }).click();
+  await expect(
+    page.getByLabel("Default: Design", { exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByLabel("Default: Automation", { exact: true }),
+  ).toBeChecked();
+  await page.getByText("Edit lists as text", { exact: true }).click();
   await expect(page.getByLabel("Selected Values", { exact: true })).toHaveValue(
     "Design\nAutomation",
   );

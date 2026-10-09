@@ -2,6 +2,7 @@
 import { validationChoices } from "@/lib/backend/validation";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { textConfigError, textFormats } from "@/lib/backend/text-validation";
+import { fileConfigError } from "@/lib/backend/files";
 import { headerContractProblems } from "@/lib/backend/header-contracts";
 import { CORS_METHODS, corsList, corsProblems } from "@/lib/backend/cors";
 
@@ -951,6 +952,7 @@ const ValidationEditor: React.FC<{
       {config.rules.map((rule, idx) => {
         let choiceError = "";
         if (rule.type === "text") choiceError = textConfigError(rule.text);
+        if (rule.type === "file") choiceError = fileConfigError(rule.file);
         if (isTemporalKind(rule.type))
           choiceError = temporalConfigError(rule.type, rule.temporal);
         if (rule.type === "oneOf") {
@@ -976,6 +978,7 @@ const ValidationEditor: React.FC<{
                       ? rule.temporal
                       : undefined,
                     text: e.target.value === "text" ? rule.text : undefined,
+                    file: e.target.value === "file" ? rule.file : undefined,
                   };
                   onChange({ rules: newRules });
                 }}
@@ -989,6 +992,7 @@ const ValidationEditor: React.FC<{
                 <option value="email">Email</option>
                 <option value="text">Text limits and format</option>
                 <option value="url">Absolute URL</option>
+                <option value="file">Submission attachment</option>
                 <option value="oneOf">Allowed values</option>
                 <option value="accepted">Must be checked</option>
                 <option value="date">Date</option>
@@ -1048,6 +1052,37 @@ const ValidationEditor: React.FC<{
                   any. The minimum sets the step base; otherwise the initial
                   value does. Blank values are optional; add Required to make
                   this mandatory. Local values have no timezone.
+                </p>
+              </>
+            )}
+            {rule.type === "file" && (
+              <>
+                <FieldRow label={`Rule ${idx + 1} maximum file bytes`}>
+                  <input
+                    className="bi-input" type="number" min={1} max={262144} step={1}
+                    value={rule.file?.maxBytes ?? 262144}
+                    onChange={(e) => onChange({
+                      rules: config.rules.map((item, i) => i === idx
+                        ? {...item, file: {...item.file, maxBytes: Number(e.target.value)}}
+                        : item),
+                    })}
+                  />
+                </FieldRow>
+                <FieldRow label={`Rule ${idx + 1} allowed extensions`}>
+                  <input
+                    className="bi-input" value={rule.file?.extensions || ""}
+                    placeholder="Any, or .pdf, .txt"
+                    onChange={(e) => onChange({
+                      rules: config.rules.map((item, i) => i === idx
+                        ? {...item, file: {...item.file, extensions: e.target.value}}
+                        : item),
+                    })}
+                  />
+                </FieldRow>
+                <p className="panel-caption">
+                  Stores name, size and encoded bytes with the record, up to 256 KiB.
+                  Extension rules check the filename. Downloads from the private
+                  inbox use attachment data and never a server path.
                 </p>
               </>
             )}
@@ -1131,7 +1166,7 @@ const ValidationEditor: React.FC<{
                 the address or grant permission to display it as a link.
               </p>
             )}
-            {!["required", "accepted", "email", "url", "text"].includes(
+            {!["required", "accepted", "email", "url", "text", "file"].includes(
               rule.type,
             ) &&
               !isTemporalKind(rule.type) && (

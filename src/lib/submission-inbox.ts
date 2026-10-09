@@ -5,6 +5,7 @@ import { defaultDatabase } from "@/lib/backend/database";
 import { serviceSlug, type ProjectDocument } from "@/lib/project/schema";
 import { useBackendStore } from "@/store/backendStore";
 import { projectHistory } from "@/store/projectHistory";
+import { submissionFileFields } from "@/lib/backend/files";
 
 export function submissionInboxPath(
   service: Pick<ServiceContainer, "name">,
@@ -153,7 +154,7 @@ export function createSubmissionInbox(serviceId: string, submitId: string) {
       filter: {},
       sortField: "_id",
       sortDirection: "desc",
-      limit: 50,
+      limit: submissionFileFields(model.config, service.blocks).length ? 5 : 50,
       page: "$request.query.page",
       output: "submissions",
       policyId: policy.id,

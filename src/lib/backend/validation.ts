@@ -1,5 +1,6 @@
 import { TEMPORAL_RUNTIME } from "./temporal";
 import { TEXT_VALIDATION_RUNTIME } from "./text-validation";
+import { FILE_VALIDATION_RUNTIME } from "./files";
 
 /** Choice rules use the same one-value-per-line format as native Select. */
 export function validationChoices(value: unknown): string[] {
@@ -21,10 +22,12 @@ export function validationChoices(value: unknown): string[] {
 export const VALIDATION_RUNTIME = String.raw`
 ${TEMPORAL_RUNTIME}
 ${TEXT_VALIDATION_RUNTIME}
+${FILE_VALIDATION_RUNTIME}
 function validationRuleValid(rule, value, coerce = false) {
   if (rule.type === 'required') return value !== undefined && value !== '' && (!Array.isArray(value) || value.length > 0);
   if (rule.type === 'accepted') return value === true;
   if (value === undefined) return true;
+  if (rule.type === 'file') return fileRuleValid(rule, value);
   if (rule.type === 'text') return textRuleValid(rule, value);
   if (rule.type === 'url') return urlRuleValid(value);
   if (['date', 'time', 'datetime-local'].includes(rule.type)) return temporalRuleValid(rule, value);

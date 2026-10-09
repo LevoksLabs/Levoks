@@ -6,6 +6,7 @@ import { modelDefault } from "./model-defaults";
 import { databaseSchema, isSql, defaultDatabase } from "./database";
 import { serviceSlug } from "@/lib/project/schema";
 import { relationDiagnostics } from "./relations";
+import { submissionFileFields } from "./files";
 
 export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
   const diagnostics: IRDiagnostic[] = [];
@@ -198,6 +199,7 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
       if (block.type === "rest_endpoint" && block.config.view === "submissionInbox") {
         const config = block.config;
         const model = service.blocks.find(b => b.type === "db_model" && b.id === config.modelId);
+        const inboxPageSize = model?.type === "db_model" && submissionFileFields(model.config, service.blocks).length ? 5 : 50;
         const policy = service.blocks.find(b => b.type === "access_policy" && config.policyIds?.includes(b.id));
         const query = service.blocks.find(b => b.type === "query" && b.id === block.connections[0]);
         const response = service.blocks.find(b => b.type === "response" && b.id === block.connections[1]);
@@ -228,7 +230,7 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
           query.config.operation !== "find" ||
           query.config.modelId !== config.modelId ||
           query.config.policyId !== policy.id ||
-          query.config.limit !== 50 ||
+          query.config.limit !== inboxPageSize ||
           query.config.page !== "$request.query.page" ||
           query.config.sortField !== "_id" ||
           query.config.sortDirection !== "desc" ||
@@ -237,7 +239,7 @@ export function validateBackendIR(backend: BackendIR): IRDiagnostic[] {
           response.config.status !== 200 ||
           response.config.value !== `$${query.config.output}`
         )
-          problem(block.id, "Submission inbox requires a fixed authenticated GET, a separate JWT identity service, the operator submissions.read policy, and a 50-record descending _id query with optional numeric page and an array response. Credential fields and owner/tenant scopes require a dedicated view.");
+          problem(block.id, `Submission inbox requires a fixed authenticated GET, a separate JWT identity service, the operator submissions.read policy, and a ${inboxPageSize}-record descending _id query with optional numeric page and an array response. Credential fields and owner/tenant scopes require a dedicated view.`);
       }
       if (
         jwt &&

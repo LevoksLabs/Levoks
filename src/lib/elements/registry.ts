@@ -278,7 +278,7 @@ for (const [id, name, type] of [
             ...(id === "switch" ? { role: "switch" } : {}),
           }
         : type === "file"
-          ? { accept: "", multiple: false }
+          ? { accept: "", multiple: false, maxFileKB: 256, label: "", helperText: "", error: "" }
           : {
               placeholder: name,
               value: type === "color" ? "#2563eb" : "",

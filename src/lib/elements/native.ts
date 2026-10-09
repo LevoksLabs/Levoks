@@ -91,6 +91,7 @@ export function nativeTree(element: ElementNode): SemanticTree {
   for (const key of ["src", "href"])
     if (p[key] !== undefined && safeElementUrl(p[key])) attrs[key] = safeElementUrl(p[key]);
   attrs.id = element.id;
+  if (d.tag === "input" && p.type === "file") attrs["data-levoks-file-max-bytes"] = Number(p.maxFileKB ?? 256) * 1024;
   if (p.ariaLabel) attrs["aria-label"] = String(p.ariaLabel);
   if (p.ariaBusy) attrs["aria-busy"] = "true";
   if (element.accessibility?.label)

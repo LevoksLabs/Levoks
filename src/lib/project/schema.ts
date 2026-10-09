@@ -4,6 +4,7 @@ import { databaseSchema } from "@/lib/backend/database";
 import { validationChoices } from "@/lib/backend/validation";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { textConfigError, textFormats } from "@/lib/backend/text-validation";
+import { fileConfigError } from "@/lib/backend/files";
 import { definitionFor } from "@/lib/elements/registry";
 import { customDefinitionSchema } from "@/lib/elements/custom";
 import { validateFiles } from "@/lib/codegen/files";
@@ -140,6 +141,7 @@ const configs = {
             "datetime-local",
             "text",
             "url",
+            "file",
             "custom",
           ]),
           value: z.union([text, finite]).optional(),
@@ -155,7 +157,10 @@ const configs = {
             pattern: z.string().max(120).refine(value => textFormats.some(format => format.pattern === value)).optional(),
           }).optional(),
           message: text,
+          file: z.object({maxBytes: z.number().int().min(1).max(262144).optional(), extensions: z.string().max(300).optional()}).optional(),
         }).refine(rule => {
+          if (rule.type === "file") return !rule.temporal && !rule.text && !fileConfigError(rule.file);
+          if (rule.file) return false;
           if (rule.type === "text") return !rule.temporal && !textConfigError(rule.text);
           if (rule.text) return false;
           if (isTemporalKind(rule.type)) return !temporalConfigError(rule.type, rule.temporal);
