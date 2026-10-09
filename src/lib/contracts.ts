@@ -53,7 +53,10 @@ export function endpointFields(config: EndpointConfig) {
       ...field,
       location: "query" as const,
     })),
-    ...(config.requestHeaders || []).map((field) => ({ ...field, location: "header" as const })),
+    ...(config.requestHeaders || []).map((field) => ({
+      ...field,
+      location: "header" as const,
+    })),
     ...(
       config.pathParameters ||
       [...config.route.matchAll(/:([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => ({
@@ -96,6 +99,21 @@ export function isFormInput(element: ElementNode) {
   );
 }
 
+/** Native multiple selections require an array in the JSON request body. */
+export function compatibleFormField(
+  element: ElementNode,
+  field: { type: SchemaField["type"]; location: RequestMapping["location"] },
+) {
+  const multiple =
+    definitionFor(element)?.tag === "select" && Boolean(element.props.multiple);
+  return (
+    field.type !== "object" &&
+    (multiple
+      ? field.type === "array" && field.location === "body"
+      : field.type !== "array")
+  );
+}
+
 /** Resolve stable identities once, before either deterministic or AI generation. */
 export function resolveContract(
   connection: import("@/types/routing").RoutingConnection,
@@ -117,7 +135,10 @@ export function resolveContract(
       message,
     });
   const fields = endpointFields(config);
-  if (!connection.requestMappings && config.requestHeaders?.some(field => field.required))
+  if (
+    !connection.requestMappings &&
+    config.requestHeaders?.some((field) => field.required)
+  )
     error("Required header fields need explicit request mappings in Routing.");
   const requestMappings: ResolvedRequestMapping[] = [];
   const seen = new Set<string>();
@@ -140,11 +161,11 @@ export function resolveContract(
     let responseName: string | undefined;
     const source = mapping.source;
     if (source.kind === "element") {
-      if (["object", "array"].includes(field.type))
-        error(
-          `Field ${field.name} requires structured data from a response, not a text input.`,
-        );
       const element = elements.find((el) => el.id === source.elementId);
+      if (element && !compatibleFormField(element, field))
+        error(
+          `Field ${field.name} requires compatible structured data; multiple selections map to an array in the request body.`,
+        );
       if (
         !element ||
         !isFormInput(element) ||

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEditorStore } from "@/store/editorStore";
-import { CONTAINER_TYPES, ElementNode } from "@/types";
+import { ElementNode } from "@/types";
+import { canHaveChildren } from "@/lib/elements/registry";
 import Renderer from "./Renderer";
 import PenOverlay from "./design/PenOverlay";
 import ContextMenu from "./ContextMenu";
@@ -483,11 +484,12 @@ const Canvas: React.FC = () => {
               0,
               (draggedRect.top - canvasRect.top) / scale,
             );
-            moveElement(
+            const issue = moveElement(
               ds.elementId,
               null,
               useEditorStore.getState().rootIds.length,
             );
+            if (issue) return;
             updateElementPosition(ds.elementId, detachedX, detachedY);
             dragState.current = {
               ...ds,
@@ -722,7 +724,7 @@ const Canvas: React.FC = () => {
               const maybeId = walkNode.getAttribute("data-element-id");
               if (maybeId && maybeId !== ds.elementId) {
                 const maybeEl = state.getElement(maybeId);
-                if (maybeEl && CONTAINER_TYPES.includes(maybeEl.type)) {
+                if (maybeEl && canHaveChildren(maybeEl, state.customElements)) {
                   targetContainerId = maybeId;
                 }
               }
@@ -780,11 +782,14 @@ const Canvas: React.FC = () => {
                   nextY = Math.min(maxY, Math.max(0, relY));
                 }
 
-                moveElement(
+                const issue = moveElement(
                   ds.elementId,
                   targetContainerId,
                   targetContainer.children.length,
                 );
+                if (issue) return;
+                const moved = useEditorStore.getState().elementsById[ds.elementId];
+                if (moved.layout.position === "static" && moved.styles.position === "static") return;
                 const rawPosition = String(draggedEl.styles.position || "");
                 if (!rawPosition || rawPosition === "static") {
                   updateElement(ds.elementId, {

@@ -11,6 +11,7 @@ import {
   fieldIdentity,
   isFormInput,
   isSubmitControl,
+  compatibleFormField,
   resolveContract,
 } from "@/lib/contracts";
 import type { IRDiagnostic } from "@/types/ir";
@@ -27,6 +28,7 @@ import { templates } from "@/templates";
 export function formControls(
   formId: string,
   elements: Record<string, ElementNode>,
+  includeDisabled = false,
 ) {
   const controls: ElementNode[] = [],
     seen = new Set<string>();
@@ -39,7 +41,9 @@ export function formControls(
     if (!node || node.type === "form") continue;
     controls.push(node);
     const children =
-      definitionFor(node)?.tag === "fieldset" && node.props.disabled
+      !includeDisabled &&
+      definitionFor(node)?.tag === "fieldset" &&
+      node.props.disabled
         ? node.children
             .filter(
               (id) =>
@@ -57,9 +61,17 @@ export function submissionFields(
   elements: Record<string, ElementNode>,
 ) {
   const controls = formControls(formId, elements);
-  const inputs = controls.filter(
-    (node) => isFormInput(node) && !node.props.disabled,
-  );
+  const radioNames = new Set<string>();
+  const inputs = controls
+    .filter((node) => isFormInput(node) && !node.props.disabled)
+    .filter((node) => {
+      const type = String(node.props.inputType || node.props.type || "");
+      if (type !== "radio" || !node.props.name) return true;
+      const name = String(node.props.name);
+      if (radioNames.has(name)) return false;
+      radioNames.add(name);
+      return true;
+    });
   const problems: string[] = [];
   if (!inputs.length)
     problems.push("Add at least one enabled input to this form.");
@@ -79,12 +91,9 @@ export function submissionFields(
         ? input.props.inputType || "text"
         : input.props.type || definitionFor(input)?.tag || "text",
     );
-    if (
-      ["password", "file", "radio"].includes(inputType) ||
-      input.props.multiple
-    )
+    if (["password", "file"].includes(inputType))
       problems.push(
-        `${input.label || "Field " + (index + 1)} needs a dedicated workflow for passwords, uploads, radio groups or multiple selections.`,
+        `${input.label || "Field " + (index + 1)} needs a dedicated workflow for passwords or uploads.`,
       );
     let name = String(input.props.name || `field_${index + 1}`)
       .replace(/[^A-Za-z0-9_]/g, "_")
@@ -112,12 +121,25 @@ export function submissionFields(
       field: {
         id: input.id,
         name,
-        type: ["number", "range"].includes(inputType)
-          ? "number"
-          : inputType === "checkbox"
-            ? "boolean"
-            : "string",
-        required: Boolean(input.props.required),
+        type:
+          definitionFor(input)?.tag === "select" && input.props.multiple
+            ? "array"
+            : ["number", "range"].includes(inputType)
+              ? "number"
+              : inputType === "checkbox"
+                ? "boolean"
+                : "string",
+        required:
+          Boolean(input.props.required) ||
+          (inputType === "radio" &&
+            Boolean(input.props.name) &&
+            controls.some(
+              (node) =>
+                String(node.props.inputType || node.props.type) === "radio" &&
+                node.props.name === input.props.name &&
+                node.props.required &&
+                !node.props.disabled,
+            )),
       } as SchemaField,
       inputType,
     };
@@ -164,11 +186,11 @@ export function suggestedFormMappings(
     (node) => isFormInput(node) && !node.props.disabled,
   );
   return endpointFields(config).flatMap((field) => {
-    if (["object", "array"].includes(field.type)) return [];
     const input = inputs.find(
       (node) =>
+        compatibleFormField(node, field) &&
         String(node.props.name || "").toLowerCase() ===
-        field.name.toLowerCase(),
+          field.name.toLowerCase(),
     );
     return input
       ? [
@@ -356,6 +378,11 @@ export function createSubmissionDestination(
     const validations = analysis.fields.flatMap(
       ({ field, input, inputType }) => {
         const rules: { type: string; value?: string; message: string }[] = [];
+        if (field.type === "array" && field.required)
+          rules.push({
+            type: "required",
+            message: `Choose at least one ${field.name} option.`,
+          });
         if (field.type === "string")
           rules.push({
             type: "maxLength",

@@ -15,6 +15,7 @@ import { widgetRuntime } from "./widget-runtime";
 import { resolveElement, vectorPath, motionFrames, fontFamily } from "@/lib/design";
 import { liveDataRuntime, liveDataCSS } from "./live-data";
 import type { ResolvedDataSource } from "@/lib/live-data";
+import { formValueRuntime } from "./form-values";
 
 type FrontendCodeResult = {
     files: Record<string, string>;
@@ -82,13 +83,9 @@ function flowHandler(
     if (el.type === "form" && steps.some(step => step.type === "api_call" && !step.requestMappings)) bodyLines.push(`const body = Object.fromEntries(new FormData(target).entries());
         for (const input of target.elements) {
             if (!input.name || input.disabled || input.matches?.(':disabled')) continue;
-            if (input.type === "number" || input.type === "range") {
-                if (input.value === "") delete body[input.name];
-                else if (!Number.isFinite(input.valueAsNumber)) throw new Error("Enter a valid number for " + input.name);
-                else body[input.name] = input.valueAsNumber;
-            }
-            if (input.type === "checkbox") body[input.name] = input.checked;
-            if (input.type === "file" && input.files?.length) throw new Error("File uploads require a storage endpoint.");
+            const value = formControlValue(input, target);
+            if (value !== undefined) body[input.name] = value;
+            else delete body[input.name];
         }`);
 
     for (let i = 0; i < steps.length; i++) {
@@ -105,18 +102,18 @@ function flowHandler(
                     else if (mapping.source.kind === "response") value = result?.[mapping.responseName];
                     else {
                       const input = Array.from(target.elements || []).find(input => input.id === mapping.source.elementId || input.id === mapping.source.elementId + "-control");
-                      if (input && !input.disabled && !input.matches?.(':disabled')) {
-                        if (input.type === "file") throw new Error("File uploads require a storage endpoint.");
-                        value = input.type === "checkbox" ? input.checked : input.type === "radio" && !input.checked ? undefined : input.value;
+                      if (input) {
+                        value = formControlValue(input, target);
                       }
                     }
-                    if (value === undefined || value === null || value === "") {
+                    if (value === undefined || value === null || value === "" || mapping.required && Array.isArray(value) && !value.length) {
                       if (mapping.required) throw new Error("Missing " + mapping.name);
                       continue;
                     }
                     if (mapping.type === "number") { value = Number(value); if (!Number.isFinite(value)) throw new Error("Invalid number: " + mapping.name); }
                     if (mapping.type === "boolean") { if (![true, false, "true", "false"].includes(value)) throw new Error("Invalid boolean: " + mapping.name); value = value === true || value === "true"; }
                     if (mapping.type === "string" || mapping.type === "objectId" || mapping.type === "date") value = String(value);
+                    if (mapping.type === "array" && (!Array.isArray(value) || mapping.source.kind === "element" && value.length > 200)) throw new Error("Invalid array: " + mapping.name);
                     if (mapping.location === "header") {
                       value = String(value);
                       if (value.length > 4096 || /[^\\x20-\\x7e]/.test(value)) throw new Error("Invalid header: " + mapping.name);
@@ -149,7 +146,7 @@ function flowHandler(
 
     if (bodyLines.length === 0) return "";
 
-    const handlerBody = bodyLines.join(" ");
+    const handlerBody = (el.type === "form" ? formValueRuntime : "") + bodyLines.join(" ");
 
     return `async (e) => { e.preventDefault(); const target = e.currentTarget; if (target.dataset.busy || target.disabled || target.getAttribute?.("aria-disabled") === "true") return; target.dataset.busy = "true"; target.setAttribute("aria-busy", "true"); setStatus("Working…"); let failure = {}; try { ${handlerBody} ${el.type === "form" && el.props.resetOnSuccess ? "target.reset();" : ""} setStatus(${JSON.stringify(el.type === "form" ? String(el.props.successMessage || "Done") : "Done")}); } catch (err) { setStatus(failure.message || (err instanceof Error ? err.message : "Request failed. Please try again.")); ${mode === "jsx" ? "if (failure.pageRoute) window.location.href = failure.pageRoute;" : 'if (failure.pageId) window.parent.postMessage({type: "levoks:preview:navigate", pageId: failure.pageId}, "*");'} } finally { delete target.dataset.busy; target.removeAttribute("aria-busy"); } }`;
 }

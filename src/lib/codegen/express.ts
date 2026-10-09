@@ -421,7 +421,7 @@ exports.validateRules = (req, res, next) => {
     const value = req.body[validation.fieldName];
     for (const rule of validation.rules) {
       if (req.method === 'PATCH' && value === undefined) continue;
-      const valid = rule.type === 'required' ? value !== undefined && value !== '' : value === undefined ? true : rule.type === 'email' ? typeof value === 'string' && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value) : rule.type === 'minLength' ? String(value).length >= Number(rule.value) : rule.type === 'maxLength' ? String(value).length <= Number(rule.value) : rule.type === 'min' ? Number(value) >= Number(rule.value) : rule.type === 'max' ? Number(value) <= Number(rule.value) : false;
+      const valid = rule.type === 'required' ? value !== undefined && value !== '' && (!Array.isArray(value) || value.length > 0) : value === undefined ? true : rule.type === 'email' ? typeof value === 'string' && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value) : rule.type === 'minLength' ? String(value).length >= Number(rule.value) : rule.type === 'maxLength' ? String(value).length <= Number(rule.value) : rule.type === 'min' ? Number(value) >= Number(rule.value) : rule.type === 'max' ? Number(value) <= Number(rule.value) : false;
       if (!valid) return res.status(400).json({ error: rule.message || 'Validation failed' });
     }
   }

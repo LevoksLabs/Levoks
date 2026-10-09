@@ -14,6 +14,7 @@ import {
   endpointFields,
   fieldIdentity,
   isFormInput,
+  compatibleFormField,
   type RequestMapping,
 } from "@/lib/contracts";
 import {
@@ -221,13 +222,13 @@ function FormDestinationSettings({ form }: { form: ElementNode }) {
                     <option
                       key={input.id}
                       value={input.id}
-                      disabled={["object", "array"].includes(field.type)}
+                      disabled={!compatibleFormField(input, field)}
                     >
                       {input.label || input.props.name || input.id}
                     </option>
                   ))}
                 </select>
-                {["object", "array"].includes(field.type) && (
+                {field.type === "object" && (
                   <small>Configure structured values in Routes.</small>
                 )}
               </label>

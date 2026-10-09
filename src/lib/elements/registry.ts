@@ -327,7 +327,7 @@ for (const [id, name, multiple] of [
       multiple,
       required: false,
       disabled: false,
-      label: "", helperText: "", error: "", ...(!multiple ? { value: "Option one", placeholder: "Choose an option" } : {}),
+      label: "", helperText: "", error: "", ...(!multiple ? { value: "Option one", placeholder: "Choose an option" } : {selectedValues: ""}),
     },
     inputStyles,
     false,

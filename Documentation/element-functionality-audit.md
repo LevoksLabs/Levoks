@@ -151,10 +151,18 @@ Tables contain their overflow and emit caption/column headers. Collections prese
 
 [Live widget contracts](fullstack-contracts.md#live-database-widgets) record source restrictions and unsupported record scopes/actions/formatters. This accepts the supported read/display subset; it does not promote unrelated property dimensions or the whole Table/Repeater catalog rows to fully functional. Screen-reader, broader nested editing, filtering/sorting and other element contracts remain open.
 
+## Native form authoring acceptance — 9 October 2026
+
+Forms now expose addition, selection and ordering of native controls inside existing nested groups. Fieldsets grow with their authored children; control labels and native interaction remain shared across canvas/HTML/React. Persisted multiple selections and grouped radio submission values now execute in guided MongoDB destinations and compatible existing body contracts. The authoring test creates a workshop form through drag/drop and the inspector, reorders with undo/redo, saves/reloads, checks the generated preview and compares every downloaded file with the compiler. The actual production application stores arrays and the chosen radio member, rejects invalid/empty required array submissions, recovers after backend outage and resets to saved defaults.
+
+Computed bounds and sibling non-overlap pass at 320/768/1024/1440px; desktop/mobile production and desktop/compact editor screenshots were inspected. This is acceptance of this nested native form path, not every property of every field definition. [Native form contracts](fullstack-contracts.md#native-and-nested-form-controls) retain server constraint, upload, composite-editor, reusable-component and accessibility boundaries. Historical census grades remain unchanged.
+
 ## Remaining work before library-wide completion
 
+The 9 October nested-editing continuation adds existing-control/group moves through the form inspector and native-group drops in Layers. Date/multiple-select regrouping retains same-form storage identities and normal flow across saved breakpoints. Global children keep one root tree when detached/reparented; linked component boundaries explain the required detach step. Browser checks cover cancel/focus, undo/redo, locks, detach recovery, reload/preview and real ZIP/compiler parity. Unit checks reject cycles, nested forms, inactive-page/cross-scope moves and excessive depth. Downloaded form production acceptance still verifies nested containment and non-overlap at four widths. This does not certify arbitrary parent geometry or reusable-component structural overrides.
+
 - Execute every element-specific acceptance contract above, including edited state and full exported runtime, rather than interpreting insertion as functionality.
-- Complete Rich Text, Timeline, real Map configuration, tooltip/popover semantics, drawer placement, toast lifecycle and multi-select persisted selections.
+- Complete Rich Text, Timeline, real Map configuration, tooltip/popover semantics, drawer placement and toast lifecycle. Multi-select persisted selections and form submission now have the bounded acceptance below; their remaining constraints and accessibility coverage remain open.
 - Accept all composition child actions, navigation destinations, nested/flow layout, responsive styles and live data/form/backend integrations.
 - Finish full keyboard and assistive-technology acceptance, including screen readers and cross-browser native controls.
 - Verify all shortcuts and snapping/alignment/zoom/pan edge cases on mouse and trackpad. Existing editor regression workflows cover representative operations only.

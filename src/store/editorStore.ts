@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { canHaveChildren } from "@/lib/elements/registry";
+import { isFormInput, isSubmitControl } from "@/lib/contracts";
 import { customDefinitionSchema, type CustomDefinition } from "@/lib/elements/custom";
 import { ElementNode, Page, ElementType, CONTAINER_TYPES, DesignToken, ComponentDefinition, DesignAsset } from "@/types";
 import { generateElementId, generatePageId, deepCloneSubtree, syncCounters } from "@/lib/idGenerator";
@@ -8,6 +9,7 @@ import type { TemplateElement } from "@/types/template";
 import {
     collectDescendantIds, isAncestorOf, getBreadcrumbPath as getBreadcrumbPathHelper,
     findParentAndIndex, reorderSiblings, detachElement, attachElement,
+    elementRoot,
 } from "./editorHelpers";
 
 import { useEditorUIStore } from "./editorUIStore";
@@ -64,7 +66,7 @@ interface EditorStore {
     toggleLock: (id: string) => void;
     deleteElement: (id: string) => void;
     duplicateElement: (id: string) => void;
-    moveElement: (id: string, targetParentId: string | null, index: number) => void;
+    moveElement: (id: string, targetParentId: string | null, index: number) => string | null;
     selectElement: (id: string | null) => void;
     selectElements: (ids: string[]) => void;
     toggleSelectElement: (id: string) => void;
@@ -118,7 +120,7 @@ function updateLayout(el: ElementNode, patch: Partial<ElementNode["layout"]>): E
 }
 
 function isSubmitButton(element: ElementNode | undefined): boolean {
-    return element?.type === "button" && !element.props.href && (!element.props.type || element.props.type === "submit");
+    return Boolean(element && isSubmitControl(element));
 }
 
 // Build nested elements from template data (old format with nested children objects)
@@ -297,7 +299,7 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
             if (validParent && next[validParent]) {
                 const parent = next[validParent];
                 const children = [...parent.children];
-                const submitIndex = parent.type === "form" && element.type === "input"
+                const submitIndex = parent.type === "form" && (isFormInput(element) || canHaveChildren(element, state.customElements))
                     ? children.findIndex(childId => isSubmitButton(next[childId])) : -1;
                 children.splice(submitIndex < 0 ? children.length : submitIndex, 0, id);
                 next[validParent] = { ...parent, children };
@@ -430,16 +432,41 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
     },
 
     moveElement: (id, targetParentId, index) => {
+        const state = get(), element = state.elementsById[id];
+        if (!element || !Number.isInteger(index) || index < 0) return "This layer is no longer available.";
+        const root = elementRoot(state.elementsById, id);
+        const key = root && state.globalRootIds.includes(root) ? "globalRootIds" : "rootIds";
+        if (!root || !state[key].includes(root)) return "Choose a layer on the active page or in Global.";
+        if (targetParentId && (!state.elementsById[targetParentId] || !canHaveChildren(state.elementsById[targetParentId], state.customElements))) return "Choose a container for this layer.";
+        if (targetParentId === id || targetParentId && isAncestorOf(state.elementsById, id, targetParentId)) return "A group cannot be moved inside itself or its children.";
+        if (targetParentId && !state[key].includes(elementRoot(state.elementsById, targetParentId)!)) return "Keep page and global layers in their own section.";
+        const locked = (start: string | null) => start && getBreadcrumbPathHelper(state.elementsById, start).some(node => state.elementsById[node.id].layout.locked);
+        if (locked(id) || locked(targetParentId)) return "Unlock the layer and its groups before moving it.";
+        if (element.parentId !== targetParentId && element.component && element.component.node !== state.components[element.component.id]?.rootId) return "Detach the component instance before moving its children between groups.";
+        if (element.parentId !== targetParentId && targetParentId && state.elementsById[targetParentId].component) return "Detach the component instance before moving layers into its groups.";
+        let owner = targetParentId ? state.elementsById[targetParentId] : undefined;
+        while (owner && owner.type !== "form") owner = owner.parentId ? state.elementsById[owner.parentId] : undefined;
+        const pending: [string, number][] = [[id, targetParentId ? getBreadcrumbPathHelper(state.elementsById, targetParentId).length : 0]];
+        while (pending.length) {
+            const [childId, depth] = pending.pop()!;
+            if (depth > 100) return "Groups support at most 100 levels of nesting.";
+            const child = state.elementsById[childId];
+            if (owner && child.type === "form") return "A form cannot be placed inside another form.";
+            pending.push(...child.children.map(id => [id, depth + 1] as [string, number]));
+        }
         set(state => {
-            if (!state.elementsById[id]) return state;
-            if (targetParentId && !state.elementsById[targetParentId]) return state;
-            if (targetParentId && !canHaveChildren(state.elementsById[targetParentId], state.customElements)) return state;
-            if (targetParentId && isAncestorOf(state.elementsById, id, targetParentId)) return state;
-            if (targetParentId === id) return state;
-            const d = detachElement(state.elementsById, state.rootIds, id);
-            const a = attachElement(d.byId, d.rootIds, id, targetParentId, index);
-            return { elementsById: a.byId, rootIds: a.rootIds };
+            const d = detachElement(state.elementsById, state[key], id);
+            const siblings = targetParentId ? d.byId[targetParentId].children : d.rootIds;
+            const submitIndex = targetParentId && d.byId[targetParentId].type === "form" && !isSubmitControl(element) ? siblings.findIndex(child => isSubmitButton(d.byId[child])) : -1;
+            const a = attachElement(d.byId, d.rootIds, id, targetParentId, submitIndex >= 0 ? Math.min(index, submitIndex) : index);
+            if (owner && element.parentId !== targetParentId) {
+                const styles = { ...element.styles, position: "static", maxWidth: "100%" };
+                const responsive = element.responsive && Object.fromEntries(Object.entries(element.responsive).map(([bp, override]) => [bp, { ...override, layout: { ...override.layout, position: "static", x: 0, y: 0 }, styles: { ...override.styles, position: "static", maxWidth: "100%" } }]));
+                a.byId[id] = { ...patchElement(element, { styles, layout: { ...element.layout, position: "static", x: 0, y: 0 }, responsive }, "base"), parentId: targetParentId };
+            }
+            return { elementsById: a.byId, [key]: a.rootIds };
         });
+        return null;
     },
 
     selectElement: (id) => set({ selectedElementId: id, selectedElementIds: id ? [id] : [] }),
@@ -465,6 +492,9 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
     reorderElements: (parentId, oldIndex, newIndex, scope = "page") => {
         set(state => {
             if (oldIndex === newIndex) return state;
+            const siblings = parentId ? state.elementsById[parentId]?.children : scope === "global" ? state.globalRootIds : state.rootIds;
+            const moving = siblings?.[oldIndex];
+            if (!moving || getBreadcrumbPathHelper(state.elementsById, moving).some(node => state.elementsById[node.id].layout.locked)) return state;
             if (!parentId) {
                 const key = scope === "global" ? "globalRootIds" : "rootIds";
                 const newRoots = reorderSiblings(state[key], oldIndex, newIndex);

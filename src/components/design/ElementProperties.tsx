@@ -183,7 +183,7 @@ export default function ElementProperties({
                       onChange={(value) => set(key, value)}
                     />
                   ) : field.type === "string" &&
-                    ["items", "options", "rows", "content"].includes(key) ? (
+                    ["items", "options", "selectedValues", "rows", "content"].includes(key) ? (
                     <textarea
                       aria-label={field.label}
                       rows={3}

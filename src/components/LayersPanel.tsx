@@ -3,7 +3,7 @@
 import { useEditorUIStore } from "@/store/editorUIStore";
 import { resolveElement } from "@/lib/design";
 import { useEditorStore } from "@/store/editorStore";
-import { CONTAINER_TYPES } from "@/types";
+import { canHaveChildren } from "@/lib/elements/registry";
 import { useRef, useState, useCallback, useMemo } from "react";
 import { useShallow } from "zustand/shallow";
 import { isAncestorOf } from "@/store/editorHelpers";
@@ -59,7 +59,6 @@ const LayerItem: React.FC<{
 
     return (
         <>
-            {showDropBefore && <div className="layer-drop-indicator" style={{ marginLeft: `${12 + depth * 16}px` }} />}
             <div
                 className={`layer-item ${isSelected ? "layer-selected" : ""} ${!element.layout.visible ? "layer-hidden" : ""} ${showDropInside ? "layer-drop-inside" : ""}`}
                 style={{ paddingLeft: `${12 + depth * 16}px` }}
@@ -86,6 +85,7 @@ const LayerItem: React.FC<{
                 }}
                 onClick={(e) => { if (e.shiftKey) toggleSelectElement(elementId); else selectElement(elementId); }}
             >
+                {(showDropBefore || showDropAfter) && <div aria-hidden="true" className="layer-drop-indicator" style={{ left: `${12 + depth * 16}px`, top: showDropBefore ? 0 : undefined, bottom: showDropAfter ? 0 : undefined }} />}
                 <div className="layer-grip" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onDragStart(elementId, parentId, index, scope); }} title="Drag to reorder">
                     <GripVertical size={12} />
                 </div>
@@ -101,7 +101,6 @@ const LayerItem: React.FC<{
                     </button>
                 </div>
             </div>
-            {showDropAfter && <div className="layer-drop-indicator" style={{ marginLeft: `${12 + depth * 16}px` }} />}
             {expanded && element.children.map((childId, ci) => (
                 <LayerItem key={childId} elementId={childId} depth={depth + 1} index={ci} parentId={elementId} scope={scope} onDragStart={onDragStart} dropIndicator={dropIndicator} />
             ))}
@@ -142,12 +141,13 @@ const LayerTree: React.FC<{
 };
 
 const LayersPanel: React.FC = () => {
-    const { rootIds, globalRootIds, elementsById, reorderElements, moveElement } = useEditorStore(useShallow(s => ({
+    const { rootIds, globalRootIds, elementsById, moveElement } = useEditorStore(useShallow(s => ({
         rootIds: s.rootIds, globalRootIds: s.globalRootIds, elementsById: s.elementsById,
-        reorderElements: s.reorderElements, moveElement: s.moveElement,
+        moveElement: s.moveElement,
     })));
 
     const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
+    const [moveError, setMoveError] = useState<string | null>(null);
     const dragRef = useRef<DragState | null>(null);
     const dropRef = useRef<DropIndicator | null>(null);
     const listRefs = useRef<{ page: HTMLDivElement | null; global: HTMLDivElement | null }>({ page: null, global: null });
@@ -161,11 +161,6 @@ const LayersPanel: React.FC = () => {
         });
         return acc;
     }, [elementsById]);
-
-    const getScopeRootIds = useCallback((scope: Scope): string[] => {
-        const s = useEditorStore.getState();
-        return scope === "global" ? s.globalRootIds : s.rootIds;
-    }, []);
 
     const handleDragStart = useCallback((elementId: string, parentId: string | null, index: number, scope: Scope) => {
         dragRef.current = { elementId, parentId, index, scope };
@@ -196,7 +191,7 @@ const LayersPanel: React.FC = () => {
                 const midY = rect.top + rect.height / 2;
                 const topZone = rect.top + rect.height * 0.25;
                 const bottomZone = rect.bottom - rect.height * 0.25;
-                const isCont = CONTAINER_TYPES.includes(targetEl.type);
+                const isCont = canHaveChildren(targetEl, state.customElements);
 
                 if (isCont && e.clientY >= topZone && e.clientY <= bottomZone) {
                     if (!isAncestorOf(state.elementsById, src.elementId, targetId) && src.elementId !== targetId) {
@@ -234,9 +229,9 @@ const LayersPanel: React.FC = () => {
                         const siblings = el.parentId ? state.elementsById[el.parentId]?.children || [] : (src.scope === "global" ? state.globalRootIds : state.rootIds);
                         const curIdx = siblings.indexOf(src.elementId);
                         const adj = drop.index > curIdx ? drop.index - 1 : drop.index;
-                        reorderElements(el.parentId, curIdx, adj, src.scope);
+                        setMoveError(moveElement(src.elementId, el.parentId, adj));
                     } else {
-                        moveElement(src.elementId, drop.parentId, drop.index);
+                        setMoveError(moveElement(src.elementId, drop.parentId, drop.index));
                     }
                 }
             }
@@ -249,7 +244,7 @@ const LayersPanel: React.FC = () => {
         document.body.style.userSelect = "none";
         document.addEventListener("mousemove", handleMouseMove);
         document.addEventListener("mouseup", handleMouseUp);
-    }, [buildFlatList, getScopeRootIds, moveElement, reorderElements]);
+    }, [buildFlatList, moveElement]);
 
     const totalCount = rootIds.length + globalRootIds.length;
 
@@ -260,6 +255,7 @@ const LayersPanel: React.FC = () => {
                 <span className="layers-count">{totalCount}</span>
             </div>
             <div className="layers-list">
+                {moveError && <p className="panel-caption" role="alert">{moveError}</p>}
                 {totalCount === 0 ? (
                     <div className="layers-empty"><span>No elements</span><span>Drag elements from the sidebar</span></div>
                 ) : (

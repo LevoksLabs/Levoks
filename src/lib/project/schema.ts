@@ -446,6 +446,10 @@ export function parseProject(value: unknown): ProjectDocument {
         if (!definition.children && node.children.length) throw new Error("This element does not accept children.");
         for (const [key, value] of Object.entries(node.props)) if (!definition.propsSchema[key] || typeof value !== definition.propsSchema[key].type) throw new Error(`Invalid ${definition.name} property: ${key}`);
         if (definition.tag === "input" && node.props.type !== definition.template.props.type) throw new Error("Input type is defined by the element registry.");
+        if (definition.tag === "select") {
+          const options = String(node.props.options || "").split("\n").filter(Boolean), selected = String(node.props.selectedValues || "").split("\n").filter(Boolean);
+          if (options.length > 200 || new Set(options).size !== options.length || selected.some(value => !options.includes(value)) || new Set(selected).size !== selected.length) throw new Error("Select options must be unique (at most 200); selected values must exist in those options.");
+        }
         // Upgrade the old 28px unlabeled choices once, in semantic state. Never
         // leave a canvas-only size/label correction that disappears on export.
         if (!project.source && ["radioButton", "checkbox", "switch"].includes(definition.id) && node.props.label === undefined) {

@@ -3,6 +3,8 @@ import { canvasSize } from "@/lib/design";
 import ElementProperties from "./design/ElementProperties";
 import FormDestination from "./FormDestination";
 import DataBinding from "./DataBinding";
+import FormControls from "./FormControls";
+import { formControls } from "@/lib/form-destination";
 import { ParameterControl, DimensionControl, LENGTH_UNITS } from "./design/ParameterControl";
 import SpacingControl from "./design/SpacingControl";
 
@@ -85,6 +87,12 @@ const FORM_FIELD_TYPES = [
   "url",
   "date",
   "textarea",
+  "checkbox",
+  "radio",
+  "range",
+  "time",
+  "datetime-local",
+  "color",
 ] as const;
 
 const FORM_REQUEST_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
@@ -792,10 +800,7 @@ const PropertyInspector: React.FC = () => {
   };
   const formFieldIds =
     el.type === "form"
-      ? el.children.filter((childId) => {
-          const c = elementsById[childId];
-          return c && c.type === "input";
-        })
+      ? formControls(el.id, elementsById, true).filter(c => c.type === "input").map(c => c.id)
       : [];
   const formFields = formFieldIds.map((id) => getElement(id)!).filter(Boolean);
   const updateFormField = (fieldId: string, updates: Partial<ElementNode>) => {
@@ -1857,6 +1862,7 @@ const PropertyInspector: React.FC = () => {
               <>
                 <Section title="Submission destination"><FormDestination key={el.id} form={el} /></Section>
                 <Section title="Fields">
+                  <FormControls key={el.id} form={el} />
                   <button type="button" onClick={() => useEditorStore.getState().arrangeFormFields(el.id)}>Arrange fields vertically</button>
                   <p className="panel-caption">Place fields in order above Submit. Use this to repair an older overlapping form; undo restores your previous layout.</p>
                   <div className="insp-form-fields-header">

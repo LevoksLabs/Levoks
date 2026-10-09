@@ -8,12 +8,12 @@ export type SemanticTree =
   | { slot: true }
   | {
       tag: string;
-      attrs: Record<string, string | number | boolean>;
+      attrs: Record<string, string | number | boolean | string[]>;
       children: SemanticTree[];
     };
 const node = (
   tag: string,
-  attrs: Record<string, string | number | boolean> = {},
+  attrs: Record<string, string | number | boolean | string[]> = {},
   children: SemanticTree[] = [],
 ): SemanticTree => ({ tag, attrs, children });
 export const escapeMarkup = (value: unknown) =>
@@ -59,7 +59,7 @@ export function nativeTree(element: ElementNode): SemanticTree {
   if (!d || d.render !== "native")
     throw new Error("Missing native element definition.");
   const p = legacyInput ? { ...element.props, type: element.props.inputType || "text" } : element.props;
-  const attrs: Record<string, string | number | boolean> = {};
+  const attrs: Record<string, string | number | boolean | string[]> = {};
   for (const key of [
     "name",
     "title",
@@ -167,6 +167,7 @@ export function nativeTree(element: ElementNode): SemanticTree {
   } else if (d.generate === "select") {
     if (p.placeholder) children.push(node("option", { value: "", disabled: true }, [String(p.placeholder)]));
     if (p.value !== undefined && !p.multiple) attrs.defaultValue = String(p.value);
+    if (p.multiple) attrs.defaultValue = String(p.selectedValues || "").split("\n").filter(Boolean);
     children.push(
       ...String(p.options || "")
         .split("\n")
@@ -243,6 +244,7 @@ export function nativeMarkup(
     .map(([key, value]) => {
       if (tree.tag === "textarea" && key === "defaultValue" && mode === "html")
         return "";
+      if (tree.tag === "select" && key === "defaultValue") return mode === "jsx" ? ` defaultValue={${JSON.stringify(value).replaceAll("<", "\\u003c")}}` : "";
       const name =
         mode === "jsx"
           ? key
@@ -256,7 +258,8 @@ export function nativeMarkup(
     })
     .join("");
   if (voidTags.has(tree.tag)) return `<${tree.tag}${attrs}${rootAttributes} />`;
-  const children = tree.tag === "select" && mode === "html" && tree.attrs.defaultValue !== undefined ? tree.children.map(child => typeof child === "object" && "tag" in child && child.tag === "option" ? { ...child, attrs: { ...child.attrs, selected: String(child.attrs.value) === String(tree.attrs.defaultValue) } } : child) : tree.children;
+  const selected = Array.isArray(tree.attrs.defaultValue) ? tree.attrs.defaultValue : [String(tree.attrs.defaultValue)];
+  const children = tree.tag === "select" && mode === "html" && tree.attrs.defaultValue !== undefined ? tree.children.map(child => typeof child === "object" && "tag" in child && child.tag === "option" ? { ...child, attrs: { ...child.attrs, selected: selected.includes(String(child.attrs.value)) } } : child) : tree.children;
   const content =
     tree.tag === "textarea" && mode === "html"
       ? escapeMarkup(tree.attrs.defaultValue)

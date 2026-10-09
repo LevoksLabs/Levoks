@@ -59,6 +59,20 @@ export function findParentAndIndex(
     return idx >= 0 ? { parentId: el.parentId, index: idx } : null;
 }
 
+/** A nested element keeps the root list it belongs to when it changes parent. */
+export function elementRoot(
+    byId: Record<string, ElementNode>, id: string
+): string | undefined {
+    const seen = new Set<string>();
+    let node = byId[id];
+    while (node?.parentId) {
+        if (seen.has(node.id)) return;
+        seen.add(node.id);
+        node = byId[node.parentId];
+    }
+    return node?.id;
+}
+
 // Reorder within siblings
 export function reorderSiblings(
     arr: string[], oldIdx: number, newIdx: number

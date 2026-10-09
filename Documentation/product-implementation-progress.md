@@ -4,6 +4,8 @@ This follows the [8 October local audit](local-product-audit-2026-10-08.md). The
 
 ## Implemented and verified locally
 
+9 October nested-editing continuation: Form → Content → Fields now moves existing controls/groups with a keyboard-operable destination selector, cancellation and returned focus. Layers accepts native groups, preserves global/page ownership and explains locked or linked-instance rejections. Detached component children can then move normally. Regrouped date/multiple-select inputs retain storage mappings and responsive flow through history, save/reload, preview, actual ZIP download and the production form runtime. The matrix records the exact evidence and the remaining component/geometry boundaries.
+
 9 October continuation: [live database widgets](fullstack-contracts.md#live-database-widgets) now connect Tables/Collections/Repeaters to existing authorized list endpoints. Table headings/order and nested text fields persist through undo, save/reload and actual ZIP output. Native preview and the downloaded production application verify real MongoDB records, denied/revoked access, pagination, malformed responses, outages/restart, text safety and responsive bounds. The current registry adds Collection (105 definitions); historical whole-library census results are not extended to it. Fixed live-container sample heights and cramped inspector controls were repaired. Windows production packaging now removes private preview/test references and disposable standalone copies after Next's build, with the existing packaging assertion retained. Wider live-data contracts and point 4 authoring/polish remain open; see the latest [matrix evidence](completion-matrix.md#live-database-tables-collections-and-repeaters--2026-10-09).
 
 | Audit item | Result | Evidence |
@@ -67,11 +69,13 @@ Submission-alert increment: 127 unit tests, TypeScript/lint (0 errors/50 existin
 
 ## Next implementation priorities
 
-1. Continue the business-site journey with broader field types and a complete site starter, then wider operator/team administration. Private inboxes, first-operator setup and durable submission inbox-link alerts are implemented and verified locally. Guided destination/database mapping and the additive working contact form are implemented; their supported boundaries are described in [form contracts](fullstack-contracts.md#guided-form-destinations).
-2. Extend the implemented readiness checklist with executable full-stack preview checks after an isolated preview runtime exists.
-3. Improve nested/composite editing and explicit responsive layout parity, including other form control types and long/complex content.
-4. Add live data binding for collections/tables/repeaters with loading, empty and error states.
-5. Provide isolated full-stack preview with sample data and test transports.
-6. Complete managed frontend/backend/database deployment and operational workflows; verify external providers in the later authorized test round.
+The current sequence is tracked in [the product completion plan](product-completion-plan.md#current-six-point-sequence). Local full-stack preview and bounded live table/collection/repeater reads are implemented with the limits in [their contracts](fullstack-contracts.md). The nested-editing continuation passes 136 unit tests and ten combined browser regressions. Regrouped native form authoring, saved multiple selections, radio submission, failure/retry/reset and 320/768/1024/1440px form layout have downloaded production acceptance. Native/global Layers, cancelled moves and detach-and-move recovery also have browser/export acceptance. Point 4 remains in progress; detailed build/runtime evidence is in the latest matrix entry.
+
+1. Continue point 4 with richer field constraints, upload storage, reusable-component structural edits, general nested responsive geometry and long/complex content. Composite option editing and a complete site starter remain.
+2. Extend operator/team administration beyond the locally verified first operator, private inbox and durable submission alerts.
+3. Extend live binding beyond bounded read/display lists: mappings, actions, filtering/sorting, richer fields and nested scopes.
+4. Extend local preview to SQL/custom-source/container/provider execution and production parity.
+5. Complete managed frontend/backend/database deployment, collaboration, billing and remaining backend families.
+6. Finish whole-product acceptance and verify external providers in the later authorized test round.
 
 The detailed remaining models, authentication strategies, automation, realtime, storage, collaboration and deployment requirements are retained in [the audit](local-product-audit-2026-10-08.md) and [completion matrix](completion-matrix.md). They are not marked complete by these initial repairs.
