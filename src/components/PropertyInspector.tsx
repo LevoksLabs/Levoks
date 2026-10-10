@@ -1,5 +1,4 @@
 "use client";
-import { canvasSize } from "@/lib/design";
 import ElementProperties from "./design/ElementProperties";
 import FormDestination from "./FormDestination";
 import DataBinding from "./DataBinding";
@@ -599,6 +598,7 @@ const PropertyInspector: React.FC = () => {
     canvasSettings,
     assets,
     updateCanvasSettings,
+    updatePageSize,
     elementsById,
     addElement: storeAddElement,
   } = useEditorStore();
@@ -733,26 +733,27 @@ const PropertyInspector: React.FC = () => {
               <Field label="Width">
                 <input
                   type="number"
-                  value={canvasSize(canvasSettings, ui.breakpoint, ui.viewportSize).width}
+                  value={canvasSettings.width}
                   onChange={(e) => {
                     const parsed = parseNumericInput(e.target.value);
                     if (parsed === null) return;
-                    updateCanvasSettings({ width: Math.max(320, parsed) });
+                    updatePageSize({ width: Math.max(320, parsed) });
                   }}
                 />
               </Field>
               <Field label="Height">
                 <input
                   type="number"
-                  value={canvasSize(canvasSettings, ui.breakpoint, ui.viewportSize).height}
+                  value={canvasSettings.height}
                   onChange={(e) => {
                     const parsed = parseNumericInput(e.target.value);
                     if (parsed === null) return;
-                    updateCanvasSettings({ height: Math.max(200, parsed) });
+                    updatePageSize({ height: Math.max(200, parsed) });
                   }}
                 />
               </Field>
             </div>
+            <p className="inspector-hint">Page dimensions are saved with the project. Screen presets only change the editing viewport.</p>
           </Section>
           <div className="inspector-hint">
             <span>Select an element on the canvas to edit its properties</span>

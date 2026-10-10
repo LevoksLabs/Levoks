@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import {
   FolderOpen,
   Save,
@@ -59,6 +60,8 @@ import SourceTools from "./SourceTools";
 import SecretsPanel from "./SecretsPanel";
 import GitHubPanel from "./GitHubPanel";
 import DeploymentPanel from "./DeploymentPanel";
+import CollaborationPanel from "./CollaborationPanel";
+import { useCollaborationStore, sharedProjectPath } from "@/store/collaborationStore";
 import PublishReadiness from "./PublishReadiness";
 import type { ReadinessTarget } from "@/lib/project/readiness";
 import { useEditorUIStore } from "@/store/editorUIStore";
@@ -109,20 +112,26 @@ function projectSignature() {
   return JSON.stringify([p.id, p.name, designFingerprint(p), p.source || null]);
 }
 
-// Keep legacy in-editor switching controls aligned with the address bar.
-async function switchWorkspace(...args: Parameters<typeof openWorkspace>) {
-  await openWorkspace(...args);
-  window.history.replaceState(null, "", `/workplace/${encodeURIComponent(args[0].id)}`);
-}
-async function switchSavedWorkspace(id: string) {
-  await reopenSavedWorkspace(id);
-  window.history.replaceState(null, "", `/workplace/${encodeURIComponent(id)}`);
-}
-
 export default function WorkspaceHub() {
+  const router = useRouter();
+  // Local switching keeps the existing editor; leaving a shared route mounts its device workspace.
+  async function switchWorkspace(...args: Parameters<typeof openWorkspace>) {
+    const shared = !!useCollaborationStore.getState().project;
+    await openWorkspace(...args);
+    const path = `/workplace/${encodeURIComponent(args[0].id)}`;
+    if (shared) router.push(path); else window.history.replaceState(null, "", path);
+  }
+  async function switchSavedWorkspace(id: string) {
+    const shared = !!useCollaborationStore.getState().project;
+    await reopenSavedWorkspace(id);
+    const path = `/workplace/${encodeURIComponent(id)}`;
+    if (shared) router.push(path); else window.history.replaceState(null, "", path);
+  }
   const { data: session } = useSession();
   const ownerId = session?.user?.id;
   const workspace = useWorkspaceStore();
+  const collaboration = useCollaborationStore(s => s.project);
+  const [showSharing, setShowSharing] = useState(false);
   const editor = useEditorStore();
   const backend = useBackendStore();
   const routing = useRoutingStore();
@@ -134,7 +143,7 @@ export default function WorkspaceHub() {
   const [history, setHistory] = useState<Checkpoint[]>([]);
   const [cloudList, setCloudList] = useState<{
     ownerId: string;
-    projects: { projectId: string; name: string; updatedAt: string }[];
+    projects: { projectId: string; ownerId?: string; role?: string; name: string; updatedAt: string }[];
   }>({ ownerId: "", projects: [] });
   const cloudProjects = cloudList.ownerId === ownerId ? cloudList.projects : [];
   function cloudRevisionKey(projectId: string) {
@@ -630,28 +639,30 @@ export default function WorkspaceHub() {
               <X size={18} />
             </button>
           </div>
-          <nav className="workspace-tabs" aria-label="Workspace tools">
-            {(
-              [
-                ["projects", FolderOpen, "Projects"],
-                ["ai", Sparkles, "AI assistant"],
-                ["source", Code2, "Source & checks"],
-                ["secrets", Save, "Secrets"],
-                ["connections", GitBranch, "Connections"],
-                ["ship", Rocket, "Export & deploy"],
-              ] as const
-            ).map(([id, Icon, label]) => (
-              <button
-                key={id}
-                aria-current={panel === id ? "page" : undefined}
-                className={panel === id ? "active" : ""}
-                onClick={() => openPanel(id)}
-              >
-                <Icon size={16} />
-                {label}
-              </button>
-            ))}
-          </nav>
+          {panel !== "ai" && (
+            <nav className="workspace-tabs" aria-label="Workspace tools">
+              {(
+                [
+                  ["projects", FolderOpen, "Projects"],
+                  ["ai", Sparkles, "AI assistant"],
+                  ["source", Code2, "Source & checks"],
+                  ["secrets", Save, "Secrets"],
+                  ["connections", GitBranch, "Connections"],
+                  ["ship", Rocket, "Export & deploy"],
+                ] as const
+              ).map(([id, Icon, label]) => (
+                <button
+                  key={id}
+                  aria-current={panel === id ? "page" : undefined}
+                  className={panel === id ? "active" : ""}
+                  onClick={() => openPanel(id)}
+                >
+                  <Icon size={16} />
+                  {label}
+                </button>
+              ))}
+            </nav>
+          )}
           <div className="workspace-feedback" aria-live="polite">
             {busy && <p>Working…</p>}
             {(error || workspace.error) && (
@@ -834,6 +845,8 @@ export default function WorkspaceHub() {
                     disabled={busy}
                     onClick={() =>
                       void run(async () => {
+                        if (collaboration?.projectId === workspace.id)
+                          throw new Error("Use Save shared project in the shared workspace bar. Your edits remain on this device.");
                         const project = redactProject(currentProject());
                         const key = cloudRevisionKey(project.id);
                         const result = await api(
@@ -852,6 +865,10 @@ export default function WorkspaceHub() {
                   >
                     Save to account
                   </button>
+                  {ownerId && <button onClick={() => setShowSharing(!showSharing)} aria-expanded={showSharing}>
+                    {showSharing ? "Close project sharing" : "Share project"}
+                  </button>}
+                  {showSharing && ownerId && <CollaborationPanel ownerId={collaboration?.ownerId || ownerId} projectId={workspace.id} />}
                   <button
                     disabled={busy}
                     onClick={() =>
@@ -867,10 +884,14 @@ export default function WorkspaceHub() {
                   {cloudProjects.map((project) => (
                     <button
                       className="workspace-list-item"
-                      key={project.projectId}
+                      key={`${project.ownerId || ownerId}/${project.projectId}`}
                       disabled={busy}
                       onClick={() =>
                         void run(async () => {
+                          if (project.ownerId && project.ownerId !== ownerId) {
+                            router.push(sharedProjectPath(project.ownerId, project.projectId));
+                            return;
+                          }
                           const key = cloudRevisionKey(project.projectId);
                           const remote = await api(
                             `/api/projects?id=${encodeURIComponent(project.projectId)}`,

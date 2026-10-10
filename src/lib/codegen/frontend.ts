@@ -444,8 +444,8 @@ export function generateFrontendProject(
 ${assetFonts(assets)}
 :root { ${Object.entries(tokens).map(([id, token]) => `--lv-${id}: ${token.value};`).join(" ")} }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { margin: 0; font-family: Inter, system-ui, -apple-system, sans-serif; background: ${bg}; color: #0f172a; }
-.page { position: relative; width: min(100%, ${canvasWidth}px); min-height: ${canvasHeight}px; margin: 0 auto; padding: 2rem; background: ${bg}; overflow: hidden; }
+body { margin: 0; font-family: Inter, system-ui, -apple-system, sans-serif; background: ${bg}; color: #0f172a; overflow-x: clip; }
+.page { position: relative; width: min(100%, ${canvasWidth}px); min-height: ${canvasHeight}px; margin: 0 auto; padding: 2rem; background: ${bg}; overflow: visible; }
 img { max-width: 100%; height: auto; display: block; }
 button { cursor: pointer; font-family: inherit; }
 input, textarea, select { font-family: inherit; }

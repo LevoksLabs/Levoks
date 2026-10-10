@@ -1,0 +1,217 @@
+.collaboration-panel {
+  color: var(--text-1);
+  max-width: 900px;
+}
+.collaboration-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.collaboration-delete {
+  margin-top: 24px;
+}
+.collaboration-delete summary {
+  cursor: pointer;
+  color: var(--red);
+}
+.collaboration-delete button {
+  margin-top: 12px;
+}
+.shared-viewer nav button {
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.shared-viewer nav button[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+.shared-viewer pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.shared-workspace > .workspace-message,
+.shared-workspace > .workspace-error {
+  margin: 0;
+  padding: 8px 16px;
+}
+.collaboration-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 18px;
+}
+.collaboration-panel h3 {
+  margin: 24px 0 8px;
+  font-size: 14px;
+}
+.collaboration-panel p {
+  color: var(--text-2);
+  line-height: 1.6;
+  max-width: 70ch;
+}
+.collaboration-heading,
+.collaboration-actions,
+.collaboration-link,
+.collaboration-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.collaboration-heading {
+  justify-content: space-between;
+}
+.collaboration-panel button,
+.collaboration-bar button,
+.collaboration-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+.collaboration-panel button:hover,
+.collaboration-bar button:hover {
+  background: var(--bg-hover);
+}
+.collaboration-panel button:disabled,
+.collaboration-bar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.collaboration-panel label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+.collaboration-panel input,
+.collaboration-panel select {
+  background: var(--bg-root);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  min-height: 34px;
+  font: inherit;
+  max-width: 100%;
+}
+.collaboration-link {
+  margin-top: 12px;
+}
+.collaboration-link label {
+  flex: 1;
+  min-width: 180px;
+}
+.collaboration-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.collaboration-row > span {
+  flex: 1;
+  min-width: 120px;
+  overflow-wrap: anywhere;
+}
+.collaboration-row small {
+  display: block;
+  color: var(--text-2);
+  margin-top: 4px;
+}
+.collaboration-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.collaboration-bar a {
+  color: var(--text-1);
+  text-underline-offset: 3px;
+}
+.collaboration-bar .collaboration-state {
+  flex: 1;
+  min-width: 140px;
+}
+.shared-workspace {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.shared-workspace > .editor-root {
+  height: auto;
+  min-height: 0;
+  flex: 1;
+}
+.shared-viewer {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg-root);
+  padding: 16px;
+}
+.shared-viewer nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.shared-artboard {
+  position: relative;
+  background: #fff;
+  color: #111;
+  min-height: 240px;
+  max-width: 100%;
+  overflow: auto;
+}
+.collaboration-entry {
+  min-height: 100dvh;
+  background: var(--bg-root);
+  color: var(--text-1);
+  padding: 24px;
+  display: grid;
+  place-content: center;
+  gap: 16px;
+}
+.collaboration-entry > section {
+  max-width: 640px;
+}
+.collaboration-panel :focus-visible,
+.collaboration-bar :focus-visible,
+.shared-viewer :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+@media (max-width: 640px) {
+  .collaboration-heading {
+    align-items: flex-start;
+  }
+  .collaboration-actions,
+  .collaboration-link {
+    align-items: stretch;
+  }
+  .collaboration-actions label {
+    flex: 1;
+  }
+  .collaboration-bar {
+    padding: 8px;
+    gap: 8px;
+  }
+}

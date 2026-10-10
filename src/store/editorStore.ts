@@ -102,6 +102,7 @@ interface EditorStore {
     getGlobalRootElements: () => ElementNode[];
     getChildElements: (parentId: string) => ElementNode[];
     updateCanvasSettings: (settings: Partial<{ backgroundColor: string; width: number; height: number }>) => void;
+    updatePageSize: (settings: Partial<{ width: number; height: number }>) => void;
     setFrontendGeneratedCode: (code: Record<string, string> | null) => void;
     setFrontendCodePreviewOpen: (open: boolean) => void;
 }
@@ -793,6 +794,11 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
         });
     },
 
+    updatePageSize: (settings) => {
+        get().finishResponsiveEdit();
+        set(state => ({ canvasSettings: { ...state.canvasSettings, ...settings } }));
+        useEditorUIStore.setState({ viewportSize: null });
+    },
     updateCanvasSettings: (settings) => {
         const ui = useEditorUIStore.getState();
         if (settings.width !== undefined || settings.height !== undefined) {

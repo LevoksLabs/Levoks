@@ -306,6 +306,11 @@ const Sidebar: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const customElements = useEditorStore((s) => s.customElements);
   const ui = useEditorUIStore();
+  const toggleTray = (category: string) => {
+    const hidden = ui.trayCollapsed ||
+      (window.matchMedia("(max-width: 900px)").matches && ui.inspectorVisible);
+    setSidebarOpen(sidebarOpen === category && !hidden ? null : category);
+  };
 
   const getFilteredCategories = () => {
     if (!searchQuery) return sidebarCategories;
@@ -331,7 +336,7 @@ const Sidebar: React.FC = () => {
       >
         <button
           className={`rail-btn ${sidebarOpen === "add" ? "rail-active" : ""}`}
-          onClick={() => setSidebarOpen(sidebarOpen === "add" ? null : "add")}
+          onClick={() => toggleTray("add")}
           title="Add Elements"
           aria-label="Elements (Shift+E)"
           aria-pressed={sidebarOpen === "add"}
@@ -346,7 +351,7 @@ const Sidebar: React.FC = () => {
           aria-label="Design library"
           aria-pressed={sidebarOpen === "library"}
           onClick={() =>
-            setSidebarOpen(sidebarOpen === "library" ? null : "library")
+            toggleTray("library")
           }
         >
           <span className="rail-icon">
@@ -357,7 +362,7 @@ const Sidebar: React.FC = () => {
         <button
           className={`rail-btn ${sidebarOpen === "assets" ? "rail-active" : ""}`}
           onClick={() =>
-            setSidebarOpen(sidebarOpen === "assets" ? null : "assets")
+            toggleTray("assets")
           }
           title="Assets (Shift+A)"
           aria-pressed={sidebarOpen === "assets"}
@@ -370,7 +375,7 @@ const Sidebar: React.FC = () => {
         <button
           className={`rail-btn ${sidebarOpen === "templates" ? "rail-active" : ""}`}
           onClick={() =>
-            setSidebarOpen(sidebarOpen === "templates" ? null : "templates")
+            toggleTray("templates")
           }
           title="Templates"
         >
@@ -382,7 +387,7 @@ const Sidebar: React.FC = () => {
         <button
           className={`rail-btn ${sidebarOpen === "pages" ? "rail-active" : ""}`}
           onClick={() =>
-            setSidebarOpen(sidebarOpen === "pages" ? null : "pages")
+            toggleTray("pages")
           }
           title="Pages"
         >
@@ -394,7 +399,7 @@ const Sidebar: React.FC = () => {
         <button
           className={`rail-btn ${sidebarOpen === "layers" ? "rail-active" : ""}`}
           onClick={() =>
-            setSidebarOpen(sidebarOpen === "layers" ? null : "layers")
+            toggleTray("layers")
           }
           title="Layers"
         >
@@ -406,7 +411,7 @@ const Sidebar: React.FC = () => {
         <button
           className={`rail-btn ${sidebarOpen === "global" ? "rail-active" : ""}`}
           onClick={() =>
-            setSidebarOpen(sidebarOpen === "global" ? null : "global")
+            toggleTray("global")
           }
           title="Global"
         >
@@ -418,7 +423,7 @@ const Sidebar: React.FC = () => {
         <button
           className={`rail-btn ${sidebarOpen === "routes" ? "rail-active" : ""}`}
           onClick={() =>
-            setSidebarOpen(sidebarOpen === "routes" ? null : "routes")
+            toggleTray("routes")
           }
           title="Routes"
         >
@@ -445,7 +450,7 @@ const Sidebar: React.FC = () => {
         <button
           className={`rail-btn ${sidebarOpen === "backend" ? "rail-active" : ""}`}
           onClick={() =>
-            setSidebarOpen(sidebarOpen === "backend" ? null : "backend")
+            toggleTray("backend")
           }
           title="Backend Builder"
         >
@@ -473,7 +478,7 @@ const Sidebar: React.FC = () => {
             className={`rail-btn ${sidebarOpen === "settings" ? "rail-active" : ""}`}
             title="Editor settings (Shift+S)"
             onClick={() =>
-              setSidebarOpen(sidebarOpen === "settings" ? null : "settings")
+              toggleTray("settings")
             }
             aria-pressed={sidebarOpen === "settings"}
           >

@@ -52,9 +52,12 @@ import ProfileSettings from "./ProfileSettings";
 import ProjectCard, { formatDate } from "./ProjectCard";
 import ActionDialog, { type Action } from "./ActionDialog";
 import styles from "./home.module.css";
+import { sharedProjectPath } from "@/store/collaborationStore";
 
 type View = "all" | "starred" | "cloud" | "trash" | `group:${string}`;
 type CloudProject = {
+  ownerId?: string;
+  role?: "owner" | "editor" | "viewer";
   projectId: string;
   name: string;
   updatedAt: string;
@@ -269,6 +272,10 @@ export default function ProjectDashboard({
     setNotice(`Created ${copy.name}.`);
   }
   async function openCloud(project: CloudProject) {
+    if (project.ownerId && project.ownerId !== ownerId) {
+      router.push(sharedProjectPath(project.ownerId, project.projectId));
+      return;
+    }
     const local = await getProject(project.projectId);
     if (local) {
       if (meta.get(local.id)?.trashedAt)
@@ -729,11 +736,11 @@ export default function ProjectDashboard({
                       {cloudProjects.map((project) => (
                         <article
                           className={styles.projectCard}
-                          key={project.projectId}
+                          key={`${project.ownerId || ownerId}/${project.projectId}`}
                         >
                           <div className={styles.cloudCover}>
                             <Cloud size={36} strokeWidth={1.3} />
-                            <span>Saved to your account</span>
+                            <span>{project.role === "editor" ? "Shared · Editor" : project.role === "viewer" ? "Shared · Viewer" : "Saved to your account"}</span>
                           </div>
                           <div className={styles.cardInfo}>
                             <h2>{project.name}</h2>
@@ -747,7 +754,7 @@ export default function ProjectDashboard({
                               disabled={busy}
                               onClick={() => void run(() => openCloud(project))}
                             >
-                              {projects.some(
+                              {project.ownerId && project.ownerId !== ownerId ? <>Open shared project</> : projects.some(
                                 (local) => local.id === project.projectId,
                               ) ? (
                                 <>
@@ -760,6 +767,7 @@ export default function ProjectDashboard({
                                 </>
                               )}
                             </button>
+                            {(!project.ownerId || project.ownerId === ownerId) && ownerId && <Link className={styles.secondary} href={sharedProjectPath(ownerId, project.projectId)}>Open shared workspace</Link>}
                           </div>
                         </article>
                       ))}

@@ -1,8 +1,10 @@
 # Documented product completion plan
 
-Updated 10 October 2026. The user's direction is to **complete the documented product**, not to narrow it to a beta or prioritize launching. Product implementation and acceptance come first. Marketing, launch videos and publication are deferred.
+Updated 11 October 2026. The user's current direction is an **alpha build**, completing project collaboration with **Owner, Editor and Viewer** roles. Deployment, billing and every other workstream are deferred for now. The earlier full-product plan below remains a backlog, not the active alpha scope. Marketing, launch videos and publication remain deferred.
 
-Latest requested sequence: start managed deployment, then collaboration, billing and remaining backend families, followed by whole-product acceptance and external-provider verification. This supersedes the earlier local-only restriction for disposable provider verification; actual provider access and a working container runtime are still required. Existing form/animation work in the shared working tree is preserved.
+Current requested scope: implement and verify alpha collaboration only. Owners manage access, Editors edit/save, and Viewers inspect without editing. Use account-private cloud projects, authenticated invitation acceptance, atomic grants/revisions, explicit conflict recovery and a read-only Viewer screen. See [alpha collaboration](collaboration-alpha.md). Existing deployment, form/animation and other work in the shared checkout is preserved.
+
+## Prior deployment increments — retained backlog
 
 First managed-deployment increment: authenticated Vercel frontend connections now keep encrypted provider authorization, versioned snapshot queues, a separate leased worker, bounded status/recovery attempts and 30 release summaries. Queue retries, worker crashes, lost acknowledgements, account changes, concurrent edits and token privacy have local database/HTTP/Next/Chromium evidence. This does not complete full-stack orchestration. See [deployment operations](deployment-operations.md) for setup, exact evidence and remaining provider/infra requirements. Complete full-stack deployment next, then collaboration permissions, account entitlements/billing and the unfinished backend families before broad acceptance.
 
@@ -10,7 +12,7 @@ Second deployment increment: the full-stack ZIP has one executable Compose relea
 
 Fourth deployment increment: managed preview history now archives captured generated source, supports private exact ZIP downloads and requeues ready source/configuration as a fresh preview. Ownership, source integrity, expiry, retained history and queue/retry concurrency have local database/API/browser coverage. This advances release recovery but does not provide production promotion, backend/data rollback, immutable built artifacts or managed-host provisioning. Continue the remaining deployment capabilities, then collaboration, billing and backend-family work. See [deployment operations](deployment-operations.md#archived-release-source--fourth-increment).
 
-## Current six-point sequence
+## Previous six-point sequence — deferred backlog
 
 Point 4 local completion — 10 October: the complete forms/nested editing/responsive scope now includes custom breakpoints, perspective-aware geometry/vector handles, durable local history, structured Rich Text/Timeline content, native floating widgets and legacy property parity. The expanded acceptance runs actual editor editing/save/reopen/Undo/Redo/preview/ZIP and six production applications. [Point 4 acceptance](point4-acceptance.md) records evidence and separates backend/infrastructure work and external/device acceptance. Earlier entries below are historical increments.
 
@@ -56,7 +58,7 @@ Second increment implemented: typed model defaults and resource soft-delete life
 
 8 October increment: BE06 now has editable one-to-one, one-to-many and explicit-junction many-to-many MongoDB resource relations. Foreign-key creation is undoable; validated scope matching, uniqueness, Restrict/Cascade/Unlink, restore and purge execute through generated repositories. Real execution of the browser-downloaded ZIP covers two server processes, concurrent mutation races, cross-owner/tenant denial, transaction rollback, restart and bounded cascades. SQL relations, migrations, populated reads and cross-service/self relations remain open. A publish-readiness checklist also selects affected elements, pages and backend blocks, distinguishes compiler blockers from advisory/runtime checks, and handles 1,000-element projects with bounded rendered rows. Saved button redirects now execute through the shared renderer and generated production website. [Implementation progress](product-implementation-progress.md) records validation and remaining work; these increments do not complete the eight workstreams.
 
-## Implementation sequence
+## Full-product implementation backlog — deferred
 
 10 October selection-limit continuation: point 4 adds native Checkbox Group minimum/maximum selection controls with history/import guards, accessible preview/export recovery, enabled-choice capacity checks and strict editable backend count rules in new guided storage. Conditional counts stay in active validation branches; existing workflow snapshots require explicit review after visual edits. Actual drag/drop/save/reload/ZIP and downloaded production Next/Express/MongoDB acceptance are recorded in the completion matrix. Next frontend gaps include multi-select count authoring, select/radio/compound conditions, richer nested composites and reusable structural overrides. Geometry, complete site starters and broader accessibility acceptance remain; points 4–6 are not marked complete by this increment.
 

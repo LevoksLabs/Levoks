@@ -1,9 +1,11 @@
 "use client";
 
 import { SessionProvider, useSession } from "next-auth/react";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { bindWorkspaceAccount } from "@/lib/project/account-scope";
 import { flushWorkspace } from "@/store/workspaceStore";
+import styles from "./AuthProvider.module.css";
 
 function AccountBoundary({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -33,7 +35,16 @@ function AccountBoundary({ children }: { children: React.ReactNode }) {
   }, [owner, status]);
 
   if (readyOwner === undefined || readyOwner !== owner)
-    return <div role="status">{error || "Opening your workspace…"}</div>;
+    return (
+      <main className={styles.openingScreen} aria-busy={!error}>
+        <div className={styles.openingContent} role={error ? "alert" : "status"}>
+          <Image src="/levoks_logo.svg" width={40} height={40} alt="" />
+          <h1>{error ? "Workspace needs attention" : "Opening your workspace"}</h1>
+          <p>{error || "Getting your projects ready."}</p>
+          {!error && <div className={styles.progress} aria-hidden="true" />}
+        </div>
+      </main>
+    );
   return children;
 }
 

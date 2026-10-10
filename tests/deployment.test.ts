@@ -21,6 +21,11 @@ test("deployment capabilities and origin validation reject unsupported secrets a
   assert.equal(DEPLOYMENT_CAPABILITIES.backend, false);
   assert.equal(DEPLOYMENT_CAPABILITIES.database, false);
   for (const value of [
+    "",
+    "h",
+    "https://",
+    "not a URL",
+    "https://[invalid",
     "http://api.example.com",
     "https://u:p@api.example.com",
     "https://api.example.com/path",

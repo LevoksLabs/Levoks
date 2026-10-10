@@ -1,5 +1,15 @@
 # Levoks completion matrix
 
+## Alpha collaboration — 2026-10-11
+
+The user has narrowed the current target to alpha collaboration with Owner, Editor and Viewer roles. Deployment, billing and other workstreams are deferred. The earlier full-product ledger remains a backlog; it does not define the active alpha acceptance target.
+
+Project-scoped grants, single-use seven-day invitations, owner role changes/removal and confirmed cloud deletion now execute through the authenticated Mongo-backed cloud API. Owners manage access; Editors edit/save shared documents; Viewers inspect pages/backend/routing and download a copy through a screen without editing controls or shortcuts. Cloud lists include accessible shared projects and their role. Provider credentials and secret vault access remain account-private.
+
+Atomic grant checks and document revisions prevent revoked Editors and stale saves from publishing changes. Device autosave, explicit shared saves, same-tab draft recovery and backup-before-opening-latest preserve edits during conflicts. Invitation tokens remain outside navigation/authentication callback queries. Populated cloud records omit undefined BSON fields to preserve validated project JSON. See [alpha collaboration operations](collaboration-alpha.md) for the exact roles and boundaries. Organization roles, ownership transfer, live cursor/document merging and email invitation delivery are outside this alpha scope.
+
+Alpha acceptance passes 205 repository units, the real-Mongo/Next/Chromium collaboration journey and the existing account cloud-save regression. Sequential post-build TypeScript passes. Targeted ESLint has zero errors and three existing warnings; the production build and private-output pruning pass. Owner desktop/compact and populated Viewer mobile screens were visually reviewed. Evidence and reproduction are recorded in [alpha collaboration operations](collaboration-alpha.md#verified-alpha-acceptance--11-october-2026). This accepts the scoped collaboration feature, without closing the deferred whole-product or live-provider gates.
+
 ## Point 4 local authoring completion — 2026-10-10
 
 The supported forms/nested-editing/responsive work is implemented and locally accepted: compound and nested choice predicates, custom masks, bounded larger/multiple private attachments, neutral choice layouts, local reusable structural edits/restore/publication, stable label references, transformed drag/resize and three working site starters. Template/helper overflow, absolute starter fields and clipped desktop pages were repaired after real browser/runtime and screenshot checks.
@@ -613,7 +623,7 @@ Evidence shorthand: E = `src/store/editorStore.ts`, `src/components/Canvas.tsx`,
 | PS02 | Authenticated cloud storage and ownership | PARTIAL | Real NextAuth session decoding → Next HTTP route → MongoDB tests prove account isolation, atomic concurrent create/update and stale-write rejection. Browser regression protects per-tab/account baselines and retained input on conflict. Live OAuth sign-in and hosted database/browser acceptance remain. |
 | PS03 | Durable assets with lifecycle/access/quotas | PARTIAL | Bounded project image/font assets persist locally, can be reused/deleted and embed in exports. Hosted durable object storage, lifecycle permissions, quotas and CDN operations remain. |
 | PS04 | Background/offline synchronization and conflict resolution | MISSING | Debounced foreground save is not durable background sync. |
-| PS05 | Teams, collaboration, permissions, conflict reconciliation | MISSING | Account-owned single-user snapshots only. |
+| PS05 | Teams, collaboration, permissions, conflict reconciliation | PARTIAL | Alpha project collaboration implements fixed Owner, Editor and Viewer grants; single-use invitations, role changes/revocation and confirmed owner deletion; private shared reads/lists, atomic authorized revision saves and recoverable device drafts. Real Mongo/API/Chromium checks cover populated pages, sign-in invitation handoff, shared discovery, competing edits and revoked access. Organization teams, ownership transfer and live merged editing remain outside the current alpha scope. See collaboration-alpha.md. |
 | GH01 | Repository authorization / Connections / token expiry | PARTIAL | Encrypted PAT connection records, authenticated APIs, expiry/error states and replacement; GitHub App/OAuth and automatic token refresh missing; live authorization unverified. |
 | GH02 | Repository/branch discovery and selection | PARTIAL | Paginated writable-repository/branch discovery and selection UI/API; live GitHub acceptance awaits test authorization. |
 | GH03 | Initial repository and branch setup | PARTIAL | Explicit private-repository creation, branch creation and empty-repo initialization; live provider verification pending. |

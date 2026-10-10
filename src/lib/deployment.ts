@@ -2,7 +2,13 @@ import { z } from "zod";
 
 export const deploymentProjectId = z.string().regex(/^[A-Za-z0-9_-]{1,120}$/);
 export const publicOrigin = z.url().refine((value) => {
-  const url = new URL(value);
+  // Refinements can still run after the URL check rejects unfinished input.
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
   return (
     url.protocol === "https:" &&
     !url.username &&

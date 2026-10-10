@@ -1,66 +1,32 @@
-import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authOptions } from "@/lib/server/auth";
 import { getMongoClient } from "@/lib/mongodb";
+import { requireOwner } from "@/lib/server/identity";
 import { apiError, HttpError, readJSON } from "@/lib/server/http";
-import { parseProject, redactProject } from "@/lib/project/schema";
-async function collection() {
+import { CloudProjects } from "@/lib/server/cloud-projects";
+async function store() {
   if (!process.env.MONGODB_URI)
     throw new HttpError(
       503,
       "Cloud saving is not configured. Local autosave remains available.",
     );
-  return (await getMongoClient())
-    .db()
-    .collection<{
-      _id: string;
-      ownerId: string;
-      projectId: string;
-      name: string;
-      updatedAt: string;
-      revision: number;
-      document: ReturnType<typeof parseProject>;
-    }>("levoks_projects");
+  return new CloudProjects((await getMongoClient()).db());
 }
-async function owner() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id)
-    throw new HttpError(401, "Sign in to use cloud projects.");
-  return session.user.id;
-}
+const identity = z.string().min(1).max(200);
 export async function GET(request: Request) {
   try {
-    const ownerId = await owner();
-    const db = await collection();
-    const id = new URL(request.url).searchParams.get("id");
-    if (id) {
-      const project = await db.findOne(
-        { ownerId, projectId: id },
-        { projection: { _id: 0 } },
-      );
-      if (!project) throw new HttpError(404, "Project not found.");
-      return NextResponse.json(project, {
-        headers: { "Cache-Control": "no-store" },
-      });
-    }
+    const actor = await requireOwner(),
+      projects = await store();
+    const params = new URL(request.url).searchParams,
+      id = params.get("id");
     return NextResponse.json(
-      await db
-        .find(
-          { ownerId },
-          {
-            projection: {
-              _id: 0,
-              projectId: 1,
-              name: 1,
-              updatedAt: 1,
-              revision: 1,
-            },
-          },
-        )
-        .sort({ updatedAt: -1 })
-        .limit(100)
-        .toArray(),
+      id
+        ? await projects.get(
+            actor,
+            identity.parse(params.get("ownerId") || actor),
+            identity.parse(id),
+          )
+        : await projects.list(actor),
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
@@ -69,57 +35,26 @@ export async function GET(request: Request) {
 }
 export async function PUT(request: Request) {
   try {
-    const ownerId = await owner();
+    const actor = await requireOwner();
     const body = z
       .object({
-        ownerId: z.string().min(1),
+        ownerId: identity,
+        projectOwnerId: identity.optional(),
         project: z.unknown(),
         revision: z.number().int().nonnegative(),
       })
       .parse(await readJSON(request));
-    if (body.ownerId !== ownerId)
+    if (body.ownerId !== actor)
       throw new HttpError(
         409,
         "Your account changed. Reload cloud projects before saving.",
       );
-    let project;
-    try {
-      project = redactProject(parseProject(body.project));
-    } catch {
-      throw new HttpError(400, "Project validation failed.");
-    }
-    const db = await collection();
-    const record = {
-      ownerId,
-      projectId: project.id,
-      name: project.name,
-      updatedAt: new Date().toISOString(),
-      document: project,
-      revision: body.revision + 1,
-    };
-    if (body.revision === 0) {
-      try {
-        await db.insertOne({ ...record, _id: `${ownerId}/${project.id}` });
-      } catch (error) {
-        if ((error as { code?: number }).code === 11000)
-          throw new HttpError(
-            409,
-            "A cloud version already exists. Open it before saving.",
-          );
-        throw error;
-      }
-    } else {
-      const result = await db.updateOne(
-        { ownerId, projectId: project.id, revision: body.revision },
-        { $set: record },
-      );
-      if (!result.matchedCount)
-        throw new HttpError(
-          409,
-          "Cloud project changed. Download a local backup, then reopen the cloud version.",
-        );
-    }
-    return NextResponse.json({ revision: record.revision });
+    return NextResponse.json(
+      await (
+        await store()
+      ).save(actor, body.projectOwnerId || actor, body.project, body.revision),
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     return apiError(error);
   }

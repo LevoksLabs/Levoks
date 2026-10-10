@@ -40,6 +40,12 @@ test("workspace saves, reopens latest edits, and recovers a conflicting tab with
   const id = useWorkspaceStore.getState().id;
   assert.ok(useWorkspaceStore.getState().ready);
   const form = useEditorStore.getState().addElement(templates.form);
+  // Repeated mounts share the open workspace instead of saving/restoring it.
+  const revisionBeforeRemount = useWorkspaceStore.getState().revision;
+  await Promise.all([initializeWorkspace(id), initializeWorkspace(id)]);
+  assert.ok(useEditorStore.getState().elementsById[form]);
+  assert.equal(useWorkspaceStore.getState().dirty, true);
+  assert.equal(useWorkspaceStore.getState().revision, revisionBeforeRemount);
   await reopenSavedWorkspace(id);
   assert.ok(useEditorStore.getState().elementsById[form]);
   assert.equal(useWorkspaceStore.getState().dirty, false);
@@ -62,6 +68,11 @@ test("workspace saves, reopens latest edits, and recovers a conflicting tab with
   assert.equal(useWorkspaceStore.getState().name, "Other tab version");
   assert.equal(useWorkspaceStore.getState().dirty, false);
   assert.equal(useWorkspaceStore.getState().error, "");
+  // A reset store can restore again; a previous completed init is not a latch.
+  useWorkspaceStore.setState({ ready: false });
+  await Promise.all([initializeWorkspace(id), initializeWorkspace(id)]);
+  assert.equal(useWorkspaceStore.getState().ready, true);
+  assert.equal(useWorkspaceStore.getState().name, "Other tab version");
   const files = compileProject(currentProject()).files;
   updateSource({ ...files, "README.md": "Reviewed source" });
   await flushWorkspace("Edited source");

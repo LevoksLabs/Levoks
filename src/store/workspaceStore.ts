@@ -18,6 +18,7 @@ import {
 } from "@/lib/project/schema";
 import { getProject, listProjects, saveProject } from "@/lib/project/storage";
 import { readLibrary } from "@/lib/project/library";
+import { useCollaborationStore } from "./collaborationStore";
 
 interface WorkspaceState {
   id: string;
@@ -55,6 +56,8 @@ let writing: Promise<void> | undefined;
 let version = 0;
 let switching = false;
 let init: Promise<void> | undefined;
+let initializingProjectId: string | undefined;
+let watching = false;
 export function currentProject() {
   const state = useWorkspaceStore.getState();
   return { ...captureProject(state.id, state.name), source: state.source };
@@ -133,6 +136,8 @@ export async function flushWorkspace(label?: string): Promise<void> {
 }
 export async function openWorkspace(document: ProjectDocument, revision = 0, history?: DurableHistory) {
   if (useWorkspaceStore.getState().ready) await flushWorkspace();
+  watchWorkspace();
+  useCollaborationStore.setState({ project: null });
   clearTimeout(timer);
   const parsed = parseProject(document);
   switching = true;
@@ -210,12 +215,15 @@ export function updateSource(files?: Record<string, string>) {
   markDirty();
 }
 export function initializeWorkspace(projectId?: string): Promise<void> {
-  // Returning to a project with unsaved changes must preserve its recovery controls.
   const current = useWorkspaceStore.getState();
-  if (init && projectId === current.id && current.ready && current.dirty)
-    return init;
   if (init)
-    return projectId ? init.then(() => reopenSavedWorkspace(projectId)) : init;
+    return projectId && projectId !== initializingProjectId
+      ? init.then(() => initializeWorkspace(projectId))
+      : init;
+  // Remounts and Fast Refresh must not restore over an already open workspace.
+  if (current.ready && (!projectId || projectId === current.id))
+    return Promise.resolve();
+  initializingProjectId = projectId;
   init = (async () => {
     try {
       const active = projectId || localStorage.getItem(accountStorageKey("levoks-active-project"));
@@ -263,7 +271,24 @@ export function initializeWorkspace(projectId?: string): Promise<void> {
         autosave: false,
       });
     }
-    useEditorStore.subscribe((next, prev) => {
+    watchWorkspace();
+  })();
+  const pending = init;
+  return pending.finally(() => {
+    if (init === pending) {
+      init = undefined;
+      initializingProjectId = undefined;
+    }
+  });
+}
+
+function watchWorkspace() {
+    if (watching) return;
+    // A refreshed module must retire the previous module's autosave listeners.
+    const lifecycle = window as Window & { levoksDisposeWorkspaceWatchers?: () => void };
+    lifecycle.levoksDisposeWorkspaceWatchers?.();
+    watching = true;
+    const stopEditor = useEditorStore.subscribe((next, prev) => {
       if (
         [
           "assets",
@@ -286,7 +311,7 @@ export function initializeWorkspace(projectId?: string): Promise<void> {
         markDirty();
       }
     });
-    useBackendStore.subscribe((next, prev) => {
+    const stopBackend = useBackendStore.subscribe((next, prev) => {
       if (
         next.services !== prev.services ||
         next.connections !== prev.connections
@@ -295,28 +320,36 @@ export function initializeWorkspace(projectId?: string): Promise<void> {
         markDirty();
       }
     });
-    useRoutingStore.subscribe((next, prev) => {
+    const stopRouting = useRoutingStore.subscribe((next, prev) => {
       if (next.nodes !== prev.nodes || next.connections !== prev.connections)
         markDirty();
     });
-    projectHistory.subscribe(()=>markDirty());
-    useWorkspaceStore.subscribe((next,prev)=>{if(next.source!==prev.source || next.name!==prev.name) markDirty();});
-    window.addEventListener("beforeunload", (event) => {
+    const stopHistory = projectHistory.subscribe(()=>markDirty());
+    const stopWorkspace = useWorkspaceStore.subscribe((next,prev)=>{if(next.source!==prev.source || next.name!==prev.name) markDirty();});
+    const beforeUnload = (event: BeforeUnloadEvent) => {
       if (useWorkspaceStore.getState().dirty) {
         event.preventDefault();
         event.returnValue = "";
       }
-    });
-    document.addEventListener("visibilitychange", () => {
+    };
+    const visibilityChange = () => {
       if (
         document.visibilityState === "hidden" &&
         useWorkspaceStore.getState().autosave
       )
         void flushWorkspace().catch(() => {});
-    });
-  })();
-  return init.catch((error) => {
-    init = undefined;
-    throw error;
-  });
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("visibilitychange", visibilityChange);
+    lifecycle.levoksDisposeWorkspaceWatchers = () => {
+      clearTimeout(timer);
+      stopEditor();
+      stopBackend();
+      stopRouting();
+      stopHistory();
+      stopWorkspace();
+      window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("visibilitychange", visibilityChange);
+      watching = false;
+    };
 }

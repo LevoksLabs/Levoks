@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, FolderOpen } from "lucide-react";
 import ProjectEditor from "./ProjectEditor";
-import { flushWorkspace, initializeWorkspace } from "@/store/workspaceStore";
+import { flushWorkspace, initializeWorkspace, useWorkspaceStore } from "@/store/workspaceStore";
 
 export default function ProjectWorkplace({ projectId }: { projectId: string }) {
   const [loaded, setLoaded] = useState("");
   const [error, setError] = useState("");
+  const ready = useWorkspaceStore(state => state.ready);
   useEffect(() => {
     let active = true;
     void initializeWorkspace(projectId)
@@ -25,8 +26,8 @@ export default function ProjectWorkplace({ projectId }: { projectId: string }) {
       active = false;
       void flushWorkspace().catch(() => {});
     };
-  }, [projectId]);
-  if (error || loaded !== projectId)
+  }, [projectId, ready]);
+  if (error || loaded !== projectId || !ready)
     return (
       <main className="workplace-state">
         <FolderOpen size={32} strokeWidth={1.5} />

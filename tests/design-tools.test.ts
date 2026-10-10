@@ -59,6 +59,26 @@ test("responsive canvas sizes preserve the base, save overrides, undo and restor
   assert.deepEqual([600, 601, 1024, 1025].map(width=>breakpointForWidth(width)), ["mobile", "tablet", "tablet", "base"]);
 });
 
+test("saved page dimensions survive viewport changes, undo and project restoration", () => {
+  const project = emptyProject();
+  restoreProject(project);
+  const store = useEditorStore.getState();
+  store.updateCanvasSettings({ width: 375, height: 812 });
+  store.updatePageSize({ width: 1440, height: 3500 });
+  assert.equal(useEditorUIStore.getState().viewportSize, null);
+  assert.equal(useEditorUIStore.getState().breakpoint, "mobile");
+  const saved = parseProject(captureProject(project.id, project.name));
+  assert.equal(saved.editor.canvasSettings.width, 1440);
+  assert.equal(saved.editor.canvasSettings.height, 3500);
+  store.undo();
+  assert.equal(useEditorStore.getState().canvasSettings.height, 1080);
+  store.redo();
+  store.updateCanvasSettings({ width: 768, height: 1024 });
+  restoreProject(saved);
+  assert.equal(useEditorStore.getState().canvasSettings.height, 3500);
+  assert.match(compileProject(saved).files["frontend/app/page.css"], /min-height: 3500px/);
+});
+
 test("responsive adjustments are provisional, cancel restores positions, and save is one undo step", () => {
   const project = emptyProject();
   restoreProject(project);
