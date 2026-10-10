@@ -10,8 +10,10 @@ import { assetElement } from "@/lib/design-assets";
 import { resolveElement, fontFamily } from "@/lib/design";
 import { useEditorStore } from "@/store/editorStore";
 import TabsWidget from "./design/TabsWidget";
+import { nativeWidgetCSS } from "@/lib/native-widget-runtime";
 import { widgetNumber, choiceCSS } from "@/lib/widgets";
-import { orderedStyles, semanticStyleParts } from "@/lib/property-values";
+import { elementStyles } from "@/lib/element-styles";
+import { semanticStyleParts } from "@/lib/property-values";
 import { embedAttributes } from "@/lib/elements/embed";
 import { safeElementUrl, nativeFieldStyles } from "@/lib/elements/native";
 import { ICON_PATHS } from "@/lib/icon-paths";
@@ -38,22 +40,6 @@ const ResizeHandles: React.FC = () => {
 };
 
 
-const SocialIcon: React.FC<{ platform: string; size: number; style: string }> = ({ platform, size, style: iconStyle }) => {
-    const colors: Record<string, string> = { facebook: "#1877F2", twitter: "#1DA1F2", instagram: "#E4405F", linkedin: "#0A66C2", youtube: "#FF0000" };
-    const color = iconStyle === "filled" ? colors[platform] || "#666" : "#666";
-    return (
-        <div className="social-icon-item" style={{
-            width: size + 12, height: size + 12,
-            backgroundColor: iconStyle === "filled" ? color : "transparent",
-            border: iconStyle === "outline" ? `2px solid ${color}` : "none",
-            borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-            color: iconStyle === "filled" ? "#fff" : color, fontSize: size * 0.6, fontWeight: 700,
-        }}>
-            {platform[0].toUpperCase()}
-        </div>
-    );
-};
-
 interface ElementRendererProps {
     elementId: string;
     isRoot?: boolean;
@@ -76,37 +62,22 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
 
     const isSelected = !readOnly && (selectedElementId === elementId || selectedElementIds.includes(elementId));
     const layout = element.layout;
-    const isTextLike = element.type === "text" || element.type === "title" || element.type === "paragraph";
-    const widthPx = `${Math.max(40, layout.w)}px`;
-    const heightPx = `${Math.max(20, layout.h)}px`;
-    const rawPosition = String(element.styles.position || element.layout.position || "");
-    const resolvedPosition = (rawPosition || (isContainer ? "relative" : "static")) as React.CSSProperties["position"];
-    const isPositionedChild = resolvedPosition !== "static";
-    const positionStyles: React.CSSProperties = isRoot
-        ? { position: "absolute", left: `${layout.x}px`, top: `${layout.y}px`, width: String(element.styles.width || widthPx), minHeight: element.styles.minHeight || (element.styles.height ? undefined : heightPx), height: isTextLike ? "auto" : String(element.styles.height || heightPx) }
-        : {
-            position: resolvedPosition, left: isPositionedChild ? `${layout.x}px` : undefined, top: isPositionedChild ? `${layout.y}px` : undefined,
-            width: String(element.styles.width || widthPx), minHeight: element.styles.minHeight || (element.styles.height ? undefined : heightPx), height: isTextLike ? "auto" : String(element.styles.height || heightPx)
-        };
-
+    const computed=elementStyles(element,Boolean(isRoot));
     const mergedStyles: React.CSSProperties = {
-        ...(["native", "button", "input"].includes(element.type) ? semanticStyleParts(element.styles).box : orderedStyles(element.styles) as React.CSSProperties),
-        ...positionStyles,
+        ...(["native","button","input","menu","socialbar"].includes(element.type) ? semanticStyleParts(computed).box : computed) as React.CSSProperties,
         ...nativeFieldStyles(element),
-        ...(!isRoot && (resolvedPosition === "static" || resolvedPosition === "relative") ? { maxWidth: "100%", minWidth: 0, flexShrink: 0 } : {}),
-        ...(isContainer && element.children.length && !element.styles.height ? { height: "auto" } : {}),
-        ...(element.type === "shape" && element.props.shapeType && element.props.shapeType !== "rectangle" ? { backgroundColor: "transparent" } : {}),
-        fontFamily: fontFamily(element.styles.fontFamily),
-        ...(element.type === "gallery" ? { display: "block" } : {}),
-        
-        cursor: readOnly ? (element.styles.cursor as React.CSSProperties["cursor"]) || "default" : (layout.locked ? "not-allowed" : (isSelected ? "grab" : "default")),
-        userSelect: "none",
-        overflow: (element.styles.overflow as React.CSSProperties["overflow"]) || ((isContainer || element.vector || isTextLike) ? "visible" : "hidden"),
-        opacity: layout.opacity ?? 1,
-        transform: layout.rotation ? `rotate(${layout.rotation}deg)` : undefined,
+        // Static content stays in flow; its editor wrapper anchors selection tools.
+        ...(computed.position==="static" ? {position:"relative",left:undefined,top:undefined,right:undefined,bottom:undefined} : {}),
+        ...(element.type==="gallery" && computed.display!=="none" ? {display:"block"} : {}),
+        opacity:layout.opacity,
+        transform:String(computed.transform),
+        cursor:readOnly ? String(element.styles.cursor || "default") : layout.locked ? "not-allowed" : isSelected ? "grab" : "default",
+        userSelect:"none",
+        overflow:String(element.styles.overflow || (isContainer || element.vector || ["text","title","paragraph"].includes(element.type) ? "visible" : "hidden")) as React.CSSProperties["overflow"],
     };
 
     // ─── Animation support ───
+    mergedStyles.animationComposition="add";
     const anim = element.animation;
     const advancedAnim = usesAnimationRuntime(anim);
     const hasAnim = anim && anim.type !== "none" && !advancedAnim;
@@ -179,26 +150,22 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
             }} />;
             case "video": return <video poster={safeElementUrl(element.props.poster) || undefined} src={safeElementUrl(element.props.src) || undefined} controls={Boolean(element.props.controls)} autoPlay={readOnly && Boolean(element.props.autoplay)} loop={Boolean(element.props.loop)} muted={Boolean(element.props.muted)} style={{ width: "100%", height: "100%", pointerEvents: readOnly ? "auto" : "none" }} />;
             case "gallery": return element.children.length === 0 ? (
-                <div className="gallery-placeholder" style={{ gridTemplateColumns: `repeat(${Number(element.props.columns) || 3}, 1fr)`, gap: `${Number(element.props.gap) || 8}px` }}>
+                <div className="gallery-placeholder" style={{ gridTemplateColumns: String(computed.gridTemplateColumns), gap: String(computed.gap) }}>
                     {Array.from({ length: Number(element.props.columns) || 3 }).map((_, i) => <div key={i} className="gallery-item-ph">🖼</div>)}</div>
-            ) : <div className="gallery-content" style={{ display: "grid", gridTemplateColumns: `repeat(${widgetNumber(element.props.columns, 3, 1, 8)}, minmax(0, 1fr))`, gap: `${widgetNumber(element.props.gap, 8, 0, 100)}px`, width: "100%", height: "100%" }}><Renderer elementIds={element.children} isRoot={false} readOnly={readOnly} /></div>;
+            ) : <div className="gallery-content" style={{ display: "grid", gridTemplateColumns: String(computed.gridTemplateColumns), gap: String(computed.gap), width: "100%", height: "100%" }}><Renderer elementIds={element.children} isRoot={false} readOnly={readOnly} /></div>;
             case "form": {
                 const rm = String(element.props.requestMethod || "POST").toUpperCase();
                 const hm = rm === "GET" ? "get" : "post";
                 return <form method={hm} action={String(element.props.requestUrl || "") || undefined} data-request-method={rm} onSubmit={e => e.preventDefault()}
-                    style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%", height: "100%" }}>
+                    style={{ display: "flex", flexDirection: String(computed.flexDirection) as React.CSSProperties["flexDirection"], gap: String(computed.gap), width: "100%", height: "auto" }}>
                     {element.children.length === 0 ? containerPlaceholder("Drop form elements here") : <Renderer elementIds={element.children} isRoot={false} readOnly={readOnly} />}
                 </form>;
             }
             case "shape": return element.vector ? <VectorShape element={element} editable={isSelected && !readOnly && !layout.locked} /> : <PrimitiveShape shapeType={String(element.props.shapeType || "rectangle")} color={String(element.styles.backgroundColor || "#6366f1")} />;
             case "divider": return <hr style={{ width: "100%", border: "none", height: "100%", backgroundColor: String(element.styles.backgroundColor || "#e5e7eb") }} />;
-            case "menu": {
-                const items = String(element.props.items || "Home,About,Contact").split(",");
-                const vert = element.props.menuStyle === "vertical";
-                return <nav style={{ display: "flex", flexDirection: vert ? "column" : "row", gap: vert ? "4px" : "24px", alignItems: vert ? "stretch" : "center", height: "100%", padding: "0 20px" }}>
-                    {items.map((item, i) => <span key={i} className="menu-item">{item.trim()}</span>)}</nav>;
-            }
-            case "repeater": return <div className="repeater-content" style={{ display: "flex", flexDirection: element.props.direction === "row" ? "row" : "column", gap: String(element.styles.gap || "12px"), width: "100%" }}>{element.children.length ? Array.from({ length: widgetNumber(element.props.repeatCount, 3, 1, 20) }, (_, index) => <div key={index} className="repeater-item"><Renderer elementIds={element.children} isRoot={false} readOnly={readOnly || index > 0} /></div>) : containerPlaceholder("Add a template to repeat")}</div>;
+            case "menu":
+            case "socialbar": return <SemanticElement element={element} interactive={readOnly}>{null}</SemanticElement>;
+            case "repeater": return <div className="repeater-content" style={{ display: "flex", flexDirection: String(computed.flexDirection) as React.CSSProperties["flexDirection"], gap: String(computed.gap), width: "100%" }}>{element.children.length ? Array.from({ length: widgetNumber(element.props.repeatCount, 3, 1, 20) }, (_, index) => <div key={index} className="repeater-item"><Renderer elementIds={element.children} isRoot={false} readOnly={readOnly || index > 0} /></div>) : containerPlaceholder("Add a template to repeat")}</div>;
             case "frame": return <iframe {...embedAttributes(element.props)} style={{ width: "100%", height: "100%", border: 0, pointerEvents: readOnly ? "auto" : "none" }} tabIndex={readOnly ? 0 : -1} />;
             case "icon": {
                 const svg = <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICON_PATHS[String(element.props.icon || "star")] || ICON_PATHS.star} /></svg>;
@@ -207,12 +174,6 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
             }
             case "spacer": return <div className="spacer-element" style={{ width: "100%", height: `${Number(element.props.spacerHeight) || 40}px`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <span className="spacer-label">↕ Spacer</span></div>;
-            case "socialbar": {
-                const plat = ["facebook", "twitter", "instagram", "linkedin", "youtube"].filter(p => element.props[p]);
-                return <div className="social-bar" style={{ display: "flex", gap: "12px", alignItems: "center", justifyContent: "center", height: "100%" }}>
-                    {plat.length > 0 ? plat.map(p => <SocialIcon key={p} platform={p} size={Number(element.props.iconSize) || 24} style={String(element.props.iconStyle || "filled")} />) :
-                        <span className="social-placeholder">Add social links</span>}</div>;
-            }
             case "accordion": {
                 const expanded = Boolean(element.props.expanded);
                 return <details open={expanded} onToggle={event => { if (!readOnly && event.currentTarget.open !== expanded) useEditorStore.getState().updateElement(element.id, { props: { expanded: event.currentTarget.open } }); }}><summary>{String(element.props.headerText || "Accordion Header")}</summary><div><Renderer elementIds={element.children} isRoot={false} readOnly={readOnly} /></div></details>;
@@ -419,7 +380,7 @@ const ElementRenderer: React.FC<ElementRendererProps> = (props) => {
 
 const Renderer: React.FC<RendererProps> = ({ elementIds, isRoot = false, readOnly = false }) => (
     <>
-        {isRoot && <style>{choiceCSS}</style>}
+        {isRoot && <style>{choiceCSS + nativeWidgetCSS}</style>}
         {elementIds.map((id) => (
             <ElementRenderer key={id} elementId={id} isRoot={isRoot} readOnly={readOnly} />
         ))}

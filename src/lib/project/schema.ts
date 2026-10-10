@@ -2,6 +2,8 @@ import { validateCheckboxGroup } from "@/lib/elements/choice-group-values";
 import { selectionCount } from "@/lib/elements/selection-limits";
 import { validateFormConditions } from "@/lib/form-conditions";
 import { requestMappingSchema, responseMappingSchema, failureSchema } from "@/lib/contracts";
+import { richDocument, timelineEvents } from "@/lib/elements/rich-content";
+import { mapUrl } from "@/lib/elements/map";
 import { z } from "zod";
 import { databaseSchema } from "@/lib/backend/database";
 import { validationChoices } from "@/lib/backend/validation";
@@ -274,7 +276,7 @@ export const backendBlockSchema = z.discriminatedUnion("type", [
   blockBase.extend({ type: z.literal("env_var"), config: configs.env_var }),
 ]);
 
-const responsiveLayout = z.object({ x: finite, y: finite, w: finite.nonnegative(), h: finite.nonnegative(), position: z.enum(["absolute", "relative", "static", "fixed", "sticky"]), opacity: finite.min(0).max(1), rotation: finite, visible: z.boolean(), locked: z.boolean() }).partial();
+const responsiveLayout = z.object({rotateX: finite.min(-3600).max(3600).optional(), rotateY: finite.min(-3600).max(3600).optional(), depth: finite.min(-10000).max(10000).optional(), perspective: finite.min(0).max(20000).optional(), scaleX: finite.min(0.01).max(100).optional(), scaleY: finite.min(0.01).max(100).optional(), skewX: finite.min(-85).max(85).optional(), skewY: finite.min(-85).max(85).optional(),  x: finite, y: finite, w: finite.nonnegative(), h: finite.nonnegative(), position: z.enum(["absolute", "relative", "static", "fixed", "sticky"]), opacity: finite.min(0).max(1), rotation: finite, visible: z.boolean(), locked: z.boolean() }).partial();
 const responsiveOverride = z.object({ layout: responsiveLayout.optional(), styles: z.record(z.string(), z.union([text, finite])).optional() });
 const vectorCoordinate = finite.min(-10000).max(10000);
 const animationEffectSchema = z.object({
@@ -336,7 +338,7 @@ export const elementSchema = z.object({
   definitionVersion: z.number().int().positive().optional(),
   events: z.record(z.string().regex(/^on[A-Z][A-Za-z0-9]*$/), z.object({ action: z.enum(["navigate", "scroll"]), target: id })).optional(),
   accessibility: z.object({ label: text.optional(), description: text.optional(), hidden: z.boolean().optional() }).optional(),
-  responsive: z.object({ tablet: responsiveOverride.optional(), mobile: responsiveOverride.optional() }).optional(),
+  responsive: z.record(z.string().regex(/^(tablet|mobile|custom_[1-9][0-9]{1,4})$/), responsiveOverride).optional(),
   vector: z.object({ points: z.array(z.object({ x: vectorCoordinate, y: vectorCoordinate, inX: vectorCoordinate.optional(), inY: vectorCoordinate.optional(), outX: vectorCoordinate.optional(), outY: vectorCoordinate.optional() }).refine(point => (point.inX === undefined) === (point.inY === undefined) && (point.outX === undefined) === (point.outY === undefined), "Curve handles require both coordinates")).min(2).max(500), closed: z.boolean(), stroke: text.regex(/^(none|#[0-9a-fA-F]{3,8})$/), strokeWidth: finite.min(0).max(100), fill: text.regex(/^(none|#[0-9a-fA-F]{3,8})$/) }).optional(),
   motion: z.object({ duration: finite.min(0.05).max(120), delay: finite.min(0).max(120), iterations: z.number().int().min(1).max(100), easing: z.enum(["linear", "ease-in", "ease-out", "ease-in-out"]), frames: z.array(z.object({ time: finite.min(0).max(1), x: vectorCoordinate, y: vectorCoordinate, scale: finite.min(0.01).max(20), rotation: finite.min(-3600).max(3600), opacity: finite.min(0).max(1) })).min(2).max(100).refine(frames => new Set(frames.map(f => f.time)).size === frames.length, "Keyframes must have unique times") }).optional(),
   component: z.object({ id, node: id, overrides: z.array(text).max(500) }).optional(),
@@ -384,6 +386,7 @@ export const elementSchema = z.object({
     rotation: finite,
     visible: z.boolean(),
     locked: z.boolean(),
+    rotateX: finite.min(-3600).max(3600).optional(), rotateY: finite.min(-3600).max(3600).optional(), depth: finite.min(-10000).max(10000).optional(), perspective: finite.min(0).max(20000).optional(), scaleX: finite.min(0.01).max(100).optional(), scaleY: finite.min(0.01).max(100).optional(), skewX: finite.min(-85).max(85).optional(), skewY: finite.min(-85).max(85).optional(),
   }),
   children: z.array(id).max(5000),
   animation: animationEffectSchema.extend({ effects: z.array(animationEffectSchema.refine(validAnimationEffect, "Custom animations need keyframes and scroll start must exceed end")).max(7).optional() }).refine(validAnimationEffect, "Custom animations need keyframes and scroll start must exceed end").optional(),
@@ -431,6 +434,7 @@ export const projectSchema = z.object({
     activePageId: id,
     pageElementMap: z.record(id, z.array(id)),
     canvasSettings: z.object({
+      breakpoints: z.array(z.object({ name: z.string().trim().min(1).max(40), width: z.number().int().min(240).max(20000) })).max(12).optional(),
       backgroundColor: text,
       width: finite.min(1).max(20000),
       height: finite.min(1).max(100000),
@@ -501,7 +505,10 @@ export function parseProject(value: unknown): ProjectDocument {
     );
   const project = projectSchema.parse(value);
   const { editor, backend, routing } = project;
+  const breakpoints = editor.canvasSettings.breakpoints || [];
+  if (new Set(breakpoints.map(bp=>bp.width)).size !== breakpoints.length || breakpoints.some(bp=>[600,1024].includes(bp.width))) throw new Error("Breakpoint widths must be unique and different from Tablet and Mobile.");
   const validateElement = (node: z.infer<typeof elementSchema>) => {
+    for (const key of Object.keys(node.responsive || {})) if (key.startsWith("custom_") && !breakpoints.some(bp=>`custom_${bp.width}` === key)) throw new Error("An element references a missing custom breakpoint.");
     if (node.type === "custom") {
       const definition = editor.customElements?.[node.definitionId || ""];
       if (!definition || node.definitionVersion !== definition.version) throw new Error("Unknown or incompatible custom element definition.");
@@ -516,6 +523,9 @@ export function parseProject(value: unknown): ProjectDocument {
         const error = textConfigError(textLimits(node.props));
         if (error) throw new Error(error);
       }
+      if(node.definitionId==="richText") richDocument(node.props);
+      if(node.definitionId==="timeline") timelineEvents(node.props);
+      if(node.definitionId==="map") mapUrl(node.props);
       const definition = definitionFor(node);
       if (!definition || definition.template.type !== node.type || (node.definitionVersion !== undefined && node.definitionVersion !== definition.version)) throw new Error("Unknown or incompatible element definition.");
       if (node.type === "native") {

@@ -1,4 +1,4 @@
-import { projectHistory } from "./projectHistory";
+import { projectHistory, withProjectHistory, type DurableHistory } from "./projectHistory";
 import { accountStorageKey } from "@/lib/project/account-scope";
 import { reconcileRouting } from "@/lib/project/links";
 import { create } from "zustand";
@@ -13,6 +13,7 @@ import {
 import {
   designFingerprint,
   parseProject,
+  redactProject,
   type ProjectDocument,
 } from "@/lib/project/schema";
 import { getProject, listProjects, saveProject } from "@/lib/project/storage";
@@ -31,7 +32,7 @@ interface WorkspaceState {
   rename: (name: string) => void;
   toggleAutosave: () => void;
 }
-export const useWorkspaceStore = create<WorkspaceState>((set) => ({
+export const useWorkspaceStore = create<WorkspaceState>(withProjectHistory("workspace", ["name", "source"], (set) => ({
   id: "",
   name: "Untitled project",
   ready: false,
@@ -48,7 +49,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     set((s) => ({ autosave: !s.autosave }));
     if (useWorkspaceStore.getState().autosave) scheduleSave();
   },
-}));
+})));
 let timer: ReturnType<typeof setTimeout> | undefined;
 let writing: Promise<void> | undefined;
 let version = 0;
@@ -58,6 +59,14 @@ export function currentProject() {
   const state = useWorkspaceStore.getState();
   return { ...captureProject(state.id, state.name), source: state.source };
 }
+
+/** Durable history is local account-scoped storage, never application IR/export. */
+function normalizeHistory(snapshot: Record<string,Record<string,unknown>>) {
+  const current = currentProject();
+  const document = redactProject(parseProject({...current,...snapshot.workspace,editor:snapshot.editor,backend:snapshot.backend,routing:snapshot.routing}));
+  return {editor:Object.fromEntries(Object.keys(snapshot.editor).map(key=>[key,document.editor[key as keyof typeof document.editor]])),backend:{...document.backend},routing:{...document.routing},workspace:{name:document.name,source:document.source}};
+}
+
 function scheduleSave() {
   clearTimeout(timer);
   if (useWorkspaceStore.getState().autosave)
@@ -90,6 +99,7 @@ export async function flushWorkspace(label?: string): Promise<void> {
         currentProject(),
         state.revision,
         label,
+        projectHistory.serialize(normalizeHistory),
       );
       useWorkspaceStore.setState({
         revision,
@@ -121,7 +131,7 @@ export async function flushWorkspace(label?: string): Promise<void> {
   }
   if (useWorkspaceStore.getState().dirty) await flushWorkspace();
 }
-export async function openWorkspace(document: ProjectDocument, revision = 0) {
+export async function openWorkspace(document: ProjectDocument, revision = 0, history?: DurableHistory) {
   if (useWorkspaceStore.getState().ready) await flushWorkspace();
   clearTimeout(timer);
   const parsed = parseProject(document);
@@ -138,6 +148,7 @@ export async function openWorkspace(document: ProjectDocument, revision = 0) {
       error: "",
       status: revision ? "Saved on this device" : "Unsaved changes",
     });
+    if (history) projectHistory.hydrate(history, normalizeHistory);
     version++;
     localStorage.setItem(accountStorageKey("levoks-active-project"), parsed.id);
   } finally {
@@ -155,7 +166,7 @@ export async function reopenSavedWorkspace(id: string) {
   const saved = await getProject(id);
   if (!saved)
     throw new Error("This project is no longer available on this device.");
-  await openWorkspace(saved.document, saved.revision);
+  await openWorkspace(saved.document, saved.revision, saved.history);
 }
 /** Use only after the user has downloaded a recovery backup. */
 export async function recoverSavedWorkspace() {
@@ -167,7 +178,7 @@ export async function recoverSavedWorkspace() {
       "No saved version is available. Keep your downloaded backup.",
     );
   useWorkspaceStore.setState({ dirty: false });
-  await openWorkspace(saved.document, saved.revision);
+  await openWorkspace(saved.document, saved.revision, saved.history);
 }
 export async function applyDesign(
   document: ProjectDocument,
@@ -191,11 +202,11 @@ export async function applyDesign(
   await flushWorkspace("Design updated");
 }
 export function updateSource(files?: Record<string, string>) {
-  useWorkspaceStore.setState({
+  projectHistory.run("workspace",()=>useWorkspaceStore.setState({
     source: files
       ? { basedOn: designFingerprint(currentProject()), files }
       : undefined,
-  });
+  }));
   markDirty();
 }
 export function initializeWorkspace(projectId?: string): Promise<void> {
@@ -231,6 +242,7 @@ export function initializeWorkspace(projectId?: string): Promise<void> {
       await openWorkspace(
         fallback?.document || emptyProject(),
         fallback?.revision || 0,
+      fallback?.history,
       );
     } catch (error) {
       if (projectId) throw error;
@@ -287,6 +299,8 @@ export function initializeWorkspace(projectId?: string): Promise<void> {
       if (next.nodes !== prev.nodes || next.connections !== prev.connections)
         markDirty();
     });
+    projectHistory.subscribe(()=>markDirty());
+    useWorkspaceStore.subscribe((next,prev)=>{if(next.source!==prev.source || next.name!==prev.name) markDirty();});
     window.addEventListener("beforeunload", (event) => {
       if (useWorkspaceStore.getState().dirty) {
         event.preventDefault();

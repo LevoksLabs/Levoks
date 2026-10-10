@@ -1,4 +1,5 @@
 "use client";
+import { localPoint } from "@/lib/canvas-geometry";
 
 import React from "react";
 import {
@@ -159,13 +160,11 @@ const DndProvider: React.FC<DndProviderProps> = ({ children }) => {
 
             const placeInsideContainer = (containerId: string) => {
                 const containerNode = document.querySelector(`[data-element-id="${containerId}"]`) as HTMLElement | null;
-                const canvasPage = document.querySelector(".canvas-page") as HTMLElement | null;
-                const scale = canvasPage ? getElementScale(canvasPage) : 1;
 
                 if (dropPoint && containerNode) {
-                    const rect = containerNode.getBoundingClientRect();
-                    const dropX = (dropPoint.x - rect.left) / scale;
-                    const dropY = (dropPoint.y - rect.top) / scale;
+                    let point;try {point=localPoint(containerNode,dropPoint.x,dropPoint.y);} catch {return;}
+                    const dropX = point.x-containerNode.clientLeft+containerNode.scrollLeft;
+                    const dropY = point.y-containerNode.clientTop+containerNode.scrollTop;
                     addElement(
                         { ...tmpl },
                         containerId,

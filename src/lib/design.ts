@@ -1,31 +1,22 @@
 import type { ElementNode, ElementLayout } from "@/types";
-export type Breakpoint = "base" | "tablet" | "mobile";
+export type Breakpoint = "base" | "tablet" | "mobile" | `custom_${number}`;
+export type CustomBreakpoint = { name: string; width: number };
 export const BREAKPOINTS = { base: 1920, tablet: 1024, mobile: 600 } as const;
-export function breakpointForWidth(width: number): Breakpoint {
-  return width <= BREAKPOINTS.mobile ? "mobile" : width <= BREAKPOINTS.tablet ? "tablet" : "base";
+export const breakpointWidth = (key: Breakpoint) => key.startsWith("custom_") ? Number(key.slice(7)) : BREAKPOINTS[key as keyof typeof BREAKPOINTS];
+export function responsiveKeys(nodes: ElementNode[]): Exclude<Breakpoint, "base">[] {
+  return [...new Set(nodes.flatMap(node => Object.keys(node.responsive || {})))].sort((a,b) => breakpointWidth(b as Breakpoint)-breakpointWidth(a as Breakpoint)) as Exclude<Breakpoint,"base">[];
 }
-export function canvasSize(
-  base: { width: number; height: number },
-  breakpoint: Breakpoint,
-  viewport: { width: number; height: number } | null,
-) {
-  return viewport ?? {
-    width: breakpoint === "mobile" ? 390 : breakpoint === "tablet" ? 820 : Math.max(320, base.width || 1920),
-    height: Math.max(200, base.height || 900),
-  };
+export function breakpointForWidth(width: number, custom: CustomBreakpoint[] = []): Breakpoint {
+  return (["tablet", "mobile", ...custom.map(bp => `custom_${bp.width}`)] as Breakpoint[])
+    .sort((a,b) => breakpointWidth(a)-breakpointWidth(b)).find(key => width <= breakpointWidth(key)) || "base";
 }
-export function resolveElement(
-  element: ElementNode,
-  breakpoint: Breakpoint,
-): ElementNode {
+export function canvasSize(base: { width: number; height: number }, breakpoint: Breakpoint, viewport: { width: number; height: number } | null) {
+  return viewport ?? { width: breakpoint.startsWith("custom_") ? breakpointWidth(breakpoint) : breakpoint === "mobile" ? 390 : breakpoint === "tablet" ? 820 : Math.max(320,base.width || 1920), height: Math.max(200,base.height || 900) };
+}
+export function resolveElement(element: ElementNode, breakpoint: Breakpoint): ElementNode {
   if (breakpoint === "base" || !element.responsive) return element;
-  const tablet = element.responsive.tablet,
-    mobile = breakpoint === "mobile" ? element.responsive.mobile : undefined;
-  return {
-    ...element,
-    layout: { ...element.layout, ...tablet?.layout, ...mobile?.layout },
-    styles: { ...element.styles, ...tablet?.styles, ...mobile?.styles },
-  };
+  const overrides = responsiveKeys([element]).filter(key => breakpointWidth(key) >= breakpointWidth(breakpoint)).map(key => element.responsive![key]!);
+  return { ...element, layout: Object.assign({},element.layout,...overrides.map(o=>o.layout)), styles: Object.assign({},element.styles,...overrides.map(o=>o.styles)) };
 }
 export function patchElement(
   element: ElementNode,
@@ -95,6 +86,10 @@ export function patchLayout(
   breakpoint: Breakpoint,
 ) {
   return patchElement(element, { layout: layout as ElementLayout }, breakpoint);
+}
+export function elementTransform(element: Pick<ElementNode,"layout" | "styles">) {
+  const l = element.layout;
+  return [l.perspective ? `perspective(${l.perspective}px)` : "", l.depth ? `translateZ(${l.depth}px)` : "", l.rotateX ? `rotateX(${l.rotateX}deg)` : "", l.rotateY ? `rotateY(${l.rotateY}deg)` : "", l.rotation ? `rotate(${l.rotation}deg)` : "", l.skewX || l.skewY ? `skew(${l.skewX || 0}deg,${l.skewY || 0}deg)` : "", l.scaleX !== undefined || l.scaleY !== undefined ? `scale(${l.scaleX ?? 1},${l.scaleY ?? 1})` : "", element.styles.transform === "none" ? "" : element.styles.transform || ""].filter(Boolean).join(" ") || "none";
 }
 export function vectorPath(vector: NonNullable<ElementNode["vector"]>) {
   const points = vector.points;

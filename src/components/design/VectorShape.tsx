@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { useEditorStore } from "@/store/editorStore";
 import { vectorPath } from "@/lib/design";
 import type { ElementNode } from "@/types";
+import { screenPlane } from "@/lib/canvas-geometry";
 
 export default function VectorShape({
   element,
@@ -16,6 +17,11 @@ export default function VectorShape({
     index: number;
     kind: "anchor" | "in" | "out";
     vector: typeof vector;
+    plane: ReturnType<typeof screenPlane>;
+    width: number;
+    height: number;
+    offsetX: number;
+    offsetY: number;
   } | null>(null);
   useEffect(() => () => {
     if (drag.current) {
@@ -31,19 +37,20 @@ export default function VectorShape({
     event.preventDefault();
     event.stopPropagation();
     if (event.button !== 0) return;
+    const wrapper=event.currentTarget.ownerSVGElement?.parentElement;
+    if (!wrapper) return;
+    let plane; try {plane=screenPlane(wrapper);} catch {return;}
     useEditorStore.getState().beginInteraction();
-    drag.current = { index, kind, vector: structuredClone(vector) };
+    const css=getComputedStyle(wrapper),svg=event.currentTarget.ownerSVGElement!;
+    drag.current = { index, kind, vector: structuredClone(vector), plane, width:svg.clientWidth,height:svg.clientHeight,offsetX:wrapper.clientLeft+(parseFloat(css.paddingLeft)||0),offsetY:wrapper.clientTop+(parseFloat(css.paddingTop)||0) };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const move = (event: React.PointerEvent<SVGCircleElement>) => {
     const active = drag.current,
       svg = event.currentTarget.ownerSVGElement;
     if (!active || !svg) return;
-    const matrix = svg.getScreenCTM()?.inverse();
-    if (!matrix) return;
-    const p = new DOMPoint(event.clientX, event.clientY).matrixTransform(
-      matrix,
-    );
+    let local; try {local=active.plane.toLocal(event.clientX,event.clientY);} catch {return;}
+    const p={x:(local.x-active.offsetX)/active.width*100,y:(local.y-active.offsetY)/active.height*100};
     const original = active.vector.points[active.index],
       x = Math.max(-10000, Math.min(10000, p.x)),
       y = Math.max(-10000, Math.min(10000, p.y));
@@ -83,6 +90,9 @@ export default function VectorShape({
     <circle
       key={kind}
       data-vector-handle="true"
+      role="button"
+      tabIndex={0}
+      aria-label={`Point ${index+1} ${kind} handle`}
       cx={x}
       cy={y}
       r={kind === "anchor" ? 2.5 : 2}
@@ -91,6 +101,17 @@ export default function VectorShape({
       strokeWidth="1"
       vectorEffect="non-scaling-stroke"
       style={{ cursor: "crosshair" }}
+      onKeyDown={event=>{
+        if(event.key==="Escape" && drag.current) {event.preventDefault();event.stopPropagation();drag.current=null;useEditorStore.getState().endInteraction(true);return;}
+        const delta=event.shiftKey ? 10 : 1;
+        const dx=event.key==="ArrowRight" ? delta : event.key==="ArrowLeft" ? -delta : 0,dy=event.key==="ArrowDown" ? delta : event.key==="ArrowUp" ? -delta : 0;
+        if(!dx && !dy) return;
+        event.preventDefault();event.stopPropagation();
+        const point=vector.points[index];
+        const next=kind==="anchor" ? {...point,x:point.x+dx,y:point.y+dy,...(point.inX===undefined ? {} : {inX:point.inX+dx,inY:point.inY!+dy}),...(point.outX===undefined ? {} : {outX:point.outX+dx,outY:point.outY!+dy})} : {...point,[`${kind}X`]:x+dx,[`${kind}Y`]:y+dy};
+        if(Object.values(next).some(value=>Math.abs(value)>10000)) return;
+        useEditorStore.getState().updateElement(element.id,{vector:{...vector,points:vector.points.map((p,i)=>i===index ? next : p)}});
+      }}
       onPointerDown={(event) => start(event, index, kind)}
       onPointerMove={move}
       onPointerUp={(event) => {

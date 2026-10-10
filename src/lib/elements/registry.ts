@@ -39,7 +39,7 @@ export interface ElementDefinition {
   status: "supported" | "experimental";
   propsSchema: Record<string, PropertyField>;
   styleSchema: "css-properties";
-  responsiveSchema: "tablet-mobile";
+  responsiveSchema: "custom-cascade";
   events: string[];
   children: boolean;
   allowedParents: "containers";
@@ -89,7 +89,7 @@ for (const [id, template] of Object.entries(legacyTemplates)) {
     status: "supported",
     propsSchema: fields(template.props),
     styleSchema: "css-properties",
-    responsiveSchema: "tablet-mobile",
+    responsiveSchema: "custom-cascade",
     events:
       id === "form"
         ? ["onSubmit"]
@@ -135,7 +135,7 @@ function native(
     status: "supported",
     propsSchema: fields(props),
     styleSchema: "css-properties",
-    responsiveSchema: "tablet-mobile",
+    responsiveSchema: "custom-cascade",
     events,
     children,
     allowedParents: "containers",
@@ -748,6 +748,19 @@ for (const id of [
 ])
   definitions.find((d) => d.id === id)!.status = "experimental";
 
+for(const [id,properties] of Object.entries({richText:{richDocument:""},timeline:{timelineEvents:""},tooltip:{placement:"top"},popover:{placement:"bottom"},drawer:{placement:"right"},toast:{duration:5000,dismissible:true,severity:"success"},map:{latitude:51.505,longitude:-.09,zoom:13,locationLabel:"London"}})) {
+  const definition=definitions.find(d=>d.id===id)!;
+  Object.assign(definition.template.props,properties);Object.assign(definition.propsSchema,fields(Object.fromEntries(Object.entries(properties).filter(([,value])=>value!==undefined))));
+  if(["richText","timeline","drawer","map"].includes(id)) definition.status="supported";
+  if(["richText","timeline"].includes(id)) {definition.template.styles.height="auto";definition.template.styles.whiteSpace="normal";}
+  if(id==="map") {definition.template.props.embedType="url";definition.template.props.source="";}
+}
+for(const id of ["tooltip","popover"]) definitions.find(d=>d.id===id)!.propsSchema.placement.options=["top","bottom","left","right"];
+definitions.find(d=>d.id==="drawer")!.propsSchema.placement.options=["left","right","top","bottom"];
+definitions.find(d=>d.id==="toast")!.propsSchema.severity.options=["success","info","warning","error"];
+
+for(const [id,properties] of Object.entries({menu:{urls:""},socialbar:{facebookUrl:"",twitterUrl:"",instagramUrl:"",linkedinUrl:"",youtubeUrl:""}})) {const d=definitions.find(d=>d.id===id)!;Object.assign(d.template.props,properties);Object.assign(d.propsSchema,fields(Object.fromEntries(Object.entries(properties).filter(([,value])=>value!==undefined))));}
+definitions.find(d=>d.id==="socialbar")!.status="supported";
 const buttonFields = definitions.find(d => d.id === "button")!.propsSchema;
 for (const definition of definitions) if (definition.propsSchema.href) definition.propsSchema.href.label = "Link URL";
 buttonFields.type.options = ["button", "submit", "reset"];

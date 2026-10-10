@@ -45,7 +45,7 @@ export function orderedStyles(styles: Record<string, string | number>) {
 
 // The editor has a selection wrapper; exported elements do not. Keep external
 // layout on that wrapper, and visual/content styles on the semantic element.
-const boxProperties = /^(?:width|height|minWidth|maxWidth|minHeight|maxHeight|margin(?:Top|Right|Bottom|Left)?|position|top|right|bottom|left|inset|zIndex|order|flex(?:Basis|Grow|Shrink)?|alignSelf|justifySelf|grid(?:Area|Column(?:Start|End)?|Row(?:Start|End)?)|display)$/;
+const boxProperties = /^(?:opacity|transform|transformOrigin|transformStyle|perspective|perspectiveOrigin|backfaceVisibility|width|height|minWidth|maxWidth|minHeight|maxHeight|margin(?:Top|Right|Bottom|Left)?|position|top|right|bottom|left|inset|zIndex|order|flex(?:Basis|Grow|Shrink)?|alignSelf|justifySelf|grid(?:Area|Column(?:Start|End)?|Row(?:Start|End)?)|display)$/;
 export function semanticStyleParts(styles: Record<string, string | number>) {
   const box: Record<string, string | number> = {};
   const surface: Record<string, string | number> = {};

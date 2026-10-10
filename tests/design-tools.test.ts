@@ -51,12 +51,12 @@ test("responsive canvas sizes preserve the base, save overrides, undo and restor
   assert.equal(store.getElement(id)!.styles.color, "#123456");
   const css = compileProject(saved).files["frontend/app/page.css"];
   assert.match(css, /max-width: 600px/);
-  assert.match(css, /left: 0\.750rem/);
+  assert.match(css, /left: 12px/);
   ui.setBreakpoint("base");
   assert.equal(store.getElement(id)!.layout.x, 80);
   store.updateCanvasSettings({ width: 1280, height: 900 });
   assert.deepEqual(useEditorStore.getState().canvasSettings, baseSize);
-  assert.deepEqual([600, 601, 1024, 1025].map(breakpointForWidth), ["mobile", "tablet", "tablet", "base"]);
+  assert.deepEqual([600, 601, 1024, 1025].map(width=>breakpointForWidth(width)), ["mobile", "tablet", "tablet", "base"]);
 });
 
 test("responsive adjustments are provisional, cancel restores positions, and save is one undo step", () => {
@@ -211,7 +211,7 @@ test("breakpoints inherit, persist and emit CSS without changing desktop or unre
   const css = compileProject(saved).files["frontend/app/page.css"];
   assert.match(css, /max-width: 1024px/);
   assert.match(css, /max-width: 600px/);
-  assert.match(css, /left: 0\.750rem/);
+  assert.match(css, /left: 12px/);
   assert.match(css, /display: none/);
 });
 

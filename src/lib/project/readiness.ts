@@ -4,7 +4,7 @@ import type { ElementNode } from "@/types";
 import type { FlowGraph, IRDiagnostic } from "@/types/ir";
 import { definitionFor } from "@/lib/elements/registry";
 import { safeElementUrl, buttonHref } from "@/lib/elements/native";
-import { resolveElement } from "@/lib/design";
+import { resolveElement, type Breakpoint } from "@/lib/design";
 
 export type ReadinessTarget =
   | { kind: "element"; pageId: string; elementId: string }
@@ -36,16 +36,13 @@ export function publishReadiness(
   for (const page of project.editor.pages) {
     const visible: ElementNode[] = [];
     const visited = new Set<string>();
-    const visit = (id: string, hidden = [false, false, false]) => {
+    const screens = ["base","tablet","mobile",...(project.editor.canvasSettings.breakpoints || []).map(bp=>`custom_${bp.width}`)] as Breakpoint[];
+    const visit = (id: string, hidden = screens.map(()=>false)) => {
       const node = nodes[id] as ElementNode | undefined;
       if (!node || visited.has(id)) return;
       visited.add(id);
       if (!elementPages.has(id)) elementPages.set(id, page.id);
-      const invisible = [
-        node,
-        resolveElement(node, "tablet"),
-        resolveElement(node, "mobile"),
-      ].map(
+      const invisible = screens.map(bp=>resolveElement(node,bp)).map(
         (resolved, i) =>
           hidden[i] ||
           !resolved.layout.visible ||

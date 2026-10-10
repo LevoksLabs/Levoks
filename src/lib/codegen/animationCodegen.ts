@@ -8,7 +8,7 @@ import { AnimationData, ElementNode } from "@/types";
 // ─── Keyframes Definitions ───
 
 import { animationTracks, resolveAnimations, resolveKeyframe, usesAnimationRuntime } from "@/lib/animation";
-import { mountAnimations } from "@/lib/animation-runtime";
+import { advancedAnimationSource } from "./runtime-sources";
 
 // ─── Generate CSS for an element's animation ───
 
@@ -54,6 +54,7 @@ export function generateAnimationCSS(
             break;
     }
 
+    classCss += `.${className} { animation-composition: add; }\n`;
     return { keyframeCss, classCss, needsJsSetup };
 }
 
@@ -67,7 +68,7 @@ export function generateAnimationSetup(elements: { className: string; anim: Anim
   if (!root) return () => {};
   const cleanups = [];
   ${elements.some(item => usesAnimationRuntime(item.anim)) ? `const __name = fn => fn;
-  const mountAdvancedAnimations = ${mountAnimations.toString()};
+  const mountAdvancedAnimations = ${advancedAnimationSource};
   for (const {className, effects} of ${advanced}) {
     root.querySelectorAll("." + className).forEach(el => cleanups.push(mountAdvancedAnimations(el, effects)));
   }` : ""}

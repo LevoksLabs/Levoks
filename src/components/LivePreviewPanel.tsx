@@ -9,11 +9,12 @@ import GeneratedPreview from "./design/GeneratedPreview";
 import FullStackPreview from "./design/FullStackPreview";
 import VectorShape from "./design/VectorShape";
 import { assetElement } from "@/lib/design-assets";
+import { elementStyles } from "@/lib/element-styles";
 import { canvasSize, resolveElement, fontFamily, type Breakpoint } from "@/lib/design";
 import { useEditorUIStore } from "@/store/editorUIStore";
 import { useEditorStore } from "@/store/editorStore";
 import { resolveAllRoutes, simulateServiceBlock, ResolvedRoute } from "@/lib/routingEngine";
-import { ElementNode, CONTAINER_TYPES } from "@/types";
+import { ElementNode } from "@/types";
 import {
     ChevronLeft, Globe, Activity,
     CheckCircle2, XCircle, ArrowRight
@@ -47,46 +48,7 @@ const LiveElement: React.FC<LiveElementProps> = ({
     if (!element) return null;
     if (!element.layout.visible) return null;
 
-    const isContainer = CONTAINER_TYPES.includes(element.type);
-    const isTextLike = element.type === "text" || element.type === "title" || element.type === "paragraph";
-    const widthPx = `${Math.max(40, element.layout.w)}px`;
-    const heightPx = `${Math.max(20, element.layout.h)}px`;
-    const rawPosition = String(element.styles.position || element.layout.position || "");
-    const resolvedPosition = (rawPosition || (isContainer ? "relative" : "static")) as React.CSSProperties["position"];
-    const isPositionedChild = resolvedPosition !== "static";
-
-    const positionStyles: React.CSSProperties = isRoot
-        ? {
-            position: "absolute",
-            left: `${element.layout.x}px`,
-            top: `${element.layout.y}px`,
-            width: String(element.styles.width || widthPx),
-            minHeight: element.styles.minHeight || (element.styles.height ? undefined : heightPx),
-            height: isTextLike ? "auto" : String(element.styles.height || heightPx),
-        }
-        : {
-            position: resolvedPosition,
-            left: isPositionedChild ? `${element.layout.x}px` : undefined,
-            top: isPositionedChild ? `${element.layout.y}px` : undefined,
-            width: String(element.styles.width || widthPx),
-            minHeight: element.styles.minHeight || (element.styles.height ? undefined : heightPx),
-            height: isTextLike ? "auto" : String(element.styles.height || heightPx),
-        };
-
-    const mergedStyles: React.CSSProperties = {
-        ...element.styles as React.CSSProperties,
-        ...positionStyles,
-        ...(!isRoot && resolvedPosition === "static" ? { maxWidth: "100%", minWidth: 0, flexShrink: 0 } : {}),
-        ...(isContainer && element.children.length && !element.styles.height ? { height: "auto" } : {}),
-        ...(element.type === "shape" && element.props.shapeType && element.props.shapeType !== "rectangle" ? { backgroundColor: "transparent" } : {}),
-        fontFamily: fontFamily(element.styles.fontFamily),
-        ...(element.type === "gallery" ? { display: "block" } : {}),
-        cursor: (element.styles.cursor as React.CSSProperties["cursor"]) || "default",
-        userSelect: "none",
-        overflow: isContainer ? "visible" : (isTextLike ? "visible" : "hidden"),
-        opacity: element.layout.opacity ?? 1,
-        transform: element.layout.rotation ? `rotate(${element.layout.rotation}deg)` : undefined,
-    };
+    const mergedStyles: React.CSSProperties = {...elementStyles(element,Boolean(isRoot)) as React.CSSProperties,cursor:String(element.styles.cursor || "default")};
 
     const hasRoute = routeMap.has(element.id);
 

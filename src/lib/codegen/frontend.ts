@@ -1,5 +1,5 @@
 import { ElementNode, Page, DesignToken, DesignAsset } from "@/types";
-import { nativeMarkup, nativeTree, nativeFieldStyles } from "@/lib/elements/native";
+import { nativeMarkup, nativeTree } from "@/lib/elements/native";
 import { customIdentifier, type CustomDefinition } from "@/lib/elements/custom";
 import { FlowGraph, Flow, ApiCallStep, NavigateStep } from "@/types/ir";
 import { ElementWiring, EndpointTarget, PageTarget } from "./connectionResolver";
@@ -9,10 +9,12 @@ import { assetElement, assetFonts } from "@/lib/design-assets";
 import { SHAPE_PATHS } from "@/lib/shape-paths";
 import { ICON_PATHS } from "@/lib/icon-paths";
 import { widgetNumber, tabLabels, tabsCSS, choiceCSS } from "@/lib/widgets";
+import { elementStyles } from "@/lib/element-styles";
 import { orderedStyles } from "@/lib/property-values";
 import { embedAttributes } from "@/lib/elements/embed";
 import { widgetRuntime } from "./widget-runtime";
-import { resolveElement, vectorPath, motionFrames, fontFamily } from "@/lib/design";
+import { nativeWidgetCSS } from "@/lib/native-widget-runtime";
+import { resolveElement, responsiveKeys, breakpointWidth, vectorPath, motionFrames, fontFamily } from "@/lib/design";
 import { liveDataRuntime, liveDataCSS } from "./live-data";
 import type { ResolvedDataSource } from "@/lib/live-data";
 import { formValueRuntime } from "./form-values";
@@ -30,25 +32,13 @@ const safeUrl = (value: unknown) => {
     return /^(https?:\/\/|\/(?!\/)|#|data:image\/(png|jpeg|webp|gif);base64,)/i.test(raw) ? escapeMarkup(raw) : "";
 };
 
-const SAFE_UNIT = (value: string | number | undefined, fallback?: string): string | undefined => {
-    if (value === undefined || value === null) return fallback;
-    if (typeof value === "number") return `${(value / 16).toFixed(3)}rem`;
-    const raw = String(value).trim();
-    if (!raw) return fallback;
-    if (/^\d+(\.\d+)?px$/.test(raw)) {
-        const num = Number(raw.replace("px", ""));
-        return `${(num / 16).toFixed(3)}rem`;
-    }
-    return raw;
-};
-
 const cssFromStyles = (styles: Record<string, string | number>): string => {
     const entries = Object.entries(orderedStyles(styles))
-        .filter(([_, v]) => v !== undefined && v !== null && String(v).trim() !== "")
+        .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "")
         .map(([k, v]) => {
             const prop = k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
             if (!/^[a-zA-Z-]+$/.test(k) || /[<>;{}]/.test(String(v))) return "";
-            const val = typeof v === "number" && ["opacity", "zIndex", "fontWeight", "lineHeight", "flexGrow", "flexShrink", "order"].includes(k) ? String(v) : SAFE_UNIT(v, String(v));
+            const val = typeof v === "number" && ["opacity", "zIndex", "fontWeight", "lineHeight", "flexGrow", "flexShrink", "order"].includes(k) ? String(v) : typeof v === "number" ? `${v}px` : String(v);
             return `${prop}: ${k === "fontFamily" ? fontFamily(val) : val};`;
         });
     return entries.join(" ");
@@ -171,74 +161,6 @@ function semanticHandler(action: NonNullable<ElementNode["events"]>[string]) {
     return `(e) => { e.preventDefault?.(); ${action.action === "navigate" ? `navigateToPage(${JSON.stringify(action.target)});` : `document.querySelector(${JSON.stringify(".el-" + action.target)})?.scrollIntoView({behavior: "smooth"});`} }`;
 }
 
-function elementStyles(el: ElementNode, isRoot: boolean): Record<string, string | number> {
-    const baseStyles: Record<string, string | number> = {
-        boxSizing: "border-box",
-    };
-
-    if (isRoot) {
-        baseStyles.position = "absolute";
-        baseStyles.left = `${el.layout.x}px`;
-        baseStyles.top = `${el.layout.y}px`;
-        baseStyles.width = `${el.layout.w}px`;
-        baseStyles.minHeight = `${el.layout.h}px`;
-    } else {
-        baseStyles.position = String(el.styles?.position || el.layout.position || "static");
-        if (baseStyles.position !== "static") {
-            baseStyles.left = `${el.layout.x}px`;
-            baseStyles.top = `${el.layout.y}px`;
-        }
-        baseStyles.width = el.styles?.width || `${el.layout.w}px`;
-        if (["static", "relative"].includes(String(baseStyles.position))) { baseStyles.maxWidth = "100%"; baseStyles.minWidth = "0"; baseStyles.flexShrink = "0"; }
-        baseStyles.minHeight = `${el.layout.h}px`;
-    }
-
-    if (el.type === "stack") {
-        baseStyles.display = "flex";
-        baseStyles.flexDirection = "column";
-        baseStyles.gap = SAFE_UNIT(el.styles?.gap ?? "16px", "1rem") || "1rem";
-    }
-    if (el.type === "columns") {
-        const count = Number(el.props?.columnCount) || 2;
-        baseStyles.display = "grid";
-        baseStyles.gridTemplateColumns = `repeat(${count}, minmax(0, 1fr))`;
-        baseStyles.gap = SAFE_UNIT(el.styles?.gap ?? "16px", "1rem") || "1rem";
-    }
-    if (el.type === "container" || el.type === "section") {
-        baseStyles.display = baseStyles.display || "flex";
-        baseStyles.flexDirection = baseStyles.flexDirection || "column";
-        baseStyles.gap = baseStyles.gap || SAFE_UNIT(el.styles?.gap ?? "12px", "0.75rem") || "0.75rem";
-    }
-    if (el.type === "form") {
-        baseStyles.display = "flex";
-        baseStyles.flexDirection = "column";
-        baseStyles.gap = SAFE_UNIT(el.styles?.gap ?? "8px", "0.5rem") || "0.5rem";
-    }
-    if (el.type === "input") {
-        baseStyles.width = baseStyles.width || "100%";
-        baseStyles.padding = el.styles?.padding || "12px 16px";
-        baseStyles.border = el.styles?.border || "1px solid #d1d5db";
-        baseStyles.borderRadius = el.styles?.borderRadius || "8px";
-        baseStyles.fontSize = el.styles?.fontSize || "14px";
-        baseStyles.backgroundColor = el.styles?.backgroundColor || "#ffffff";
-        baseStyles.color = "#1a1a2e";
-    }
-    if (el.type === "button") {
-        baseStyles.display = "inline-flex";
-        baseStyles.alignItems = "center";
-        baseStyles.justifyContent = "center";
-        baseStyles.border = el.styles?.border || "none";
-        baseStyles.padding = el.styles?.padding || "12px 24px";
-        baseStyles.borderRadius = el.styles?.borderRadius || "6px";
-        baseStyles.fontSize = el.styles?.fontSize || "14px";
-        baseStyles.fontWeight = el.styles?.fontWeight || "500";
-    }
-
-    if (!["title", "text", "paragraph"].includes(el.type)) baseStyles.height = `${el.layout.h}px`;
-    if (["form", "section", "container", "stack", "columns"].includes(el.type) && el.children.length) baseStyles.height = "auto";
-    if (el.styles.height && !el.styles.minHeight) delete baseStyles.minHeight;
-    return { ...baseStyles, ...(el.type === "image" ? { objectFit: String(el.props.objectFit || "cover"), objectPosition: String(el.props.objectPosition || "50% 50%") } : {}), ...(el.type === "button" && el.props.hoverBg ? { "--button-hover": String(el.props.hoverBg) } : {}), ...(el.styles || {}), ...nativeFieldStyles(el), ...(!el.layout.visible ? { display: "none" } : {}), opacity: el.layout.opacity, ...(el.layout.rotation ? { transform: `rotate(${el.layout.rotation}deg)` } : {}) };
-}
 
 const renderElementBody = (
     el: ElementNode,
@@ -271,12 +193,15 @@ const renderElementBody = (
     })();
 
     const mergedStyles = elementStyles(el, isRoot);
+    cssOut.add(nativeWidgetCSS);
     const css = cssFromStyles(mergedStyles);
     cssOut.add(`.${className} { ${css} }`);
-    for (const breakpoint of ["tablet", "mobile"] as const) {
+    let inheritedBreakpoint: import("@/lib/design").Breakpoint = "base";
+    for (const breakpoint of responsiveKeys([el])) {
         if (!el.responsive?.[breakpoint]) continue;
         const current = elementStyles(resolveElement(el, breakpoint), isRoot);
-        const inherited = elementStyles(resolveElement(el, breakpoint === "mobile" ? "tablet" : "base"), isRoot);
+        const inherited = elementStyles(resolveElement(el, inheritedBreakpoint), isRoot);
+        inheritedBreakpoint = breakpoint;
         const changed = new Set([...Object.keys(inherited), ...Object.keys(current)].filter(key => current[key] !== inherited[key]));
         // CSS shorthands reset their longhands. Reapply the resolved longhands
         // when a breakpoint changes a shorthand, even if those values inherit.
@@ -287,10 +212,10 @@ const renderElementBody = (
             .map(key => [key, current[key] === undefined || current[key] === "" ? "initial" : current[key]]));
         // Keep inherited styles in the cascade; changing X must not freeze font,
         // flow height, or the other desktop/tablet properties at this breakpoint.
-        if (Object.keys(override).length) cssOut.add(`@media (max-width: ${breakpoint === "tablet" ? 1024 : 600}px) { .page .${className} { ${cssFromStyles(override)} } }`);
+        if (Object.keys(override).length) cssOut.add(`@media (max-width: ${breakpointWidth(breakpoint)}px) { .page .${className} { ${cssFromStyles(override)} } }`);
     }
     if (el.motion) {
-        const keyframes = motionFrames(el.motion).map(frame => `${frame.offset * 100}% { opacity: ${frame.opacity}; transform: ${frame.transform}; }`).join(" ");
+        const keyframes = motionFrames(el.motion).map(frame => `${frame.offset * 100}% { opacity: ${frame.opacity}; transform: var(--lv-base-transform) ${frame.transform}; }`).join(" ");
         cssOut.add(`@keyframes motion-${className} { ${keyframes} } .${className} { animation: motion-${className} ${el.motion.duration}s ${el.motion.easing} ${el.motion.delay}s ${el.motion.iterations} both; }`);
     }
 
@@ -300,7 +225,7 @@ const renderElementBody = (
     }).join("");
     const clsAttr = mode === "jsx" ? "className" : "class";
 
-    if (["native", "button", "input"].includes(el.type)) { cssOut.add(choiceCSS); const native = nativeMarkup(nativeTree(el, conditionDefault(el, elementsById),elementsById), mode, children, ` ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}`); return mode === "jsx" && recordFields ? native.replace(`id="${escapeMarkup(el.id)}"`, `id={record._id + ${JSON.stringify("-" + el.id)}}`) : native; }
+    if (["native", "button", "input", "menu", "socialbar"].includes(el.type)) { cssOut.add(choiceCSS); const native = nativeMarkup(nativeTree(el, conditionDefault(el, elementsById),elementsById), mode, children, ` ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}`); return mode === "jsx" && recordFields ? native.replace(`id="${escapeMarkup(el.id)}"`, `id={record._id + ${JSON.stringify("-" + el.id)}}`) : native; }
     if (el.type === "custom") {
         if (mode === "html") return `<div ${clsAttr}="${className}">${escapeMarkup(el.label)} — custom source runs in the exported application.</div>`;
         return `<div className="${className}"><${customIdentifier(el.definitionId!)} {...${JSON.stringify(el.props)}}${wiringAttr(el, flowMap, mode)}>${children}</${customIdentifier(el.definitionId!)}></div>`;
@@ -315,29 +240,10 @@ const renderElementBody = (
             return `<img ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" alt="${escapeMarkup(el.props?.alt)}" />`;
         case "video":
             return `<video ${clsAttr}="${className}" src="${safeUrl(el.props?.src)}" poster="${safeUrl(el.props.poster)}" ${el.props?.autoplay ? (mode === "jsx" ? "autoPlay" : "autoplay") : ""} ${el.props?.loop ? "loop" : ""} ${el.props?.muted ? "muted" : ""} ${el.props.controls ? "controls" : ""}></video>`;
-        case "menu": {
-            const items = String(el.props?.items || "Home,About,Contact").split(",");
-            const isVertical = el.props?.menuStyle === "vertical";
-            const itemTag = flowMap.has(el.id) ? "button" : "span";
-            const menuItems = items.map((i) => `<${itemTag}${itemTag === "button" ? ' type="button"' : ""} ${clsAttr}="${className}__item">${escapeMarkup(i.trim())}</${itemTag}>`).join("");
-            cssOut.add(`.${className} { display: flex; gap: ${isVertical ? "0.5rem" : "1.5rem"}; flex-direction: ${isVertical ? "column" : "row"}; align-items: center; }`);
-            cssOut.add(`.${className}__item { font-size: 0.9rem; cursor: pointer; border:0; background:none; color:inherit; }`);
-            return `<nav ${clsAttr}="${className}">${menuItems}</nav>`;
-        }
         case "divider":
             return `<hr ${clsAttr}="${className}" />`;
         case "frame":
             return nativeMarkup({ tag: "iframe", attrs: embedAttributes(el.props), children: [] }, mode, "", ` ${clsAttr}="${className}"`);
-        case "socialbar": {
-            const platforms = ["facebook", "twitter", "instagram", "linkedin", "youtube"].filter((p) => Boolean(el.props?.[p]));
-            const iconTag = flowMap.has(el.id) ? "button" : "span";
-            const icons = platforms.length > 0
-                ? platforms.map((p) => `<${iconTag}${iconTag === "button" ? ' type="button"' : ""} aria-label="${p}" ${clsAttr}="${className}__icon">${p[0].toUpperCase()}</${iconTag}>`).join("")
-                : `<span ${clsAttr}="${className}__empty">Add social links</span>`;
-            cssOut.add(`.${className} { display: flex; gap: 0.75rem; align-items: center; }`);
-            cssOut.add(`.${className}__icon { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #1f2937; color: #fff; font-size: 0.8rem; }`);
-            return `<div ${clsAttr}="${className}">${icons}</div>`;
-        }
         case "accordion":
             return `<details ${clsAttr}="${className}"${el.props.expanded ? " open" : ""}><summary>${escapeMarkup(el.props?.headerText || "Accordion")}</summary><div>${children}</div></details>`;
         case "tabs": {
@@ -346,10 +252,10 @@ const renderElementBody = (
             return `<div ${clsAttr}="${className}" data-levoks-tabs="true" data-active-tab="${active}"><div role="tablist" aria-label="${escapeMarkup(el.label || "Content tabs")}">${labels.map((label, index) => `<button type="button" role="tab" aria-selected="${index === active}" ${mode === "jsx" ? "tabIndex" : "tabindex"}="${index === active ? 0 : -1}">${escapeMarkup(label)}</button>`).join("")}</div>${labels.map((_, index) => `<div role="tabpanel" ${mode === "jsx" ? "tabIndex" : "tabindex"}="0" ${index !== active ? "hidden" : ""}>${el.children[index] && elementsById[el.children[index]] ? renderElement(elementsById[el.children[index]], false, cssOut, mode, flowMap, elementsById, sources, recordFields) : escapeMarkup(String(el.props.tabContents || "").split("\n")[index] || "")}</div>`).join("")}</div>`;
         }
         case "gallery":
-            cssOut.add(`.${className} { display:grid; grid-template-columns:repeat(${widgetNumber(el.props.columns, 3, 1, 8)}, minmax(0, 1fr)); gap:${widgetNumber(el.props.gap, 8, 0, 100)}px; } .${className} > * { position:relative !important; left:auto !important; top:auto !important; width:100%; max-width:100%; }`);
+            cssOut.add(`.${className} {  } .${className} > * { position:relative !important; left:auto !important; top:auto !important; width:100%; max-width:100%; }`);
             return `<div ${clsAttr}="${className}">${children}</div>`;
         case "repeater":
-            cssOut.add(`.${className} { display:flex; flex-direction:${el.props.direction === "row" ? "row" : "column"}; } .${className} > .repeat-item { position:relative; flex:1; min-width:0; } .${className} > .repeat-item > * { position:relative !important; left:auto !important; top:auto !important; max-width:100%; }`);
+            cssOut.add(`.${className} {  } .${className} > .repeat-item { position:relative; flex:1; min-width:0; } .${className} > .repeat-item > * { position:relative !important; left:auto !important; top:auto !important; max-width:100%; }`);
             return `<div ${clsAttr}="${className}">${Array.from({ length: widgetNumber(el.props.repeatCount, 3, 1, 20) }, () => `<div ${clsAttr}="repeat-item">${children}</div>`).join("")}</div>`;
         case "form": {
             const requestMethod = String(el.props?.requestMethod || "POST").toUpperCase();
@@ -367,7 +273,7 @@ const renderElementBody = (
             if (el.vector) return `<svg ${clsAttr}="${className}" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${escapeMarkup(el.label || "Vector shape")}"><path d="${vectorPath(el.vector)}" fill="${el.vector.closed ? el.vector.fill : "none"}" stroke="${el.vector.stroke}" ${mode === "jsx" ? "strokeWidth" : "stroke-width"}="${el.vector.strokeWidth}" ${mode === "jsx" ? "vectorEffect" : "vector-effect"}="non-scaling-stroke" /></svg>`;
             if (SHAPE_PATHS[String(el.props.shapeType)]) {
                 cssOut.add(`.${className} { background-color: transparent !important; } .${className} path { ${cssFromStyles({ fill: el.styles.backgroundColor || "#6366f1" })} }`);
-                for (const bp of ["tablet", "mobile"] as const) if (el.responsive?.[bp]) cssOut.add(`@media (max-width: ${bp === "tablet" ? 1024 : 600}px) { .${className} path { ${cssFromStyles({ fill: resolveElement(el, bp).styles.backgroundColor || "#6366f1" })} } }`);
+                for (const bp of responsiveKeys([el])) if (el.responsive?.[bp]) cssOut.add(`@media (max-width: ${breakpointWidth(bp)}px) { .${className} path { ${cssFromStyles({ fill: resolveElement(el, bp).styles.backgroundColor || "#6366f1" })} } }`);
                 return `<div ${clsAttr}="${className}"><svg viewBox="0 0 100 100" width="100%" height="100%" role="img" aria-label="${escapeMarkup(el.label || "Shape")}"><path d="${SHAPE_PATHS[String(el.props.shapeType)]}" /></svg></div>`;
             }
             return `<div ${clsAttr}="${className}"></div>`;
@@ -394,7 +300,7 @@ function renderElement(el: ElementNode, isRoot: boolean, cssOut: Set<string>, mo
         if (el.definitionId === "collection") {
             const grid = (node: ElementNode) => cssFromStyles({display: "grid", gridTemplateColumns: node.styles.gridTemplateColumns || "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: node.styles.gap || "16px"});
             cssOut.add(`.${classNameFor(el)} {display:block !important;} .${classNameFor(el)}-items {${grid(el)}}`);
-            for (const bp of ["tablet", "mobile"] as const) if (el.responsive?.[bp]) cssOut.add(`@media(max-width:${bp === "tablet" ? 1024 : 600}px){.${classNameFor(el)}-items {${grid(resolveElement(el, bp))}}}`);
+            for (const bp of responsiveKeys([el])) if (el.responsive?.[bp]) cssOut.add(`@media(max-width:${breakpointWidth(bp)}px){.${classNameFor(el)}-items {${grid(resolveElement(el, bp))}}}`);
         }
         const settings = JSON.stringify(source).replaceAll("<", "\\u003c");
         const content = el.definitionId === "table"
@@ -402,7 +308,7 @@ function renderElement(el: ElementNode, isRoot: boolean, cssOut: Set<string>, mo
             : `<div className="live-records-items ${classNameFor(el)}-items"${el.props.direction === "row" ? ' style={{flexDirection:"row",flexWrap:"wrap"}}' : ""}>{records.map(record => <article key={record._id}>${el.children.map(id => elementsById[id] ? renderElement(elementsById[id], false, cssOut, mode, flowMap, elementsById, sources, source.fields) : "").join("")}</article>)}</div>`;
         return `<div${attrs} className="${classNameFor(el)}"><LiveRecords source={${settings}}>{records => (${content})}</LiveRecords></div>`;
     }
-    if (["native", "button", "input"].includes(el.type)) return markup;
+    if (["native", "button", "input", "menu", "socialbar"].includes(el.type)) return markup;
     if (el.accessibility?.label) markup = markup.replace(/^(<[^>]*?) aria-label="[^"]*"/, "$1");
     return markup.replace(/^<([a-z][a-z0-9]*)/, `<$1${attrs}`);
 }

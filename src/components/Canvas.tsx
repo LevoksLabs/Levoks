@@ -1,4 +1,5 @@
 "use client";
+import { flushSync } from "react-dom";
 
 import { useEditorStore } from "@/store/editorStore";
 import { ElementNode } from "@/types";
@@ -29,8 +30,8 @@ import {
 import { useEditorUIStore } from "@/store/editorUIStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { useCanvasNavigation } from "./useCanvasNavigation";
-import { canvasSize } from "@/lib/design";
-import { localDelta, childPosition } from "@/lib/canvas-geometry";
+import { canvasSize, elementTransform } from "@/lib/design";
+import { screenPlane, childPosition } from "@/lib/canvas-geometry";
 import ResponsiveControls from "./design/ResponsiveControls";
 
 const MIN_ZOOM = 10;
@@ -48,7 +49,7 @@ type DragElement = {
   h: number;
   maxX?: number;
   maxY?: number;
-  position?: "absolute";
+  position?: "absolute" | "relative";
   autoHeightParent?: { id: string; minHeight: number };
 };
 
@@ -62,7 +63,14 @@ function dragElement(element: ElementNode): DragElement {
   const parent = element.parentId
     ? useEditorStore.getState().getElement(element.parentId)
     : undefined;
-  if (!parent) return result;
+  if (!parent) {
+    if ((element.styles.position || element.layout.position) === "static") {
+      result.x = 0;
+      result.y = 0;
+      result.position = "relative";
+    }
+    return result;
+  }
   const node = document.querySelector<HTMLElement>(`.canvas-page [data-element-id="${element.id}"]`);
   const parentNode = document.querySelector<HTMLElement>(`.canvas-page [data-element-id="${parent.id}"]`);
   if (!node || !parentNode) return result;
@@ -327,6 +335,10 @@ const Canvas: React.FC = () => {
     centerX: number;
     centerY: number;
     group?: DragElement[];
+    plane?: ReturnType<typeof screenPlane>;
+    anchor?: {x:number;y:number;u:number;v:number};
+    parentPlane?: ReturnType<typeof screenPlane>;
+    groupPlanes?: Record<string, ReturnType<typeof screenPlane>>;
     moved?: boolean;
   } | null>(null);
   const handlePointerUpRef = useRef<((e: PointerEvent) => void) | null>(null);
@@ -484,8 +496,11 @@ const Canvas: React.FC = () => {
     const editedNode = document.querySelector<HTMLElement>(`.canvas-page [data-element-id="${ds.elementId}"]`);
     const coordinateNode = ds.resizing ? editedNode : editedNode?.parentElement;
     if (coordinateNode) {
-      const delta = localDelta(coordinateNode, latest.x-ds.startX, latest.y-ds.startY);
-      dx = delta.x; dy = delta.y;
+      try {
+        if(!ds.plane) ds.plane=screenPlane(coordinateNode);
+        const from=ds.plane.toLocal(ds.startX,ds.startY),to=ds.plane.toLocal(latest.x,latest.y);
+        dx=to.x-from.x;dy=to.y-from.y;
+      } catch {return;}
     }
 
     if (latest.shiftKey && ds.dragging) {
@@ -500,7 +515,7 @@ const Canvas: React.FC = () => {
         if (element.position) {
           const current = useEditorStore.getState().getElement(element.id);
           if (!current) return;
-          if (current.layout.position === "absolute" && current.styles.position === "absolute") {
+          if (current.layout.position === element.position && current.styles.position === element.position) {
             updateElementPosition(element.id, x, y);
             return;
           }
@@ -522,7 +537,10 @@ const Canvas: React.FC = () => {
         if (new Set(parents).size > 1) {
           ds.group.forEach(el=>{
             const node = document.querySelector<HTMLElement>(`.canvas-page [data-element-id="${el.id}"]`);
-            const delta = node?.parentElement ? localDelta(node.parentElement,latest.x-ds.startX,latest.y-ds.startY) : {x:dx,y:dy};
+            let delta={x:dx,y:dy};
+            if(node?.parentElement) {
+              try { const plane=ds.groupPlanes![el.id],from=plane.toLocal(ds.startX,ds.startY),to=plane.toLocal(latest.x,latest.y);delta={x:to.x-from.x,y:to.y-from.y}; } catch {return;}
+            }
             positionElement(el,Math.max(0,Math.min(el.maxX ?? Infinity,el.x+delta.x)),Math.max(0,Math.min(el.maxY ?? Infinity,el.y+delta.y)));
           });
           return;
@@ -592,6 +610,12 @@ const Canvas: React.FC = () => {
         return;
       }
 
+      const moving = ds.group?.[0];
+      if (moving?.position === "relative") {
+        setSnapGuides({ x: [], y: [] });
+        positionElement(moving, ds.startElX + dx, ds.startElY + dy);
+        return;
+      }
       const newX = Math.max(0, ds.startElX + dx);
       const newY = Math.max(0, ds.startElY + dy);
       const state = useEditorStore.getState();
@@ -625,23 +649,31 @@ const Canvas: React.FC = () => {
         newY = ds.startElY + (ds.startElH - newH);
       }
 
-      if (editedNode) {
-        const transform = getComputedStyle(editedNode).transform;
-        if (transform !== "none") {
-          const matrix = new DOMMatrix(transform);
-          const halfW = (newW-ds.startElW)/2, halfH = (newH-ds.startElH)/2;
-          const shift = new DOMPoint(newX-ds.startElX+halfW,newY-ds.startElY+halfH).matrixTransform(new DOMMatrix([matrix.a,matrix.b,matrix.c,matrix.d,0,0]));
-          newX = ds.startElX+shift.x-halfW; newY = ds.startElY+shift.y-halfH;
+      flushSync(()=>{
+        updateElementPosition(ds.elementId, newX, newY);
+        updateElementSize(ds.elementId, newW, newH);
+      });
+      // Preserve the opposite projected edge/corner as size changes the origin.
+      if(editedNode && ds.anchor && ds.parentPlane) {
+        for(let attempt=0;attempt<6;attempt++) {
+          try {
+            const actual=screenPlane(editedNode).toScreen(ds.anchor.u*editedNode.offsetWidth,ds.anchor.v*editedNode.offsetHeight);
+            if(Math.hypot(actual.x-ds.anchor.x,actual.y-ds.anchor.y)<.05) break;
+            const parent=editedNode.parentElement ? screenPlane(editedNode.parentElement) : ds.parentPlane;
+            const wanted=parent.toLocal(ds.anchor.x,ds.anchor.y),current=parent.toLocal(actual.x,actual.y);
+            newX+=wanted.x-current.x;newY+=wanted.y-current.y;
+            flushSync(()=>updateElementPosition(ds.elementId,newX,newY));
+          } catch {break;}
         }
       }
-      updateElementPosition(ds.elementId, newX, newY);
-      updateElementSize(ds.elementId, newW, newH);
       setSnapGuides({ x: [], y: [] });
       return;
     }
 
     if (ds.rotating) {
-      const angle = Math.atan2(latest.y - ds.centerY, latest.x - ds.centerX);
+      let point={x:latest.x,y:latest.y};
+      try {if(ds.plane) point=ds.plane.toLocal(latest.x,latest.y);} catch {return;}
+      const angle = Math.atan2(point.y - ds.centerY, point.x - ds.centerX);
       let deg = ds.startRotation + ((angle - ds.startAngle) * 180) / Math.PI;
       if (latest.shiftKey) {
         deg = Math.round(deg / 15) * 15;
@@ -1058,9 +1090,15 @@ const Canvas: React.FC = () => {
         const el = useEditorStore.getState().getElement(elId);
         if (!el || el.layout.locked) return;
         useEditorStore.getState().beginInteraction();
-        const rect = elementWrapper.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
+        const savedTransform=elementWrapper.style.transform;
+        let plane;
+        try {
+          elementWrapper.style.transform=elementTransform({...el,layout:{...el.layout,rotation:0,skewX:0,skewY:0,scaleX:1,scaleY:1},styles:{...el.styles,transform:"none"}});
+          plane=screenPlane(elementWrapper);
+        } catch {useEditorStore.getState().endInteraction(true);return;}
+        finally {elementWrapper.style.transform=savedTransform;}
+        const centerX=elementWrapper.offsetWidth/2,centerY=elementWrapper.offsetHeight/2;
+        const start=plane.toLocal(e.clientX,e.clientY);
         dragState.current = {
           dragging: false,
           resizing: false,
@@ -1075,7 +1113,8 @@ const Canvas: React.FC = () => {
           handle: "",
           parentContainerId: null,
           pointerId: e.pointerId,
-          startAngle: Math.atan2(e.clientY - centerY, e.clientX - centerX),
+          startAngle: Math.atan2(start.y - centerY, start.x - centerX),
+          plane,
           startRotation: el.layout.rotation || 0,
           centerX,
           centerY,
@@ -1093,9 +1132,17 @@ const Canvas: React.FC = () => {
         e.stopPropagation();
         const elId = elementWrapper.getAttribute("data-element-id")!;
         const handle = resizeHandle.getAttribute("data-resize-handle")!;
-        const el = useEditorStore.getState().getElement(elId);
+        let el = useEditorStore.getState().getElement(elId);
         if (!el || el.layout.locked) return;
         useEditorStore.getState().beginInteraction();
+
+        if((el.styles.position || el.layout.position)==="static") {
+          // Relative positioning keeps the child in flow while permitting an
+          // anchored resize under its own transform and transformed ancestors.
+          const current=el;
+          flushSync(()=>updateElement(elId,{layout:{...current.layout,position:"relative",x:0,y:0},styles:{position:"relative"}}));
+          el=useEditorStore.getState().getElement(elId)!;
+        }
 
         dragState.current = {
           dragging: false,
@@ -1116,6 +1163,12 @@ const Canvas: React.FC = () => {
           centerX: 0,
           centerY: 0,
         };
+        try {
+          const plane=screenPlane(elementWrapper),u=handle.includes("w")?1:handle.includes("e")?0:.5,v=handle.includes("n")?1:handle.includes("s")?0:.5;
+          dragState.current.plane=plane;
+          dragState.current.anchor={...plane.toScreen(u*elementWrapper.offsetWidth,v*elementWrapper.offsetHeight),u,v};
+          if(elementWrapper.parentElement) dragState.current.parentPlane=screenPlane(elementWrapper.parentElement);
+        } catch {dragState.current=null;useEditorStore.getState().endInteraction(true);return;}
         document.body.style.userSelect = "none";
         document.body.style.cursor = "grabbing";
         window.addEventListener("pointermove", handlePointerMove);
@@ -1138,7 +1191,7 @@ const Canvas: React.FC = () => {
           selectElement(elId);
         const state = useEditorStore.getState();
         const wrapper = document.querySelector<HTMLElement>(`.canvas-page [data-element-id="${elId}"]`);
-        if (el.parentId && state.getBreadcrumbPath(elId).some(node=>node.type === "form") && wrapper && getComputedStyle(wrapper).position === "static") return;
+        if (el.parentId && state.getBreadcrumbPath(elId).some(node=>node.type === "form") && ["static", "relative"].includes(String(el.styles.position || el.layout.position || "static"))) return;
         const group = state.selectedElementIds
           .filter((id) => {
             let p = state.elementsById[id]?.parentId;
@@ -1176,6 +1229,13 @@ const Canvas: React.FC = () => {
           centerX: 0,
           centerY: 0,
         };
+        try {
+          if(wrapper?.parentElement) dragState.current.plane=screenPlane(wrapper.parentElement);
+          dragState.current.groupPlanes=Object.fromEntries(group.map(element=> {
+            const node=document.querySelector<HTMLElement>(`.canvas-page [data-element-id="${element.id}"]`);
+            return [element.id,node?.parentElement ? screenPlane(node.parentElement) : dragState.current!.plane!];
+          }));
+        } catch {dragState.current=null;state.endInteraction(true);return;}
         document.body.style.userSelect = "none";
         document.body.style.cursor = "grabbing";
         window.addEventListener("pointermove", handlePointerMove);

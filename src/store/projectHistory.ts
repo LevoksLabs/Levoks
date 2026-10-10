@@ -3,6 +3,20 @@ import type { StateCreator } from "zustand";
 type Slice = Record<string, unknown>;
 type Snapshot = Map<string, Slice>;
 type Entry = { before: Snapshot; after: Snapshot; scope: string };
+export type DurableHistory = {
+  version: 1;
+  head: Record<string, Slice>;
+  past: {
+    before: Record<string, Slice>;
+    after: Record<string, Slice>;
+    scope: string;
+  }[];
+  future: {
+    before: Record<string, Slice>;
+    after: Record<string, Slice>;
+    scope: string;
+  }[];
+};
 const participants = new Map<
   string,
   { read: () => Slice; write: (slice: Slice) => void }
@@ -79,6 +93,98 @@ export const projectHistory = {
     past = [];
     future = [];
     notify();
+  },
+  serialize(
+    normalize: (snapshot: Record<string, Slice>) => Record<string, Slice>,
+  ): DurableHistory {
+    const encode = (snapshot: Snapshot) =>
+      normalize(Object.fromEntries(snapshot));
+    const current = capture();
+    const pending =
+      !batch && gesture && !equal(gesture.before, current)
+        ? { before: gesture.before, after: current, scope: gesture.scope }
+        : undefined;
+    const head = encode(batch?.before || current);
+    let bytes = JSON.stringify(head).length;
+    const entries = (items: Entry[]) => {
+      const saved: DurableHistory["past"] = [];
+      for (const entry of [...items].reverse()) {
+        try {
+          const next = {
+            before: encode(entry.before),
+            after: encode(entry.after),
+            scope: entry.scope,
+          };
+          bytes += JSON.stringify(next).length;
+          if (bytes > 10_000_000) break;
+          saved.unshift(next);
+        } catch {
+          // Invalid intermediate inspector drafts must never prevent a valid save.
+          // Retain only the contiguous valid history nearest the saved document.
+          break;
+        }
+      }
+      return saved;
+    };
+    const value: DurableHistory = {
+      version: 1,
+      head,
+      past: entries(
+        batch?.past || (pending ? [...past, pending].slice(-50) : past),
+      ),
+      future: entries(batch?.future || (pending ? [] : future)),
+    };
+    return value;
+  },
+  hydrate(
+    value: unknown,
+    normalize: (snapshot: Record<string, Slice>) => Record<string, Slice>,
+  ) {
+    this.clear();
+    try {
+      const data = value as DurableHistory;
+      if (
+        !data ||
+        data.version !== 1 ||
+        data.past.length > 50 ||
+        data.future.length > 50 ||
+        data.past.length + data.future.length > 50 ||
+        JSON.stringify(value).length > 15_000_000
+      )
+        return false;
+      const decode = (snapshot: Record<string, Slice>) => {
+        if (
+          Object.keys(snapshot).length !== participants.size ||
+          [...participants.keys()].some((key) => !snapshot[key])
+        )
+          throw new Error("History participants differ.");
+        return new Map(Object.entries(normalize(snapshot)));
+      };
+      if (
+        JSON.stringify(Object.fromEntries(decode(data.head))) !==
+        JSON.stringify(normalize(Object.fromEntries(capture())))
+      )
+        return false;
+      const entries = (items: DurableHistory["past"]) =>
+        items.map((entry) => {
+          if (!participants.has(entry.scope))
+            throw new Error("Invalid history scope.");
+          return {
+            scope: entry.scope,
+            before: decode(entry.before),
+            after: decode(entry.after),
+          };
+        });
+      const nextPast = entries(data.past),
+        nextFuture = entries(data.future);
+      past = nextPast;
+      future = nextFuture;
+      notify();
+      return true;
+    } catch {
+      this.clear();
+      return false;
+    }
   },
   endBatch(cancel = false) {
     if (!batch) return;

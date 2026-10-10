@@ -1909,3 +1909,17 @@ kbd {
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
+
+.breakpoint-dialog { color:var(--text-1); background:var(--surface-1); border:1px solid var(--border); border-radius:10px; width:min(540px,calc(100vw - 32px)); max-height:80vh; padding:24px; overflow:auto; }
+.breakpoint-dialog::backdrop { background:rgb(0 0 0 / .55); }
+.breakpoint-dialog h2 { font-size:18px; margin:0 0 12px; }
+.breakpoint-dialog p { font-size:12px; color:var(--text-2); line-height:1.5; }
+.breakpoint-dialog ul { list-style:none; padding:0; }
+.breakpoint-dialog li { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:12px 0; }
+.breakpoint-dialog li span { flex:1; }
+.breakpoint-dialog form { display:flex; flex-wrap:wrap; gap:12px; }
+.breakpoint-dialog label { display:flex; flex-direction:column; gap:6px; flex:1; min-width:120px; }
+.breakpoint-dialog input,.canvas-responsive-actions select { color:var(--text-1); background:var(--surface-2); border:1px solid var(--border); padding:6px; border-radius:4px; }
+.breakpoint-dialog button,.canvas-responsive-actions > button { color:var(--text-1); background:var(--surface-2); border:1px solid var(--border); padding:6px 9px; border-radius:4px; cursor:pointer; }
+
+.rich-block-editor { border-top:1px solid var(--border); padding:12px 0; display:grid; gap:8px; }

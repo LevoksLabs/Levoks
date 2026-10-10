@@ -1,5 +1,6 @@
 import { parseProject, redactProject, type ProjectDocument } from "./schema";
 import { accountStorageKey } from "./account-scope";
+import type { DurableHistory } from "@/store/projectHistory";
 
 export interface SavedProject {
   id: string;
@@ -7,6 +8,7 @@ export interface SavedProject {
   updatedAt: string;
   revision: number;
   document: ProjectDocument;
+  history?: DurableHistory;
 }
 export interface Checkpoint {
   id: string;
@@ -92,6 +94,7 @@ export async function saveProject(
   document: ProjectDocument,
   expectedRevision: number,
   label?: string,
+  history?: DurableHistory,
 ): Promise<number> {
   const safe = redactProject(parseProject(document));
   const db = await workspaceDatabase();
@@ -127,6 +130,7 @@ export async function saveProject(
         updatedAt: safe.updatedAt,
         revision: expectedRevision + 1,
         document: safe,
+        history,
       } satisfies SavedProject);
       if (label) {
         const history = tx.objectStore("checkpoints");

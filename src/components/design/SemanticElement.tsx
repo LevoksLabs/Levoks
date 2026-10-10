@@ -1,8 +1,10 @@
 "use client";
-import { createElement, type ReactNode } from "react";
+import { createElement, useRef, useEffect, useCallback, type ReactNode } from "react";
+import { setupNativeWidgets } from "@/lib/native-widget-runtime";
 import type { ElementNode } from "@/types";
 import { nativeTree, type SemanticTree } from "@/lib/elements/native";
 import { useEditorStore } from "@/store/editorStore";
+import { elementStyles } from "@/lib/element-styles";
 import { semanticStyleParts } from "@/lib/property-values";
 
 export default function SemanticElement({
@@ -18,6 +20,9 @@ export default function SemanticElement({
     (s) => s.customElements[element.definitionId || ""],
   );
   const elements = useEditorStore(s=>s.elementsById);
+  const rootRef=useRef<HTMLElement>(null);
+  const attachRoot=useCallback((node:HTMLElement | null)=>{rootRef.current=node;},[]);
+  useEffect(()=>{if(!interactive || !rootRef.current) return;return setupNativeWidgets(rootRef.current,false);},[interactive,element.id,element.props]);
   if (element.type === "custom")
     return (
       <div className="semantic-boundary">
@@ -31,6 +36,9 @@ export default function SemanticElement({
         {children}
       </div>
     );
+  return <SemanticRoot element={element} interactive={interactive} attachRoot={attachRoot} tree={nativeTree(element,undefined,elements)}>{children}</SemanticRoot>;
+}
+function SemanticRoot({element,interactive,attachRoot,tree,children}:{element:ElementNode;interactive:boolean;attachRoot:(node:HTMLElement | null)=>void;tree:SemanticTree;children:ReactNode}) {
   const render = (tree: SemanticTree, key: number, root = false): ReactNode => {
     if (typeof tree === "string") return tree;
     if ("slot" in tree) return children;
@@ -66,11 +74,12 @@ export default function SemanticElement({
         : {}),
       ...(root
         ? {
+            ref:attachRoot,
             onClick: interactive ? click : undefined,
             style: {
               color: "inherit",
               font: "inherit",
-              ...semanticStyleParts(element.styles).surface,
+              ...semanticStyleParts(elementStyles(element,false)).surface,
               ...(element.type === "button" && element.props.hoverBg ? { "--button-hover": String(element.props.hoverBg) } : {}),
               width: "100%",
               height: "100%",
@@ -89,5 +98,5 @@ export default function SemanticElement({
           ...tree.children.map((child, index) => render(child, index)),
         );
   };
-  return render(nativeTree(element,undefined,elements), 0, true);
+  return render(tree,0,true);
 }

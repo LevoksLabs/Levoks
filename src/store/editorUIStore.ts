@@ -5,7 +5,7 @@ import type { Breakpoint } from "@/lib/design";
 export const useEditorUIStore = create<{
   tool: "select" | "hand" | "marquee" | "pen";
   canvasMode: "ui" | "backend" | "routes";
-  breakpoint: "base" | "tablet" | "mobile";
+  breakpoint: Breakpoint;
   viewportSize: { width: number; height: number } | null;
   setBreakpoint: (breakpoint: Breakpoint) => void;
   motionOpen: boolean;

@@ -3,6 +3,8 @@
 import { Monitor, Tablet, Smartphone } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useEditorUIStore } from "@/store/editorUIStore";
+import BreakpointManager from "./BreakpointManager";
+import type { Breakpoint } from "@/lib/design";
 
 const screens = [
   { id: "base", label: "Desktop", Icon: Monitor },
@@ -25,6 +27,11 @@ export default function ResponsiveControls() {
           </button>
         ))}
       </div>
+      {!!useEditorStore.getState().canvasSettings.breakpoints?.length && <select aria-label="Custom responsive layout" value={ui.breakpoint.startsWith("custom_") ? ui.breakpoint : ""} onChange={event=>{if(event.target.value) ui.setBreakpoint(event.target.value as Breakpoint);}}>
+        <option value="">Custom layout</option>
+        {useEditorStore.getState().canvasSettings.breakpoints?.map(point=><option key={point.width} value={`custom_${point.width}`}>{point.name} · {point.width}px</option>)}
+      </select>}
+      <BreakpointManager />
       {ui.breakpoint !== "base" && <button className="canvas-responsive-toggle"
         aria-pressed={responsiveBaseline !== null}
         onClick={() => responsiveBaseline ? finishResponsiveEdit() : beginResponsiveEdit()}

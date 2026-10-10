@@ -22,6 +22,7 @@ import {
   AlertCircle,
   LoaderCircle,
 } from "lucide-react";
+import { projectHistory } from "@/store/projectHistory";
 import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
 import { useRoutingStore } from "@/store/routingStore";
@@ -1282,6 +1283,8 @@ export default function WorkspaceHub() {
                       <textarea
                         aria-label={`Source code for ${activeFile}`}
                         spellCheck={false}
+                        onFocus={()=>projectHistory.begin("workspace")}
+                        onBlur={()=>projectHistory.end()}
                         wrap="off"
                         onScroll={(event) => {
                           if (lineNumbers.current)

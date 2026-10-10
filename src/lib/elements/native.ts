@@ -5,6 +5,8 @@ import { ICON_PATHS } from "@/lib/icon-paths";
 import { selectChoices } from "./select-options";
 import { selectionLimits, selectionHelp } from "./selection-limits";
 import { maskPattern, maskHelp } from "@/lib/backend/text-mask";
+import { richDocument, timelineEvents } from "./rich-content";
+import { mapUrl } from "./map";
 
 export type SemanticTree =
   | string
@@ -43,6 +45,27 @@ export function buttonHref(element: ElementNode) {
 
 /** An allowlisted tree, never raw HTML or executable project source. */
 export function nativeTree(element: ElementNode, conditionVisible?: boolean, elements: Record<string,ElementNode> = {}): SemanticTree {
+  const tree=buildNativeTree(element,conditionVisible,elements);
+  if(typeof tree!=="string" && !("slot" in tree) && (["menu","socialbar","button"].includes(element.type) || ["map","richText","timeline","toast","tooltip","popover"].includes(element.definitionId || ""))) {
+    if(element.accessibility?.label) tree.attrs["aria-label"]=element.accessibility.label;
+    if(element.accessibility?.description) tree.attrs["aria-description"]=element.accessibility.description;
+    if(element.accessibility?.hidden) tree.attrs["aria-hidden"]="true";
+  }
+  return tree;
+}
+function buildNativeTree(element: ElementNode, conditionVisible?: boolean, elements: Record<string,ElementNode> = {}): SemanticTree {
+  if(element.type === "menu") {
+    const urls=String(element.props.urls || "").split("\n");
+    return node("nav",{id:element.id,"aria-label":element.accessibility?.label || element.label || "Navigation","data-menu":String(element.props.menuStyle || "horizontal")},String(element.props.items || "Home,About,Contact").split(",").map((label,index)=> {
+      const href=safeElementUrl(urls[index]);return node(href ? "a" : "span",href ? {href} : {},[label.trim()]);
+    }));
+  }
+  if(element.type === "socialbar") {
+    const names=["facebook","twitter","instagram","linkedin","youtube"].filter(name=>element.props[name]);
+    return node("div",{id:element.id,"data-socialbar":"true"},names.length ? names.map(name=>{
+      const href=safeElementUrl(element.props[`${name}Url`]);return node(href ? "a" : "span",{...(href ? {href} : {}),"aria-label":name,"data-social-icon":name,"data-icon-style":String(element.props.iconStyle || "filled")},[{facebook:"f",twitter:"X",instagram:"◎",linkedin:"in",youtube:"▶"}[name] || name]);
+    }) : ["Add social links"]);
+  }
   if (element.type === "button") {
     const p = element.props, disabled = Boolean(p.disabled || p.loading), href = buttonHref(element);
     const attrs: Record<string, string | number | boolean> = { id: element.id, "data-button": "true", "aria-busy": Boolean(p.loading) };
@@ -62,6 +85,39 @@ export function nativeTree(element: ElementNode, conditionVisible?: boolean, ele
   if (!d || d.render !== "native")
     throw new Error("Missing native element definition.");
   const p = legacyInput ? { ...element.props, type: element.props.inputType || "text" } : element.props;
+  if(d.id === "map") {
+    try {return node("iframe",{id:element.id,title:String(p.locationLabel || p.title || "Map"),src:mapUrl(p),loading:"lazy",referrerPolicy:"no-referrer",sandbox:"allow-scripts"},[]);}
+    catch {return node("p",{id:element.id,role:"alert"},["Choose valid map coordinates and zoom in Content."]);}
+  }
+  if(d.id === "richText") {
+    const content:SemanticTree[]=[];
+    for(const block of richDocument(p)) {
+      const spans=block.spans.map(span=> {
+        let child:SemanticTree=span.text;
+        if(span.bold) child=node("strong",{},[child]);
+        if(span.italic) child=node("em",{},[child]);
+        if(span.underline) child=node("u",{},[child]);
+        if(span.href) child=node("a",{href:span.href},[child]);
+        return child;
+      });
+      if(block.kind === "li") {
+        const last=content[content.length-1];
+        if(last && typeof last!=="string" && !("slot" in last) && last.tag==="ul") last.children.push(node("li",{},spans));
+        else content.push(node("ul",{},[node("li",{},spans)]));
+      } else content.push(node(block.kind,{},spans));
+    }
+    if(d.children) content.push({slot:true});
+    return node("div",{id:element.id,"data-rich-text":"true"},content);
+  }
+  if(d.id === "timeline") return node("ol",{id:element.id,"data-timeline":"true"},[...timelineEvents(p).map(event=>node("li",{},[node("strong",{},[event.title]),...(event.date ? [node("span",{},[event.date])] : []),node("p",{},[event.description])])),...(element.children.length ? [node("li",{},[{slot:true}])] : [])]);
+  if(d.id === "tooltip" || d.id === "popover") {
+    const id=`${element.id}-floating`,tooltip=d.id==="tooltip";
+    return node("div",{id:element.id,"data-floating-widget":d.id,"data-placement":String(p.placement || (tooltip ? "top" : "bottom"))},[
+      node("button",{type:"button","data-floating-trigger":"true",...(tooltip ? {"aria-describedby":id} : {"aria-controls":id,"aria-expanded":"false"})},[String(p.summary || "More information")]),
+      node("div",{id,popover:tooltip ? "manual" : "auto",role:tooltip ? "tooltip" : "dialog",...(tooltip ? {} : {"aria-label":String(p.summary || "More information")}),"data-floating-panel":"true"},[String(p.content || ""),{slot:true}]),
+    ]);
+  }
+  if(d.id === "toast") return node("div",{id:element.id,"data-toast":"true","data-duration":Math.max(0,Math.min(600000,Number(p.duration ?? 5000))),"data-severity":String(p.severity || "success"),role:p.severity==="error" ? "alert" : "status","aria-live":p.severity==="error" ? "assertive" : "polite"},[String(p.content || "Changes saved"),...(p.dismissible!==false ? [node("button",{type:"button","data-toast-dismiss":"true","aria-label":"Dismiss notification"},["Dismiss"])] : [])]);
   const attrs: Record<string, string | number | boolean | string[]> = {};
   for (const key of [
     "name",
@@ -167,7 +223,7 @@ export function nativeTree(element: ElementNode, conditionVisible?: boolean, ele
       ]),
     );
     children.push(
-      node("dialog", { "aria-label": String(p.ariaLabel || "Dialog") }, [
+      node("dialog", { "aria-label": String(p.ariaLabel || "Dialog"), ...(d.id==="drawer" ? {"data-drawer":String(p.placement || "right")} : {}) }, [
         node("button", { type: "button", "data-dialog-close": "true" }, [
           "Close",
         ]),

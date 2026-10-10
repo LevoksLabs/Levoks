@@ -17,6 +17,7 @@ import { breakpointForWidth, canvasSize, patchElement, patchLayout, resolveEleme
 import { groupElements, ungroupElements } from "@/lib/grouping";
 import { componentDefinition, componentInstance, componentRoot, markComponentStructure } from "@/lib/design-components";
 import { projectHistory, withProjectHistory } from "./projectHistory";
+import type { CustomBreakpoint } from "@/lib/design";
 type NewElement = Omit<ElementNode, "id" | "parentId" | "children" | "layout"> & { layout?: Partial<ElementNode["layout"]>; children?: NewElement[] };
 
 interface EditorStore {
@@ -38,6 +39,7 @@ interface EditorStore {
     groupSelection: () => void;
     ungroupSelection: () => void;
     resetBreakpoint: (id: string) => void;
+    setBreakpoints: (breakpoints: CustomBreakpoint[], rename?: {from: number; to: number}) => void;
     elementsById: Record<string, ElementNode>;
     rootIds: string[];
     globalRootIds: string[];
@@ -52,7 +54,7 @@ interface EditorStore {
     endInteraction: (cancel?: boolean) => void;
     canUndo: boolean;
     canRedo: boolean;
-    canvasSettings: { backgroundColor: string; width: number; height: number };
+    canvasSettings: { backgroundColor: string; width: number; height: number; breakpoints?: CustomBreakpoint[] };
     frontendGeneratedCode: Record<string, string> | null;
     frontendCodePreviewOpen: boolean;
 
@@ -216,6 +218,22 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
         }
         return {  tokens, elementsById, components };
     }),
+    setBreakpoints: (breakpoints, rename) => {
+        if (breakpoints.length > 12 || breakpoints.some(bp=>!bp.name.trim() || bp.name.length>40 || !Number.isInteger(bp.width) || bp.width<240 || bp.width>20000 || [600,1024].includes(bp.width)) || new Set(breakpoints.map(bp=>bp.width)).size !== breakpoints.length) throw new Error("Use unique widths from 240–20000px, different from 600 and 1024, with names up to 40 characters (12 custom breakpoints maximum).");
+        get().finishResponsiveEdit();
+        set(state => {
+            const clean = (nodes: Record<string,ElementNode>) => Object.fromEntries(Object.entries(nodes).map(([id,node])=> {
+                const responsive = {...node.responsive};
+                if (rename && responsive[`custom_${rename.from}`]) { responsive[`custom_${rename.to}`] = responsive[`custom_${rename.from}`]; delete responsive[`custom_${rename.from}`]; }
+                Object.keys(responsive).filter(key=>key.startsWith("custom_") && !breakpoints.some(bp=>`custom_${bp.width}`===key)).forEach(key=>delete responsive[key as `custom_${number}`]);
+                return [id,{...node,responsive}];
+            }));
+            return {canvasSettings:{...state.canvasSettings,breakpoints},elementsById:clean(state.elementsById),components:Object.fromEntries(Object.entries(state.components).map(([id,definition])=>[id,{...definition,nodes:clean(definition.nodes)}]))};
+        });
+        const ui = useEditorUIStore.getState();
+        if (rename && ui.breakpoint === `custom_${rename.from}`) ui.setBreakpoint(`custom_${rename.to}`);
+        else if (ui.breakpoint.startsWith("custom_") && !breakpoints.some(bp=>`custom_${bp.width}`===ui.breakpoint)) ui.setBreakpoint("base");
+    },
     resetBreakpoint: (id) => set(state => {
         const element = state.elementsById[id], breakpoint = useEditorUIStore.getState().breakpoint;
         if (!element || breakpoint === "base") return {};
@@ -476,7 +494,7 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
             const a = attachElement(d.byId, d.rootIds, id, targetParentId, submitIndex >= 0 ? Math.min(index, submitIndex) : index);
             if (owner && element.parentId !== targetParentId) {
                 const styles = { ...element.styles, position: "static", maxWidth: "100%" };
-                const responsive = element.responsive && Object.fromEntries(Object.entries(element.responsive).map(([bp, override]) => [bp, { ...override, layout: { ...override.layout, position: "static", x: 0, y: 0 }, styles: { ...override.styles, position: "static", maxWidth: "100%" } }]));
+                const responsive = element.responsive && Object.fromEntries(Object.entries(element.responsive).map(([bp, override]) => [bp, { ...override, layout: { ...override.layout, position: "static" as const, x: 0, y: 0 }, styles: { ...override.styles, position: "static", maxWidth: "100%" } }]));
                 a.byId[id] = { ...patchElement(a.byId[id], { styles, layout: { ...element.layout, position: "static", x: 0, y: 0 }, responsive }, "base"), parentId: targetParentId };
             }
             return { elementsById: a.byId, [key]: a.rootIds };
@@ -782,7 +800,7 @@ export const useEditorStore = create<EditorStore>(withProjectHistory("editor", [
                 if (settings.width !== undefined) get().finishResponsiveEdit();
                 const current = canvasSize(get().canvasSettings, ui.breakpoint, ui.viewportSize);
                 const viewportSize = { width: settings.width ?? current.width, height: settings.height ?? current.height };
-                useEditorUIStore.setState({ viewportSize, breakpoint: breakpointForWidth(viewportSize.width) });
+                useEditorUIStore.setState({ viewportSize, breakpoint: breakpointForWidth(viewportSize.width, get().canvasSettings.breakpoints) });
                 if (settings.backgroundColor !== undefined) set(state => ({ canvasSettings: { ...state.canvasSettings, backgroundColor: settings.backgroundColor! } }));
                 return;
             }

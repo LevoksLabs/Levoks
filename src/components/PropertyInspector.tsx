@@ -1586,6 +1586,7 @@ const PropertyInspector: React.FC = () => {
             {/* Menu */}
             {el.type === "menu" && (
               <Section title="Menu">
+                <Field label="URLs (one per item)"><textarea aria-label="Menu URLs" value={String(el.props.urls || "")} onChange={event=>setProp("urls",event.target.value)} /></Field>
                 <Field label="Items (comma-sep)">
                   <input
                     type="text"
@@ -1766,6 +1767,7 @@ const PropertyInspector: React.FC = () => {
             {/* Social Bar */}
             {el.type === "socialbar" && (
               <Section title="Social Bar">
+                {["facebook","twitter","instagram","linkedin","youtube"].filter(platform=>el.props[platform]).map(platform=><Field key={`${platform}-url`} label={`${platform} URL`}><input aria-label={`${platform} URL`} type="url" value={String(el.props[`${platform}Url`] || "")} onChange={event=>setProp(`${platform}Url`,event.target.value)} /></Field>)}
                 {[
                   "facebook",
                   "twitter",

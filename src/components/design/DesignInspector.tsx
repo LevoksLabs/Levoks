@@ -3,6 +3,7 @@ import type { ElementNode } from "@/types";
 import { useEditorStore } from "@/store/editorStore";
 import { useEditorUIStore } from "@/store/editorUIStore";
 import {componentRoot} from "@/lib/design-components";
+import { ParameterControl } from "./ParameterControl";
 
 export default function DesignInspector({ element }: { element: ElementNode }) {
   const store = useEditorStore(),
@@ -25,7 +26,7 @@ export default function DesignInspector({ element }: { element: ElementNode }) {
       {ui.breakpoint !== "base" && (
         <div className="design-notice">
           <strong>
-            {ui.breakpoint === "mobile" ? "Mobile" : "Tablet"} overrides
+            {ui.breakpoint.startsWith("custom_") ? store.canvasSettings.breakpoints?.find(bp=>`custom_${bp.width}`===ui.breakpoint)?.name || "Custom" : ui.breakpoint === "mobile" ? "Mobile" : "Tablet"} overrides
           </strong>
           <span>
             Layout and style changes affect this breakpoint and smaller screens.
@@ -112,6 +113,18 @@ export default function DesignInspector({ element }: { element: ElementNode }) {
             </select>
           </label>
         ))}
+      </details>
+      <details>
+        <summary>Transform and perspective</summary>
+        <p>Transforms apply to this element and its children. Perspective is measured in pixels; 0 disables it.</p>
+        {([
+          ["rotateX","Tilt X",0,-3600,3600,"°"], ["rotateY","Tilt Y",0,-3600,3600,"°"],
+          ["depth","Depth",0,-10000,10000,"px"], ["perspective","Perspective",800,0,20000,"px"],
+          ["scaleX","Scale X",1,.01,100,""], ["scaleY","Scale Y",1,.01,100,""],
+          ["skewX","Skew X",0,-85,85,"°"], ["skewY","Skew Y",0,-85,85,"°"],
+        ] as const).map(([key,label,fallback,min,max,unit])=><label key={key}>{label}<ParameterControl label={label} value={element.layout[key] ?? fallback} min={min} max={max} step={key.startsWith("scale") ? .01 : 1} unit={unit} onChange={value=>store.updateElement(element.id,{layout:{...element.layout,[key]:value}})} /></label>)}
+        <label>Transform origin<input aria-label="Transform origin" value={String(element.styles.transformOrigin || "50% 50%")} onChange={event=>store.updateElement(element.id,{styles:{transformOrigin:event.target.value}})} /></label>
+        <button onClick={()=>store.updateElement(element.id,{layout:{...element.layout,rotation:0,perspective:0,rotateX:0,rotateY:0,depth:0,scaleX:1,scaleY:1,skewX:0,skewY:0},styles:{transformOrigin:"50% 50%",transform:"none"}})}>Reset transform</button>
       </details>
       {vector && (
         <details open>

@@ -1,10 +1,13 @@
 // This source is emitted into React's effect and into the isolated HTML preview.
 // Event delegation also supports nested tabs and repeated widgets.
+import { nativeWidgetSource } from "./runtime-sources";
 export const widgetRuntime = `
 function setupWidgets(root) {
+  const __name = fn => fn;
   root.querySelectorAll('[data-error-message]').forEach(input => input.setCustomValidity?.(input.dataset.errorMessage));
   const widgets = Array.from(root.querySelectorAll('[data-levoks-tabs]'));
   const cleanup = [];
+  cleanup.push((${nativeWidgetSource})(root));
   const semanticClick = event => {
     const open = event.target.closest('[data-dialog-open]'), close = event.target.closest('[data-dialog-close]'), slide = event.target.closest('[data-slide]');
     if (open) open.closest('[data-levoks-dialog]').querySelector('dialog').showModal();

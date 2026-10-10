@@ -1,7 +1,7 @@
 import type { ElementNode } from "@/types";
 import { DEFAULT_LAYOUT } from "./defaults";
 import { generateElementId } from "./idGenerator";
-import { resolveElement, type Breakpoint } from "./design";
+import { resolveElement, responsiveKeys, type Breakpoint } from "./design";
 type Tree = {
   elementsById: Record<string, ElementNode>;
   rootIds: string[];
@@ -17,14 +17,19 @@ export function canGroup(tree: Tree) {
     nodes.every(
       (node) =>
         !node.layout.locked &&
-        (!node.parentId ||
-          ["base", "tablet", "mobile"].every((bp) => {
-            const resolved = resolveElement(node, bp as Breakpoint);
-            return (
-              (resolved.styles.position || resolved.layout.position) ===
-              "absolute"
-            );
-          })) &&
+        [
+          "base",
+          "tablet",
+          "mobile",
+          ...responsiveKeys(Object.values(tree.elementsById)),
+        ].every((bp) => {
+          const resolved = resolveElement(node, bp as Breakpoint);
+          return (
+            (resolved.styles.position ||
+              (node.parentId ? resolved.layout.position : "absolute")) ===
+            "absolute"
+          );
+        }) &&
         node.parentId === nodes[0].parentId &&
         (!!node.parentId ||
           tree.rootIds.includes(node.id) ===
@@ -57,9 +62,10 @@ export function groupElements(tree: Tree) {
       h: Math.max(...layouts.map((layout) => layout.y + layout.h)) - y,
     };
   };
-  const base = bounds("base"),
-    tablet = bounds("tablet"),
-    mobile = bounds("mobile");
+  const base = bounds("base");
+  const keys = [
+    ...new Set(["tablet", "mobile", ...responsiveKeys(nodes)]),
+  ] as Exclude<Breakpoint, "base">[];
   elementsById[id] = {
     id,
     type: "container",
@@ -73,11 +79,11 @@ export function groupElements(tree: Tree) {
       padding: "0",
     },
     layout: { ...DEFAULT_LAYOUT.container, ...base, position: "absolute" },
-    responsive: { tablet: { layout: tablet }, mobile: { layout: mobile } },
+    responsive: Object.fromEntries(
+      keys.map((bp) => [bp, { layout: bounds(bp) }]),
+    ),
   };
   for (const node of nodes) {
-    const t = resolveElement(node, "tablet"),
-      m = resolveElement(node, "mobile");
     elementsById[node.id] = {
       ...node,
       parentId: id,
@@ -88,24 +94,23 @@ export function groupElements(tree: Tree) {
         y: node.layout.y - base.y,
         position: "absolute",
       },
-      responsive: {
-        tablet: {
-          ...node.responsive?.tablet,
-          layout: {
-            ...node.responsive?.tablet?.layout,
-            x: t.layout.x - tablet.x,
-            y: t.layout.y - tablet.y,
-          },
-        },
-        mobile: {
-          ...node.responsive?.mobile,
-          layout: {
-            ...node.responsive?.mobile?.layout,
-            x: m.layout.x - mobile.x,
-            y: m.layout.y - mobile.y,
-          },
-        },
-      },
+      responsive: Object.fromEntries(
+        keys.map((bp) => {
+          const resolved = resolveElement(node, bp),
+            box = bounds(bp);
+          return [
+            bp,
+            {
+              ...node.responsive?.[bp],
+              layout: {
+                ...node.responsive?.[bp]?.layout,
+                x: resolved.layout.x - box.x,
+                y: resolved.layout.y - box.y,
+              },
+            },
+          ];
+        }),
+      ),
     };
   }
   const next = siblings.filter((item) => !children.includes(item));
@@ -132,10 +137,31 @@ export function canUngroup(tree: Tree) {
   )
     return false;
   // Flattening a styled/animated wrapper changes compositing. Keep it intact.
-  return (["base", "tablet", "mobile"] as const).every((bp) => {
+  return (
+    [
+      "base",
+      "tablet",
+      "mobile",
+      ...responsiveKeys([
+        group,
+        ...group.children.map((id) => tree.elementsById[id]),
+      ]),
+    ] as Breakpoint[]
+  ).every((bp) => {
     const resolved = resolveElement(group, bp),
       layout = resolved.layout;
     return (
+      ![
+        layout.rotateX,
+        layout.rotateY,
+        layout.depth,
+        layout.perspective,
+        layout.skewX,
+        layout.skewY,
+      ].some((value) => value) &&
+      [layout.scaleX, layout.scaleY].every(
+        (value) => value === undefined || value === 1,
+      ) &&
       !layout.locked &&
       layout.visible &&
       layout.opacity === 1 &&
@@ -145,16 +171,27 @@ export function canUngroup(tree: Tree) {
           (key === "backgroundColor" && value === "transparent") ||
           (key === "padding" && [0, "0", "0px"].includes(value)),
       ) &&
-      group.children.every(
-        (id) => !resolveElement(tree.elementsById[id], bp).layout.locked,
-      )
+      group.children.every((id) => {
+        const child = resolveElement(tree.elementsById[id], bp);
+        return (
+          !child.layout.locked &&
+          !(layout.rotation && (child.layout.rotateX || child.layout.rotateY))
+        );
+      })
     );
   });
 }
 function flattenPosition(child: ElementNode, group: ElementNode) {
-  const c = child.layout, g = group.layout, angle = g.rotation * Math.PI/180;
-  const dx = c.x+c.w/2-g.w/2, dy = c.y+c.h/2-g.h/2;
-  return {x:g.x+g.w/2+dx*Math.cos(angle)-dy*Math.sin(angle)-c.w/2,y:g.y+g.h/2+dx*Math.sin(angle)+dy*Math.cos(angle)-c.h/2,rotation:c.rotation+g.rotation};
+  const c = child.layout,
+    g = group.layout,
+    angle = (g.rotation * Math.PI) / 180;
+  const dx = c.x + c.w / 2 - g.w / 2,
+    dy = c.y + c.h / 2 - g.h / 2;
+  return {
+    x: g.x + g.w / 2 + dx * Math.cos(angle) - dy * Math.sin(angle) - c.w / 2,
+    y: g.y + g.h / 2 + dx * Math.sin(angle) + dy * Math.cos(angle) - c.h / 2,
+    rotation: c.rotation + g.rotation,
+  };
 }
 export function ungroupElements(tree: Tree) {
   if (!canUngroup(tree)) return null;
@@ -166,35 +203,40 @@ export function ungroupElements(tree: Tree) {
     : tree.rootIds.includes(group.id)
       ? tree.rootIds
       : tree.globalRootIds;
-  const t = resolveElement(group, "tablet"),
-    m = resolveElement(group, "mobile");
+  const keys = [
+    ...new Set([
+      "tablet",
+      "mobile",
+      ...responsiveKeys([
+        group,
+        ...group.children.map((id) => elementsById[id]),
+      ]),
+    ]),
+  ] as Exclude<Breakpoint, "base">[];
   for (const id of group.children) {
-    const node = elementsById[id],
-      nt = resolveElement(node, "tablet"),
-      nm = resolveElement(node, "mobile");
+    const node = elementsById[id];
     elementsById[id] = {
       ...node,
       parentId,
       layout: {
         ...node.layout,
-        ...flattenPosition(node,group),
+        ...flattenPosition(node, group),
       },
-      responsive: {
-        tablet: {
-          ...node.responsive?.tablet,
-          layout: {
-            ...node.responsive?.tablet?.layout,
-            ...flattenPosition(nt,t),
+      responsive: Object.fromEntries(
+        keys.map((bp) => [
+          bp,
+          {
+            ...node.responsive?.[bp],
+            layout: {
+              ...node.responsive?.[bp]?.layout,
+              ...flattenPosition(
+                resolveElement(node, bp),
+                resolveElement(group, bp),
+              ),
+            },
           },
-        },
-        mobile: {
-          ...node.responsive?.mobile,
-          layout: {
-            ...node.responsive?.mobile?.layout,
-            ...flattenPosition(nm,m),
-          },
-        },
-      },
+        ]),
+      ),
     };
   }
   const next = siblings.flatMap((id) =>

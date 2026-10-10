@@ -13,6 +13,8 @@ import {nativeControlId} from "@/lib/elements/native";
 import { fileLimits, fileConfigError } from "@/lib/backend/files";
 import ChoiceGroupEditor from "./ChoiceGroupEditor";
 import FormConditionEditor from "./FormConditionEditor";
+import { mapUrl } from "@/lib/elements/map";
+import RichContentEditor from "./RichContentEditor";
 import TextMaskEditor from "./TextMaskEditor";
 
 export default function ElementProperties({
@@ -44,7 +46,7 @@ export default function ElementProperties({
       : definition?.propsSchema || {};
   const events =
     element.type === "custom" ? custom?.events || [] : definition?.events || [];
-  const isEmbed = definition?.generate === "iframe" || element.type === "frame";
+  const isEmbed = (element.definitionId !== "map" && definition?.generate === "iframe") || element.type === "frame";
   const inputType = String(element.props.type || element.props.inputType || definition?.tag || "");
   const temporalError = isTemporalKind(inputType) ? temporalConfigError(inputType, {
     min: String(element.props.min ?? ""), max: String(element.props.max ?? ""),
@@ -54,7 +56,11 @@ export default function ElementProperties({
   const textError = textInput ? textConfigError(textLimits(element.props)) : "";
   const fileInput = element.type === "native" && inputType === "file";
   const fileError = fileInput ? fileConfigError(fileLimits(element.props)) : "";
-  const set = (key: string, value: string | number | boolean) =>
+  const set = (key: string, value: string | number | boolean) => {
+    if(element.definitionId==="map") {
+      try {mapUrl({...element.props,[key]:value});setSelectError(null);}
+      catch(error) {setSelectError({props:element.props,message:(error as Error).message});return;}
+    }
     updateElement(element.id, {
       props: { [key]: value },
       ...(element.type === "button" && key === "href" ? {actions: {type: "none"}} : {}),
@@ -84,9 +90,13 @@ export default function ElementProperties({
           }
         : {}),
     });
+  };
   return (
     <div className="semantic-properties">
       <FormConditionEditor element={element} />
+      {element.definitionId==="map" && selectError?.props===element.props && <p role="alert">{selectError.message}</p>}
+      {element.type==="menu" && <p>URLs: one address per menu item, in the same order. Use page paths or section links for local navigation.</p>}
+      {["richText","timeline"].includes(element.definitionId || "") && <RichContentEditor key={element.id} element={element} />}
       {isEmbed && (
         <fieldset>
           <legend>Embed</legend>
@@ -172,7 +182,7 @@ export default function ElementProperties({
           <fieldset>
             <legend>{custom?.name || definition?.name} properties</legend>
             {definition?.tag === "label" && <label><span>Associated field</span><select aria-label="Associated field" value={String(element.props.htmlFor || "")} onChange={e=>updateElement(element.id,{props:{htmlFor:e.target.value}})}><option value="">No association</option>{Object.values(elementsById).filter(node=>{const store=useEditorStore.getState(),root=store.getBreadcrumbPath(node.id)[0]?.id;return nativeControlId(node) && (store.rootIds.includes(root) || store.globalRootIds.includes(root));}).map(node=><option key={node.id} value={node.id}>{node.props.label || node.label || node.props.name || node.id}</option>)}{element.props.htmlFor && !elementsById[String(element.props.htmlFor)] && <option value={String(element.props.htmlFor)}>Unavailable field — choose another</option>}</select></label>}
-            {Object.entries(fields)
+            {Object.entries(fields).filter(([key])=>!["richDocument","timelineEvents"].includes(key) && !(["richText","timeline"].includes(element.definitionId || "") && key==="content") && !(element.definitionId==="map" && ["embedType","source","src","allowScripts","allowForms"].includes(key)))
               .filter(
                 ([key]) =>
                     (key !== "type" || element.type === "button") &&

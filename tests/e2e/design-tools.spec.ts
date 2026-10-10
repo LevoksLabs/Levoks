@@ -63,7 +63,7 @@ test("undo restores deleted pages with routing connections and survives canvas n
   );
   await expect(
     page.getByRole("button", { name: "Undo", exact: true }),
-  ).toBeDisabled();
+  ).toBeEnabled();
 });
 
 test("workflow ports persist execution steps, reject cycles and retain dragged positions", async ({

@@ -155,6 +155,14 @@ export interface ElementLayout {
     rotation: number;
     visible: boolean;
     locked: boolean;
+    rotateX?: number;
+    rotateY?: number;
+    depth?: number;
+    perspective?: number;
+    scaleX?: number;
+    scaleY?: number;
+    skewX?: number;
+    skewY?: number;
 }
 
 export interface FormConditionRule {
@@ -186,7 +194,7 @@ export interface ElementNode {
     animation?: AnimationData;
     actions?: ActionData;
     children: string[]; // child element IDs
-    responsive?: Partial<Record<"tablet" | "mobile", { layout?: Partial<ElementLayout>; styles?: Record<string, string | number> }>>;
+    responsive?: Record<string, { layout?: Partial<ElementLayout>; styles?: Record<string, string | number> }>;
     vector?: { points: { x: number; y: number; inX?: number; inY?: number; outX?: number; outY?: number }[]; closed: boolean; stroke: string; strokeWidth: number; fill: string };
     motion?: { duration: number; delay: number; iterations: number; easing: "linear" | "ease-in" | "ease-out" | "ease-in-out"; frames: { time: number; x: number; y: number; scale: number; rotation: number; opacity: number }[] };
     component?: { id: string; node: string; overrides: string[] };
