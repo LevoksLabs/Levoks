@@ -139,7 +139,6 @@ export function canUngroup(tree: Tree) {
       !layout.locked &&
       layout.visible &&
       layout.opacity === 1 &&
-      layout.rotation === 0 &&
       Object.entries(resolved.styles).every(
         ([key, value]) =>
           (key === "position" && value === "absolute") ||
@@ -151,6 +150,11 @@ export function canUngroup(tree: Tree) {
       )
     );
   });
+}
+function flattenPosition(child: ElementNode, group: ElementNode) {
+  const c = child.layout, g = group.layout, angle = g.rotation * Math.PI/180;
+  const dx = c.x+c.w/2-g.w/2, dy = c.y+c.h/2-g.h/2;
+  return {x:g.x+g.w/2+dx*Math.cos(angle)-dy*Math.sin(angle)-c.w/2,y:g.y+g.h/2+dx*Math.sin(angle)+dy*Math.cos(angle)-c.h/2,rotation:c.rotation+g.rotation};
 }
 export function ungroupElements(tree: Tree) {
   if (!canUngroup(tree)) return null;
@@ -173,24 +177,21 @@ export function ungroupElements(tree: Tree) {
       parentId,
       layout: {
         ...node.layout,
-        x: node.layout.x + group.layout.x,
-        y: node.layout.y + group.layout.y,
+        ...flattenPosition(node,group),
       },
       responsive: {
         tablet: {
           ...node.responsive?.tablet,
           layout: {
             ...node.responsive?.tablet?.layout,
-            x: nt.layout.x + t.layout.x,
-            y: nt.layout.y + t.layout.y,
+            ...flattenPosition(nt,t),
           },
         },
         mobile: {
           ...node.responsive?.mobile,
           layout: {
             ...node.responsive?.mobile?.layout,
-            x: nm.layout.x + m.layout.x,
-            y: nm.layout.y + m.layout.y,
+            ...flattenPosition(nm,m),
           },
         },
       },

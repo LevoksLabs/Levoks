@@ -44,6 +44,8 @@ export interface ReleaseMetadata {
   providerId?: string;
   url?: string;
   providerState?: string;
+  archiveExpiresAt?: string;
+  sourceOperationId?: string;
 }
 export interface DeploymentMetadata extends DeploymentTarget {
   version: number;

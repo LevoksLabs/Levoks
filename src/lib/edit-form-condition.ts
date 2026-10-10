@@ -16,8 +16,6 @@ export function editFormCondition(
     .map((item) => store.elementsById[item.id]);
   if (ancestors.some((item) => item.layout.locked))
     throw new Error("Unlock this section before changing its condition.");
-  if (ancestors.some((item) => item.component))
-    throw new Error("Detach this component before changing its condition.");
   validateFormConditions(
     {
       ...store.elementsById,

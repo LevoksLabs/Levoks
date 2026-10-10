@@ -17,13 +17,23 @@ import {
 } from "@/lib/contracts";
 import type { IRDiagnostic } from "@/types/ir";
 import { definitionFor } from "@/lib/elements/registry";
-import { selectChoices, validateSelectMetadata } from "@/lib/elements/select-options";
+import {
+  selectChoices,
+  validateSelectMetadata,
+} from "@/lib/elements/select-options";
 import { backendDefaults } from "@/lib/backend/registry";
 import { defaultDatabase } from "@/lib/backend/database";
 import { validationChoices } from "@/lib/backend/validation";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
-import { isTextInput, textLimits, textConfigError } from "@/lib/backend/text-validation";
-import { groupChoices, validateCheckboxGroup } from "@/lib/elements/choice-group-values";
+import {
+  isTextInput,
+  textLimits,
+  textConfigError,
+} from "@/lib/backend/text-validation";
+import {
+  groupChoices,
+  validateCheckboxGroup,
+} from "@/lib/elements/choice-group-values";
 import { selectionLimits } from "@/lib/elements/selection-limits";
 import { fileLimits, fileConfigError } from "@/lib/backend/files";
 import { useEditorStore } from "@/store/editorStore";
@@ -31,7 +41,14 @@ import { useBackendStore } from "@/store/backendStore";
 import { useRoutingStore } from "@/store/routingStore";
 import { projectHistory } from "@/store/projectHistory";
 import { templates } from "@/templates";
-import { fieldCondition, validateFormConditions } from "@/lib/form-conditions";
+import {
+  fieldCondition,
+  fieldConditions,
+  conditionRules,
+  conditionInputId,
+  conditionKind,
+  validateFormConditions,
+} from "@/lib/form-conditions";
 
 /** Match native form ownership: stop at nested forms rather than collecting their controls. */
 export function formControls(
@@ -72,7 +89,11 @@ export function submissionFields(
   const controls = formControls(formId, elements);
   const radioNames = new Set<string>();
   const inputs = controls
-    .filter((node) => isFormInput(node, elements[node.parentId || ""]) && !node.props.disabled)
+    .filter(
+      (node) =>
+        isFormInput(node, elements[node.parentId || ""], elements) &&
+        !node.props.disabled,
+    )
     .filter((node) => {
       const type = String(node.props.inputType || node.props.type || "");
       if (type !== "radio" || !node.props.name) return true;
@@ -82,11 +103,28 @@ export function submissionFields(
       return true;
     });
   const problems: string[] = [];
-  try { validateFormConditions(elements); }
-  catch (error) { problems.push((error as Error).message); }
-  for (const group of controls.filter(node => node.definitionId === "radioGroup" && node.props.required && !node.props.disabled)) {
-    if (!formControls(group.id, elements).some(node => isFormInput(node, elements[node.parentId || ""]) && !node.props.disabled && String(node.props.inputType || node.props.type) === "radio"))
-      problems.push(`${group.props.legend || group.label || "Radio group"}: add at least one enabled radio choice for this required field.`);
+  try {
+    validateFormConditions(elements);
+  } catch (error) {
+    problems.push((error as Error).message);
+  }
+  for (const group of controls.filter(
+    (node) =>
+      node.definitionId === "radioGroup" &&
+      node.props.required &&
+      !node.props.disabled,
+  )) {
+    if (
+      !formControls(group.id, elements).some(
+        (node) =>
+          isFormInput(node, elements[node.parentId || ""], elements) &&
+          !node.props.disabled &&
+          String(node.props.inputType || node.props.type) === "radio",
+      )
+    )
+      problems.push(
+        `${group.props.legend || group.label || "Radio group"}: add at least one enabled radio choice for this required field.`,
+      );
   }
   if (!inputs.length)
     problems.push("Add at least one enabled input to this form.");
@@ -101,11 +139,14 @@ export function submissionFields(
     problems.push("Add an enabled Submit button to this form.");
   const used = new Set<string>();
   const fields = inputs.map((input, index) => {
-    const inputType = input.definitionId === "checkboxGroup" ? "checkbox-group" : String(
-      input.type === "input"
-        ? input.props.inputType || "text"
-        : input.props.type || definitionFor(input)?.tag || "text",
-    );
+    const inputType =
+      input.definitionId === "checkboxGroup"
+        ? "checkbox-group"
+        : String(
+            input.type === "input"
+              ? input.props.inputType || "text"
+              : input.props.type || definitionFor(input)?.tag || "text",
+          );
     if (inputType === "password")
       problems.push(
         `${input.label || "Field " + (index + 1)} needs an identity workflow for passwords.`,
@@ -114,24 +155,35 @@ export function submissionFields(
     if (file) {
       const error = fileConfigError(file);
       if (error) problems.push(`${input.label || "Attachment"}: ${error}`);
-      if (input.props.multiple) problems.push("Submission attachments support one file per control. Turn off Multiple.");
-      if (inputs.filter(node => String(node.props.inputType || node.props.type) === "file").length > 1) problems.push("Guided submissions support one attachment field per collection.");
+      if (
+        inputs.filter(
+          (node) => String(node.props.inputType || node.props.type) === "file",
+        ).length > 5
+      )
+        problems.push(
+          "Guided submissions support up to five attachment fields per collection.",
+        );
     }
-    const temporal = isTemporalKind(inputType) ? {
-      min: String(input.props.min ?? ""),
-      max: String(input.props.max ?? ""),
-      step: String(input.props.step ?? ""),
-      base: String(input.props.value ?? ""),
-    } : undefined;
+    const temporal = isTemporalKind(inputType)
+      ? {
+          min: String(input.props.min ?? ""),
+          max: String(input.props.max ?? ""),
+          step: String(input.props.step ?? ""),
+          base: String(input.props.value ?? ""),
+        }
+      : undefined;
     const text = isTextInput(inputType) ? textLimits(input.props) : undefined;
     if (text) {
       const error = textConfigError(text);
-      if (error) problems.push(`${input.label || "Field " + (index + 1)}: ${error}`);
-      if (inputType === "textarea" && text.pattern) problems.push("Textarea does not support native text formats.");
+      if (error)
+        problems.push(`${input.label || "Field " + (index + 1)}: ${error}`);
+      if (inputType === "textarea" && text.pattern)
+        problems.push("Textarea does not support native text formats.");
     }
     if (temporal && isTemporalKind(inputType)) {
       const error = temporalConfigError(inputType, temporal);
-      if (error) problems.push(`${input.label || "Field " + (index + 1)}: ${error}`);
+      if (error)
+        problems.push(`${input.label || "Field " + (index + 1)}: ${error}`);
     }
     let name = String(input.props.name || `field_${index + 1}`)
       .replace(/[^A-Za-z0-9_]/g, "_")
@@ -161,21 +213,44 @@ export function submissionFields(
         validateSelectMetadata(input.props);
         if (input.props.multiple) {
           selections = selectionLimits(input.props);
-          if (selectChoices(input.props).filter(choice => !choice.disabled && !choice.groupDisabled).length < selections.min)
-            problems.push(`${input.props.label || input.label}: add enough enabled choices to meet the minimum of ${selections.min}.`);
+          if (
+            selectChoices(input.props).filter(
+              (choice) => !choice.disabled && !choice.groupDisabled,
+            ).length < selections.min
+          )
+            problems.push(
+              `${input.props.label || input.label}: add enough enabled choices to meet the minimum of ${selections.min}.`,
+            );
         }
+      } catch (error) {
+        problems.push(`${input.label || name}: ${(error as Error).message}`);
       }
-      catch (error) { problems.push(`${input.label || name}: ${(error as Error).message}`); }
-      choices = selectChoices(input.props).filter(choice => !choice.disabled && !choice.groupDisabled).map(choice => choice.value).join("\n");
+      choices = selectChoices(input.props)
+        .filter((choice) => !choice.disabled && !choice.groupDisabled)
+        .map((choice) => choice.value)
+        .join("\n");
     }
     if (inputType === "checkbox-group") {
       try {
         validateCheckboxGroup(input, elements);
         selections = selectionLimits(input.props);
-        if (groupChoices(input, elements).filter(choice => !choice.props.disabled).length < selections.min)
-          problems.push(`${input.props.legend || input.label}: add enough enabled choices to meet the minimum of ${selections.min}.`);
-        choices = groupChoices(input, elements).filter(choice => !choice.props.disabled).map(choice => String(choice.props.value)).join("\n");
-      } catch (error) { problems.push(`${input.props.legend || input.label}: ${(error as Error).message}`); }
+        if (
+          groupChoices(input, elements).filter(
+            (choice) => !choice.props.disabled,
+          ).length < selections.min
+        )
+          problems.push(
+            `${input.props.legend || input.label}: add enough enabled choices to meet the minimum of ${selections.min}.`,
+          );
+        choices = groupChoices(input, elements)
+          .filter((choice) => !choice.props.disabled)
+          .map((choice) => String(choice.props.value))
+          .join("\n");
+      } catch (error) {
+        problems.push(
+          `${input.props.legend || input.label}: ${(error as Error).message}`,
+        );
+      }
     }
     if (inputType === "radio") {
       const members = controls.filter(
@@ -209,19 +284,24 @@ export function submissionFields(
       file,
       selections,
       condition: fieldCondition(input, elements),
+      conditions: fieldConditions(input, elements),
       field: {
         id: input.id,
         name,
         type:
-          inputType === "file" ? "object" : inputType === "checkbox-group" || definitionFor(input)?.tag === "select" && input.props.multiple
-            ? "array"
-            : ["number", "range"].includes(inputType)
-              ? "number"
-              : inputType === "checkbox"
-                ? "boolean"
-                : "string",
+          inputType === "file"
+            ? file?.multiple ? "array" : "object"
+            : inputType === "checkbox-group" ||
+                (definitionFor(input)?.tag === "select" && input.props.multiple)
+              ? "array"
+              : ["number", "range"].includes(inputType)
+                ? "number"
+                : inputType === "checkbox"
+                  ? "boolean"
+                  : "string",
         required:
           Boolean(input.props.required) ||
+          Boolean(file?.minFiles) ||
           Boolean(selections?.min) ||
           (inputType === "radio" &&
             Boolean(input.props.name) &&
@@ -275,7 +355,8 @@ export function suggestedFormMappings(
   config: EndpointConfig,
 ): RequestMapping[] {
   const inputs = formControls(formId, elements).filter(
-    (node) => isFormInput(node, elements[node.parentId || ""]) && !node.props.disabled,
+    (node) =>
+      isFormInput(node, elements[node.parentId || ""], elements) && !node.props.disabled,
   );
   return endpointFields(config).flatMap((field) => {
     const input = inputs.find(
@@ -319,7 +400,11 @@ export function connectFormDestination(
     throw new Error("Choose an existing POST, PUT or PATCH endpoint.");
   const inputs = new Set(
     formControls(formId, editor.elementsById)
-      .filter((node) => isFormInput(node, editor.elementsById[node.parentId || ""]) && !node.props.disabled)
+      .filter(
+        (node) =>
+          isFormInput(node, editor.elementsById[node.parentId || ""], editor.elementsById) &&
+          !node.props.disabled,
+      )
       .map((node) => node.id),
   );
   const fields = endpointFields(endpoint.config as EndpointConfig);
@@ -468,15 +553,36 @@ export function createSubmissionDestination(
         position: { x: 0, y: 0 },
       }) as BackendBlock;
     const validations = analysis.fields.flatMap(
-      ({ field, input, inputType, choices, temporal, text, file, condition, selections }) => {
+      ({
+        field,
+        input,
+        inputType,
+        choices,
+        temporal,
+        text,
+        file,
+        condition,
+        conditions,
+        selections,
+      }) => {
         const rules: ValidationRule[] = [];
-        if (condition && field.required && field.type !== "array") rules.push({type: "required", message: `Complete ${field.name} when its section is shown.`});
-        if (file) rules.push({type:"file",file,message:`Choose a valid ${field.name} within the allowed file size and extensions.`});
-        if (temporal && isTemporalKind(inputType)) rules.push({
-          type: inputType,
-          temporal,
-          message: `Enter a valid ${field.name} within the allowed limits.`,
-        });
+        if (condition && field.required && field.type !== "array")
+          rules.push({
+            type: "required",
+            message: `Complete ${field.name} when its section is shown.`,
+          });
+        if (file)
+          rules.push({
+            type: "file",
+            file,
+            message: `Choose a valid ${field.name} within the allowed file size and extensions.`,
+          });
+        if (temporal && isTemporalKind(inputType))
+          rules.push({
+            type: inputType,
+            temporal,
+            message: `Enter a valid ${field.name} within the allowed limits.`,
+          });
         if (choices !== undefined)
           rules.push({
             type: "oneOf",
@@ -488,19 +594,43 @@ export function createSubmissionDestination(
             type: "accepted",
             message: `Confirm ${field.name} before submitting.`,
           });
-        if (field.type === "array" && field.required && (!selections || selections.min <= 1))
+        if (
+          field.type === "array" &&
+          field.required &&
+          (!selections || selections.min <= 1)
+        )
           rules.push({
             type: "required",
             message: `Choose at least one ${field.name} option.`,
           });
         if (selections) {
-          if (selections.min > 1) rules.push({type: "minItems", value: selections.min, message: `Choose at least ${selections.min} ${field.name} options.`});
-          if (selections.max !== undefined) rules.push({type: "maxItems", value: selections.max, message: `Choose at most ${selections.max} ${field.name} options.`});
+          if (selections.min > 1)
+            rules.push({
+              type: "minItems",
+              value: selections.min,
+              message: `Choose at least ${selections.min} ${field.name} options.`,
+            });
+          if (selections.max !== undefined)
+            rules.push({
+              type: "maxItems",
+              value: selections.max,
+              message: `Choose at most ${selections.max} ${field.name} options.`,
+            });
         }
-        if (text) rules.push({
-          type: "text", text: {...text, maxLength: text.maxLength ?? Math.max(text.minLength ?? 0, inputType === "email" ? 320 : 2000)},
-          message: `Enter ${field.name} in the allowed format and length.`,
-        });
+        if (text)
+          rules.push({
+            type: "text",
+            text: {
+              ...text,
+              maxLength:
+                text.maxLength ??
+                Math.max(
+                  text.minLength ?? 0,
+                  inputType === "email" ? 320 : 2000,
+                ),
+            },
+            message: `Enter ${field.name} in the allowed format and length.`,
+          });
         if (field.type === "string" && !text)
           rules.push({
             type: "maxLength",
@@ -521,7 +651,8 @@ export function createSubmissionDestination(
             type: "email",
             message: "Enter a valid email address.",
           });
-        if (inputType === "url") rules.push({type:"url", message:"Enter a valid absolute URL."});
+        if (inputType === "url")
+          rules.push({ type: "url", message: "Enter a valid absolute URL." });
         if (field.type === "number")
           for (const type of ["min", "max"] as const)
             if (
@@ -535,11 +666,63 @@ export function createSubmissionDestination(
                 message: `${field.name} is outside the allowed range.`,
               });
         if (condition) {
-          const controller = analysis.fields.find(item => item.input.id === condition.sourceId)!;
-          const active = block(uuid(), "validation", `Check ${field.name}`, {fieldName: field.name, rules});
-          const inactive = block(uuid(), "validation", `Omit hidden ${field.name}`, {fieldName: field.name, rules: [{type: "absent", message: `Omit ${field.name} while its section is hidden.`}]});
-          const gate = block(uuid(), "logic_if", `When ${controller.field.name} is ${condition.checked ? "checked" : "unchecked"}`, {program: {left: `$request.body.${controller.field.name}`, operator: "eq", right: condition.checked, thenSteps: [active.id], elseSteps: [inactive.id]}});
-          return [gate, active, inactive];
+          const active = block(uuid(), "validation", `Check ${field.name}`, {
+            fieldName: field.name,
+            rules,
+          });
+          const inactive = block(
+            uuid(),
+            "validation",
+            `Omit hidden ${field.name}`,
+            {
+              fieldName: field.name,
+              rules: [
+                {
+                  type: "absent",
+                  message: `Omit ${field.name} while its section is hidden.`,
+                },
+              ],
+            },
+          );
+          const gates: BackendBlock[] = [];
+          let success = active.id;
+          for (const section of conditions.toReversed()) {
+            const rules = conditionRules(section);
+            let next = inactive.id;
+            for (const rule of rules.toReversed()) {
+              const source = editor.elementsById[rule.sourceId];
+              const controller = analysis.fields.find(
+                (item) =>
+                  item.input.id ===
+                  conditionInputId(source, editor.elementsById),
+              )!;
+              const gate = block(
+                uuid(),
+                "logic_if",
+                `When ${controller.field.name} matches ${field.name}`,
+                {
+                  program: {
+                    left: `$request.body.${controller.field.name}`,
+                    operator: rule.operator || "eq",
+                    right: rule.checked,
+                    ...(rule.operator ? { literalValue: rule.value } : {}),
+                    thenSteps: [
+                      section.match === "any"
+                        ? success
+                        : next === inactive.id
+                          ? success
+                          : next,
+                    ],
+                    elseSteps: [section.match === "any" ? next : inactive.id],
+                  },
+                },
+              );
+              gates.unshift(gate);
+              next = gate.id;
+            }
+            success = next;
+          }
+          return [...gates, active, inactive];
         }
         return rules.length
           ? [
@@ -551,10 +734,31 @@ export function createSubmissionDestination(
           : [];
       },
     );
-    const fields = analysis.fields.map(item => ({...item.field,
-      required: item.condition ? false : item.field.required || analysis.fields.some(other => other.condition?.sourceId === item.input.id),
+    const fields = analysis.fields.map((item) => ({
+      ...item.field,
+      required: item.condition
+        ? false
+        : item.field.required ||
+          analysis.fields.some((other) =>
+            other.conditions
+              .flatMap(conditionRules)
+              .some(
+                (rule) =>
+                  conditionKind(editor.elementsById[rule.sourceId]) ===
+                    "boolean" && rule.sourceId === item.input.id,
+              ),
+          ),
     }));
-    const branchIds = new Set(validations.flatMap(item => "program" in item.config && item.config.program ? [...(item.config.program.thenSteps || []), ...(item.config.program.elseSteps || [])] : []));
+    const branchIds = new Set(
+      validations.flatMap((item) =>
+        "program" in item.config && item.config.program
+          ? [
+              ...(item.config.program.thenSteps || []),
+              ...(item.config.program.elseSteps || []),
+            ]
+          : [],
+      ),
+    );
     const blocks = [
       block(modelId, "db_model", `${name} records`, {
         tableName: "Submission",
@@ -612,8 +816,14 @@ export function createSubmissionDestination(
         ],
       }),
     ];
+    if (blocks.length > 1000)
+      throw new Error(
+        "This form needs more than 1,000 workflow blocks. Reduce repeated conditional rules or split it into smaller forms.",
+      );
     blocks[2].connections = [
-      ...validations.filter(item => !branchIds.has(item.id)).map((item) => item.id),
+      ...validations
+        .filter((item) => !branchIds.has(item.id))
+        .map((item) => item.id),
       queryId,
       transformId,
       responseId,

@@ -163,9 +163,10 @@ export const PROGRAM_DEFAULTS: Record<ProgramBlockType, ProgramConfig> = {
 export const controlSchema = z.object({
   left: binding.default("$request.body.value"),
   operator: z
-    .enum(["eq", "ne", "gt", "gte", "lt", "lte", "exists"])
+    .enum(["eq", "ne", "gt", "gte", "lt", "lte", "exists", "includes", "excludes"])
     .default("exists"),
   right: binding.default(null),
+  literalValue: z.string().max(1000).optional(),
   thenSteps: steps.default([]),
   elseSteps: steps.default([]),
   steps: steps.default([]),

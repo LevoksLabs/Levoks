@@ -14,6 +14,7 @@
 //
 
 import type { ElementNode } from "@/types";
+import { remapCondition } from "./form-conditions";
 
 const counters: Record<string, number> = {};
 
@@ -115,8 +116,13 @@ export function deepCloneSubtree(
         if (["radioGroup", "checkboxGroup"].includes(el.definitionId || "") && el.props.name) {
             const name = `choice_${newId}`;
             allCloned[newId].props = {...el.props, name};
-            for (const childId of newChildIds) if (allCloned[childId].definitionId === (el.definitionId === "radioGroup" ? "radioButton" : "checkbox"))
-                allCloned[childId].props = {...allCloned[childId].props, name};
+            const pending = [...newChildIds];
+            while (pending.length) {
+                const choice = allCloned[pending.pop()!];
+                if (["checkboxGroup", "radioGroup"].includes(choice.definitionId || "")) continue;
+                if (choice.definitionId === (el.definitionId === "radioGroup" ? "radioButton" : "checkbox")) choice.props = {...choice.props,name};
+                pending.push(...choice.children);
+            }
         }
 
         return newId;
@@ -124,6 +130,7 @@ export function deepCloneSubtree(
 
     const clonedRootId = cloneRecursive(rootElement, newParentId);
     for (const node of Object.values(allCloned)) if (node.formCondition)
-        node.formCondition = { ...node.formCondition, sourceId: clonedIds.get(node.formCondition.sourceId) || node.formCondition.sourceId };
+        node.formCondition = remapCondition(node.formCondition, id => clonedIds.get(id) || id);
+    for (const node of Object.values(allCloned)) if (node.props.htmlFor && clonedIds.has(String(node.props.htmlFor))) node.props = {...node.props,htmlFor:clonedIds.get(String(node.props.htmlFor))!};
     return { clonedRootId, allCloned };
 }

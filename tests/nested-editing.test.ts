@@ -134,7 +134,7 @@ test("nested form moves preserve bindings, sizes and history while normalizing f
   assert.deepEqual(captureProject(project.id, project.name).editor, locked);
 });
 
-test("global reparenting keeps one owning tree and rejects cross-scope, inactive-page and component-child moves", () => {
+test("global reparenting keeps one owning tree, supports local component structure and rejects cross-scope and inactive-page moves", () => {
   const project = emptyProject();
   restoreProject(project);
   const store = useEditorStore.getState();
@@ -170,13 +170,10 @@ test("global reparenting keeps one owning tree and rejects cross-scope, inactive
   const child = store.addElement(templates.text, pageGroup);
   store.saveComponent(pageGroup, "Card");
   const outsider = store.addElement(templates.text);
-  const current = captureProject(project.id, project.name);
-  assert.match(store.moveElement(child, null, 0)!, /Detach/);
-  assert.match(store.moveElement(outsider, pageGroup, 0)!, /Detach/);
-  assert.deepEqual(
-    captureProject(project.id, project.name).editor,
-    current.editor,
-  );
+  assert.equal(store.moveElement(child, null, 0), null);
+  assert.equal(useEditorStore.getState().elementsById[child].component, undefined);
+  assert.equal(store.moveElement(outsider, pageGroup, 0), null);
+  assert.ok(useEditorStore.getState().elementsById[pageGroup].component!.overrides.includes("structure"));
   store.detachComponent(pageGroup);
   assert.equal(store.moveElement(child, null, 0), null);
   store.switchPage(store.addPage("Other"));

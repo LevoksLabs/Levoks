@@ -11,7 +11,7 @@ export function submissionFileFields(
   return model.fields
     .filter(
       (field) =>
-        field.type === "object" &&
+        ["object", "array"].includes(field.type) &&
         blocks.some(
           (block) =>
             block.type === "validation" &&
@@ -24,10 +24,14 @@ export function submissionFileFields(
     .map((field) => field.name);
 }
 
-export const MAX_SUBMISSION_FILE_BYTES = 256 * 1024;
+export const MAX_SUBMISSION_FILE_BYTES = 1024 * 1024;
 export interface FileLimits {
   maxBytes?: number;
   extensions?: string;
+  multiple?: boolean;
+  minFiles?: number;
+  maxFiles?: number;
+  maxTotalBytes?: number;
 }
 export function fileConfigError(limits: FileLimits = {}) {
   if (
@@ -36,7 +40,32 @@ export function fileConfigError(limits: FileLimits = {}) {
       limits.maxBytes < 1 ||
       limits.maxBytes > MAX_SUBMISSION_FILE_BYTES)
   )
-    return "File size must be from 1 byte to 256 KiB.";
+    return "File size must be from 1 byte to 1024 KiB.";
+  if (limits.multiple) {
+    const min = limits.minFiles ?? 0,
+      max = limits.maxFiles ?? 5;
+    if (
+      !Number.isInteger(min) ||
+      !Number.isInteger(max) ||
+      min < 0 ||
+      max < 1 ||
+      max > 5 ||
+      min > max
+    )
+      return "Choose a minimum from 0 to the maximum and a maximum from 1 to 5 files.";
+    if (
+      limits.maxTotalBytes !== undefined &&
+      (!Number.isInteger(limits.maxTotalBytes) ||
+        limits.maxTotalBytes < 1 ||
+        limits.maxTotalBytes > MAX_SUBMISSION_FILE_BYTES)
+    )
+      return "Combined file size must be from 1 byte to 1024 KiB.";
+  } else if (
+    limits.minFiles !== undefined ||
+    limits.maxFiles !== undefined ||
+    limits.maxTotalBytes !== undefined
+  )
+    return "File count and combined size limits require Multiple.";
   const extensions = String(limits.extensions || "")
     .split(",")
     .map((value) => value.trim().toLowerCase())
@@ -53,14 +82,31 @@ export function fileLimits(props: Record<string, unknown>): FileLimits {
   return {
     maxBytes: Number(props.maxFileKB ?? 256) * 1024,
     extensions: String(props.accept || ""),
+    ...(props.multiple
+      ? {
+          multiple: true,
+          minFiles: Math.max(
+            Number(props.minFiles ?? 0),
+            props.required ? 1 : 0,
+          ),
+          maxFiles: Number(props.maxFiles ?? 5),
+          maxTotalBytes: Number(props.maxTotalKB ?? 1024) * 1024,
+        }
+      : {}),
   };
 }
 /** Embedded bytes are saved atomically with the record; never used as a filesystem path. */
 export const FILE_VALIDATION_RUNTIME = String.raw`
 function fileRuleValid(rule, value) {
+  const limits = rule.file || {}, maximum = limits.maxBytes ?? 1048576;
+  if (!Number.isInteger(maximum) || maximum < 1 || maximum > 1048576) return false;
+  if (limits.multiple) {
+    const min = limits.minFiles ?? 0, max = limits.maxFiles ?? 5, total = limits.maxTotalBytes ?? 1048576;
+    if (!Number.isInteger(min) || !Number.isInteger(max) || min < 0 || max < 1 || max > 5 || min > max || !Number.isInteger(total) || total < 1 || total > 1048576) return false;
+    return Array.isArray(value) && value.length >= min && value.length <= max && value.every(file => fileRuleValid({file: {maxBytes: maximum, extensions: limits.extensions}}, file)) && value.reduce((sum, file) => sum + file.size, 0) <= total;
+  }
+  if (limits.minFiles !== undefined || limits.maxFiles !== undefined || limits.maxTotalBytes !== undefined) return false;
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).sort().join(',') !== 'data,name,size') return false;
-  const limits = rule.file || {}, maximum = limits.maxBytes ?? 262144;
-  if (!Number.isInteger(maximum) || maximum < 1 || maximum > 262144) return false;
   if (typeof value.name !== 'string' || !value.name || value.name.length > 120 || /[\x00-\x1f\x7f/\\]/.test(value.name) || ['.', '..'].includes(value.name)) return false;
   if (!Number.isInteger(value.size) || value.size < 0 || value.size > maximum || typeof value.data !== 'string' || value.data.length > Math.ceil(maximum / 3) * 4) return false;
   const extensions = String(limits.extensions || '').split(',').map(item => item.trim().toLowerCase()).filter(Boolean);

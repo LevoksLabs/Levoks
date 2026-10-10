@@ -2,11 +2,13 @@
 import type { ElementNode } from "@/types";
 import { useEditorStore } from "@/store/editorStore";
 import { useEditorUIStore } from "@/store/editorUIStore";
+import {componentRoot} from "@/lib/design-components";
 
 export default function DesignInspector({ element }: { element: ElementNode }) {
   const store = useEditorStore(),
     ui = useEditorUIStore();
   const vector = element.vector;
+  const instanceRoot = componentRoot(element.id, store.elementsById, store.components);
   const editPoint = (index: number, field: string, value: number) => {
     if (!vector || !Number.isFinite(value) || Math.abs(value) > 10000) return;
     store.updateElement(element.id, {
@@ -39,32 +41,33 @@ export default function DesignInspector({ element }: { element: ElementNode }) {
           </button>
         </div>
       )}
-      {element.component && (
+      {instanceRoot && (
         <details open>
           <summary>Component instance</summary>
           <span>
-            {store.components[element.component.id]?.name} ·{" "}
-            {element.component.overrides.length} local overrides
+            {store.components[instanceRoot.component!.id]?.name} ·{" "}
+            {element.component?.overrides.length || 0} local overrides
           </span>
           <div className="design-button-row">
             <button
               disabled={
-                element.component.node !==
-                store.components[element.component.id]?.rootId
+                element.id !== instanceRoot.id
               }
               onClick={() =>
                 store.saveComponent(
                   element.id,
-                  store.components[element.component!.id].name,
+                  store.components[instanceRoot.component!.id].name,
                 )
               }
             >
               Publish to instances
             </button>
-            <button onClick={() => store.detachComponent(element.id)}>
+            <button onClick={() => store.detachComponent(instanceRoot.id)}>
               Detach instance
             </button>
+            {instanceRoot.component!.overrides.includes("structure") && <button onClick={() => store.resetComponentStructure(instanceRoot.id)}>Restore shared structure</button>}
           </div>
+          <p>Structure changes stay local until published. Restore shared structure removes local additions and restores shared children; Undo recovers the local version. Content and style overrides remain.</p>
         </details>
       )}
       <details>

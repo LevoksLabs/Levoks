@@ -157,8 +157,18 @@ export interface ElementLayout {
     locked: boolean;
 }
 
+export interface FormConditionRule {
+    sourceId: string;
+    checked: boolean;
+    operator?: "eq" | "ne" | "includes" | "excludes";
+    value?: string;
+}
+export interface FormCondition extends FormConditionRule {
+    match?: "all" | "any";
+    rules?: FormConditionRule[];
+}
 export interface ElementNode {
-    formCondition?: { sourceId: string; checked: boolean };
+    formCondition?: FormCondition;
     dataSource?: { serviceId: string; endpointId: string; columns: { fieldId: string; label: string }[]; emptyMessage: string };
     dataField?: string;
     /** Missing on v1 documents: resolve the definition from type. */

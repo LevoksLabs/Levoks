@@ -15,6 +15,7 @@ import {
 } from "../deployment";
 import { HttpError } from "./http";
 import { MongoVault } from "./vault";
+import { DeploymentArchives, releaseDigest } from "./deployment-archives";
 import {
   verifyVercelTarget,
   createVercelRelease,
@@ -31,6 +32,7 @@ interface Connection extends DeploymentMetadata {
   job?: {
     release: ReleaseMetadata;
     snapshot?: ProjectDocument;
+    sourceArchived?: boolean;
     attempted: boolean;
     attempts: number;
     dueAt: Date;
@@ -54,24 +56,6 @@ const idFor = (ownerId: string, projectId: string) =>
     .update(JSON.stringify([ownerId, projectId]))
     .digest("hex");
 const namespace = (projectId: string) => `deployment:${projectId}`;
-function releaseDigest(
-  files: Record<string, string>,
-  environment: Record<string, string>,
-  target: DeploymentTarget,
-) {
-  const sorted = (values: Record<string, string>) =>
-    Object.entries(values).sort(([a], [b]) => a.localeCompare(b));
-  return createHash("sha256")
-    .update(
-      JSON.stringify([
-        sorted(files),
-        sorted(environment),
-        target.providerProjectId,
-        target.teamId,
-      ]),
-    )
-    .digest("hex");
-}
 export class Deployments {
   constructor(
     private db: Db,
@@ -229,19 +213,145 @@ export class Deployments {
         422,
         "Resolve Source & checks errors before deploying.",
       );
-    const digest = releaseDigest(output.files, origins, c);
+    return this.queue(c, output.files, origins, version, sequence, operationId);
+  }
+  async archive(ownerId: string, projectId: string, operationId: string) {
+    const c = await this.require(ownerId, projectId);
+    const release = c.history.find(
+      (item) => item.operationId === operationId && item.archiveExpiresAt,
+    );
+    if (!release)
+      throw new HttpError(
+        404,
+        "Archived source is not in this project's release history.",
+      );
+    const archive = await new DeploymentArchives(this.db).get(
+      ownerId,
+      projectId,
+      operationId,
+    );
+    if (archive.digest !== release.digest)
+      throw new HttpError(
+        422,
+        "Archived source does not match release history. Queue a new reviewed snapshot.",
+      );
+    return archive;
+  }
+  async replay(
+    ownerId: string,
+    projectId: string,
+    sourceOperationId: string,
+    version: number,
+    sequence: number,
+    operationId: string,
+  ) {
+    const c = await this.require(ownerId, projectId);
+    if (operationId === sourceOperationId)
+      throw new HttpError(
+        400,
+        "Use a new operation ID for the archived preview.",
+      );
+    const duplicate = c.history.find(
+      (release) => release.operationId === operationId,
+    );
+    if (duplicate) {
+      if (duplicate.sourceOperationId !== sourceOperationId)
+        throw new HttpError(
+          409,
+          "This operation ID was used for a different release.",
+        );
+      return c;
+    }
+    const previous = c.history.find(
+      (release) => release.operationId === sourceOperationId,
+    );
+    if (previous?.state !== "ready")
+      throw new HttpError(
+        409,
+        "Choose a completed ready preview from this project's history.",
+      );
+    const archive = await this.archive(ownerId, projectId, sourceOperationId);
+    if (
+      archive.target.providerProjectId !== c.providerProjectId ||
+      archive.target.teamId !== c.teamId
+    )
+      throw new HttpError(
+        409,
+        "Archived source belongs to another deployment target. Restore that connection before requeuing.",
+      );
+    return this.queue(
+      c,
+      archive.files,
+      archive.environment,
+      version,
+      sequence,
+      operationId,
+      sourceOperationId,
+    );
+  }
+  async source(c: Connection) {
+    let files: Record<string, string>;
+    if (c.job!.sourceArchived) {
+      const archive = await new DeploymentArchives(this.db).get(
+        c.ownerId,
+        c.projectId,
+        c.job!.release.operationId,
+      );
+      files = archive.files;
+    } else {
+      if (!c.job!.snapshot)
+        throw new HttpError(422, "Queued snapshot is missing.");
+      const output = compileProject(c.job!.snapshot);
+      if (output.diagnostics.some((item) => item.severity === "error"))
+        throw new HttpError(422, "Snapshot no longer compiles.");
+      files = output.files;
+    }
+    if (releaseDigest(files, c.environment, c) !== c.job!.release.digest)
+      throw new HttpError(
+        422,
+        "Queued source or configuration failed its integrity check. Review and queue a new release.",
+      );
+    return files;
+  }
+  private async queue(
+    c: Connection,
+    files: Record<string, string>,
+    origins: Record<string, string>,
+    version: number,
+    sequence: number,
+    operationId: string,
+    sourceOperationId?: string,
+  ) {
+    const digest = releaseDigest(files, origins, c);
     const existing = c.history.find(
       (release) => release.operationId === operationId,
     );
     if (existing) {
-      if (existing.digest !== digest)
+      if (
+        existing.digest !== digest ||
+        existing.sourceOperationId !== sourceOperationId
+      )
         throw new HttpError(
           409,
           "This operation ID was already used for a different release.",
         );
       return c;
     }
+    if (c.active || c.version !== version || c.sequence !== sequence || c.lease)
+      throw new HttpError(
+        409,
+        "A release is active or the queue changed. Refresh before deploying.",
+      );
     const at = new Date().toISOString();
+    const archives = new DeploymentArchives(this.db);
+    const expiresAt = await archives.put(
+      c.ownerId,
+      c.projectId,
+      operationId,
+      files,
+      origins,
+      c,
+    );
     const release: ReleaseMetadata = {
       operationId,
       sequence: sequence + 1,
@@ -250,6 +360,8 @@ export class Deployments {
       createdAt: at,
       updatedAt: at,
       digest,
+      archiveExpiresAt: expiresAt.toISOString(),
+      ...(sourceOperationId ? { sourceOperationId } : {}),
     };
     const result = await this.collection().findOneAndUpdate(
       {
@@ -265,7 +377,7 @@ export class Deployments {
           environment: origins,
           job: {
             release,
-            snapshot: project,
+            sourceArchived: true,
             attempted: false,
             attempts: 0,
             dueAt: new Date(),
@@ -277,10 +389,13 @@ export class Deployments {
       { returnDocument: "after" },
     );
     if (!result) {
-      const latest = await this.require(ownerId, projectId);
+      const latest = await this.require(c.ownerId, c.projectId);
       if (
         latest.history.some(
-          (item) => item.operationId === operationId && item.digest === digest,
+          (item) =>
+            item.operationId === operationId &&
+            item.digest === digest &&
+            item.sourceOperationId === sourceOperationId,
         )
       )
         return latest;
@@ -289,6 +404,16 @@ export class Deployments {
         "A release is active or the queue changed. Refresh before deploying.",
       );
     }
+    const retained = new Set(result.history.map((item) => item.operationId));
+    await archives
+      .prune(
+        c.ownerId,
+        c.projectId,
+        c.history
+          .filter((item) => !retained.has(item.operationId))
+          .map((item) => item.operationId),
+      )
+      .catch(() => {});
     return result;
   }
   async cancel(ownerId: string, projectId: string, operationId: string) {
@@ -461,7 +586,9 @@ export class Deployments {
       ...c.job!.release,
       state: rejected ? "error" : "attention",
       message: rejected
-        ? "The release could not be submitted. Check project access, token and quota before queuing a new release."
+        ? !c.job!.attempted && [410, 422].includes(status)
+          ? "Queued source is unavailable or failed validation. Review Source & checks and queue a new snapshot."
+          : "The release could not be submitted. Check project access, token and quota before queuing a new release."
         : "Release status is unresolved. Refresh tracking or replace the token for this target; no duplicate build will be submitted.",
       updatedAt: new Date().toISOString(),
     };
@@ -519,21 +646,12 @@ export async function processDeploymentJob(
         job.release.createdAt,
       );
     else {
-      if (!job.snapshot)
-        throw new HttpError(422, "Queued snapshot is missing.");
-      const output = compileProject(job.snapshot);
-      if (output.diagnostics.some((item) => item.severity === "error"))
-        throw new HttpError(422, "Snapshot no longer compiles.");
-      if (releaseDigest(output.files, c.environment, c) !== job.release.digest)
-        throw new HttpError(
-          422,
-          "Compiler output changed after queuing. Review and queue a new release.",
-        );
+      const files = await store.source(c);
       await store.markSubmission(c);
       createRequest = true;
       provider = await transport.create(
         auth,
-        output.files,
+        files,
         c.environment,
         job.release.operationId,
       );

@@ -11,6 +11,9 @@ import { encode } from "next-auth/jwt";
 import { Deployments } from "../../src/lib/server/deployments";
 import { MongoVault } from "../../src/lib/server/vault";
 import { emptyProject } from "../../src/lib/project/workspace";
+import JSZip from "jszip";
+import { compileProject } from "../../src/lib/project/compiler";
+import { mkdir, writeFile } from "node:fs/promises";
 
 test(
   "real Next deployment API enforces sessions, account changes, same origin and concurrent queue revisions",
@@ -61,6 +64,26 @@ test(
     await new Promise<void>((resolve) => reservation.close(() => resolve()));
     const origin = `http://127.0.0.1:${port}`;
     const secret = randomBytes(32).toString("hex");
+    const acceptanceId = randomUUID().replaceAll("-", "");
+    const acceptanceRoot = path.resolve(
+      `.verification/deployment-api-${acceptanceId}`,
+    );
+    await mkdir(acceptanceRoot, { recursive: true });
+    await writeFile(
+      path.join(acceptanceRoot, "tsconfig.json"),
+      JSON.stringify(
+        {
+          extends: "../../tsconfig.json",
+          include: [
+            path.resolve("next-env.d.ts"),
+            path.resolve("src/**/*.ts"),
+            path.resolve("src/**/*.tsx"),
+          ],
+        },
+        null,
+        2,
+      ),
+    );
     const server = spawn(
       process.execPath,
       [
@@ -78,7 +101,7 @@ test(
           ...process.env,
           NODE_ENV: "development",
           LEVOKS_E2E: "1",
-          LEVOKS_DEPLOYMENT_API_TEST: "1",
+          LEVOKS_DEPLOYMENT_API_TEST: acceptanceId,
           NEXT_TELEMETRY_DISABLED: "1",
           NEXTAUTH_URL: origin,
           NEXTAUTH_SECRET: secret,
@@ -206,6 +229,30 @@ test(
       /fixture-provider-token|secretName|snapshot|lease/,
     );
     assert.equal((await request(bob)).body.connection, null);
+    const archiveUrl = `${origin}/api/deploy/archive?projectId=${project.id}&operationId=${payload.operationId}`;
+    assert.equal((await fetch(archiveUrl)).status, 401);
+    assert.equal(
+      (await fetch(archiveUrl, { headers: { Cookie: cookies.get(bob)! } }))
+        .status,
+      404,
+    );
+    const archived = await fetch(archiveUrl, {
+      headers: { Cookie: cookies.get(alice)! },
+    });
+    assert.equal(archived.status, 200);
+    assert.equal(archived.headers.get("cache-control"), "private, no-store");
+    assert.match(
+      archived.headers.get("content-disposition")!,
+      /^attachment; filename="levoks-release-/,
+    );
+    const zip = await JSZip.loadAsync(await archived.arrayBuffer());
+    const compiled = compileProject(project).files;
+    assert.deepEqual(
+      Object.keys(zip.files).sort(),
+      Object.keys(compiled).sort(),
+    );
+    for (const [name, source] of Object.entries(compiled))
+      assert.equal(await zip.file(name)!.async("string"), source);
     assert.equal(
       (
         await request(alice, {
@@ -220,6 +267,41 @@ test(
     assert.equal(
       (await request(alice)).body.connection.history[0].state,
       "canceled",
+    );
+    const replay = {
+      action: "replay",
+      ownerId: alice,
+      projectId: project.id,
+      sourceOperationId: payload.operationId,
+      version: 1,
+      sequence: 1,
+      operationId: randomUUID(),
+    };
+    assert.equal((await request(alice, replay)).status, 409);
+    await client
+      .db()
+      .collection("levoks_deployments")
+      .updateOne(
+        { ownerId: alice, projectId: project.id },
+        { $set: { "history.0.state": "ready" } },
+      );
+    assert.equal(
+      (await request(alice, replay, "https://foreign.example")).status,
+      403,
+    );
+    assert.equal((await request(bob, { ...replay, ownerId: bob })).status, 404);
+    const replays = await Promise.all([
+      request(alice, replay),
+      request(alice, replay),
+    ]);
+    assert.ok(
+      replays.every((result) => result.status === 200),
+      JSON.stringify(replays),
+    );
+    assert.equal(replays[0].body.sequence, 2);
+    assert.equal(
+      replays[0].body.history[1].sourceOperationId,
+      payload.operationId,
     );
   },
 );

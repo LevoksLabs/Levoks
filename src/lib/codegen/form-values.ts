@@ -5,10 +5,14 @@ export const formValueRuntime = `
 ${URL_VALIDATION_RUNTIME}
 ${FILE_VALIDATION_RUNTIME}
 async function formFileValue(input) {
-  if (!input.files?.length) return undefined;
-  if (input.multiple || input.files.length !== 1) throw new Error('Choose one file for ' + input.name);
-  const file = input.files[0], rule = {file: {maxBytes: Number(input.dataset?.levoksFileMaxBytes || 262144), extensions: input.accept || ''}};
-  if (file.size > rule.file.maxBytes || file.size > 262144) throw new Error('The file for ' + input.name + ' exceeds the allowed size.');
+  const files = Array.from(input.files || []), min = input.multiple ? Math.max(Number(input.dataset?.fileMin || 0), input.required ? 1 : 0) : input.required ? 1 : 0;
+  if (files.length < min) throw new Error('Choose at least ' + min + ' files for ' + input.name);
+  if (!files.length) return undefined;
+  const rule = {file: {maxBytes: Number(input.dataset?.levoksFileMaxBytes || 262144), extensions: input.accept || '', ...(input.multiple ? {multiple: true, minFiles: min, maxFiles: Number(input.dataset?.fileMax || 5), maxTotalBytes: Number(input.dataset?.fileTotal || 1048576)} : {})}};
+  if (files.length > (rule.file.maxFiles || 1)) throw new Error('Choose at most ' + (rule.file.maxFiles || 1) + ' files for ' + input.name);
+  if (files.some(file => file.size > rule.file.maxBytes || file.size > 1048576) || files.reduce((sum, file) => sum + file.size, 0) > (rule.file.maxTotalBytes || 1048576)) throw new Error('The files for ' + input.name + ' exceed the allowed size.');
+  const values = [];
+  for (const file of files) {
   const data = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
@@ -16,8 +20,11 @@ async function formFileValue(input) {
     reader.readAsDataURL(file);
   });
   const value = {name: file.name, size: file.size, data};
-  if (!fileRuleValid(rule, value)) throw new Error('Choose a file with an allowed name, size and extension for ' + input.name);
-  return value;
+  values.push(value);
+  }
+  const result = input.multiple ? values : values[0];
+  if (!fileRuleValid(rule, result)) throw new Error('Choose files with allowed names, sizes and extensions for ' + input.name);
+  return result;
 }
 function formControlValue(input, form) {
   if (input.type === 'radio' && input.name) return Array.from(form.elements).find(candidate => candidate.type === 'radio' && candidate.name === input.name && candidate.checked && !candidate.disabled && !candidate.matches?.(':disabled'))?.value;

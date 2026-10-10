@@ -894,17 +894,17 @@ export default function ProgramInspector({
             {select(
               "Comparison",
               c.operator,
-              ["eq", "ne", "gt", "gte", "lt", "lte", "exists"].map((id) => ({
+              ["eq", "ne", "gt", "gte", "lt", "lte", "exists", "includes", "excludes"].map((id) => ({
                 id,
                 label: id,
               })),
               (operator) => change({ operator: operator as typeof c.operator }),
             )}
-            <Binding
+            {c.literalValue !== undefined ? <label className="bi-field"><span>Literal choice value</span><input aria-label="Literal choice value" value={c.literalValue} maxLength={1000} onChange={e => change({literalValue: e.target.value})} /></label> : <Binding
               label="Right value"
               value={c.right}
               onChange={(right) => change({ right })}
-            />
+            />}
             {steps("When true", c.thenSteps, (thenSteps) =>
               change({ thenSteps }),
             )}

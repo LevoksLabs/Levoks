@@ -1,0 +1,78 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {emptyProject, restoreProject, captureProject} from "../src/lib/project/workspace";
+import {parseProject} from "../src/lib/project/schema";
+import {compileProject} from "../src/lib/project/compiler";
+import {useEditorStore} from "../src/store/editorStore";
+import {templates} from "../src/templates";
+function fixture() {
+  const project=emptyProject(); restoreProject(project); const store=useEditorStore.getState();
+  const source=store.addElement(templates.container);
+  const first=store.addElement({...templates.text,props:{content:"Shared heading"}},source);
+  const second=store.addElement({...templates.button,props:{label:"Shared action"}},source);
+  store.saveComponent(source,"Card"); const component=useEditorStore.getState().elementsById[source].component!.id;
+  store.insertComponent(component); const instance=useEditorStore.getState().selectedElementId!;
+  const children=[...useEditorStore.getState().elementsById[instance].children];
+  return {project,store,source,first,second,component,instance,children};
+}
+test("local additions, reordering and reparenting survive publishing, while other instances follow shared structure",()=>{
+  const f=fixture(); f.store.insertComponent(f.component); const untouched=useEditorStore.getState().selectedElementId!;
+  const local=f.store.addElement({...templates.container,label:"Local group"},f.instance);
+  const added=f.store.addElement({...templates.text,props:{content:"Local note"}},local);
+  f.store.updateElement(f.children[0],{props:{content:"Local heading"},responsive:{mobile:{styles:{fontSize:"18px"}}}});
+  assert.equal(f.store.moveElement(f.children[0],local,0),null);
+  f.store.reorderElements(f.instance,0,1);
+  const before=captureProject(f.project.id,f.project.name);
+  const order=[...before.editor.elementsById[f.instance].children];
+  f.store.updateElement(f.first,{props:{content:"Revised shared heading"},styles:{color:"#123456"}});
+  f.store.deleteElement(f.second);
+  f.store.addElement({...templates.text,props:{content:"New shared item"}},f.source);
+  f.store.saveComponent(f.source,"Card");
+  const current=captureProject(f.project.id,f.project.name);
+  assert.deepEqual(current.editor.elementsById[f.instance].children,order);
+  assert.equal(current.editor.elementsById[f.children[0]].parentId,local);
+  assert.equal(current.editor.elementsById[f.children[0]].props.content,"Local heading");
+  assert.equal(current.editor.elementsById[f.children[0]].styles.color,"#123456");
+  assert.equal(current.editor.elementsById[f.children[1]].component,undefined);
+  assert.equal(current.editor.elementsById[added].props.content,"Local note");
+  assert.equal(current.editor.elementsById[untouched].children.length,2);
+  assert.ok(current.editor.elementsById[untouched].children.some(id=>current.editor.elementsById[id].props.content==="New shared item"));
+  assert.doesNotThrow(()=>parseProject(current));
+  assert.deepEqual(compileProject(current).diagnostics.filter(d=>d.severity==="error"),[]);
+  f.store.resetComponentStructure(f.instance);
+  let nodes=useEditorStore.getState().elementsById;
+  assert.equal(nodes[local],undefined); assert.equal(nodes[added],undefined);
+  assert.equal(nodes[f.children[0]].props.content,"Local heading");
+  assert.equal(nodes[f.children[0]].parentId,f.instance);
+  assert.equal(nodes[f.instance].component!.overrides.includes("structure"),false);
+  assert.doesNotThrow(()=>parseProject(captureProject(f.project.id,f.project.name)));
+  f.store.undo(); nodes=useEditorStore.getState().elementsById;
+  assert.deepEqual(nodes[f.instance].children,order); assert.equal(nodes[added].props.content,"Local note");
+  f.store.redo(); assert.equal(useEditorStore.getState().elementsById[added],undefined);
+});
+test("local deletion and duplicate children retain independent identities across publishing and reload",()=>{
+  const f=fixture();
+  f.store.deleteElement(f.children[1]); f.store.duplicateElement(f.children[0]); const copy=useEditorStore.getState().selectedElementId!;
+  assert.equal(useEditorStore.getState().elementsById[copy].component,undefined);
+  f.store.updateElement(copy,{props:{content:"Independent duplicate"}});
+  f.store.saveComponent(f.source,"Card");
+  let saved=parseProject(captureProject(f.project.id,f.project.name));
+  assert.equal(saved.editor.elementsById[f.children[1]],undefined);
+  assert.equal(saved.editor.elementsById[copy].props.content,"Independent duplicate");
+  restoreProject(saved); f.store.saveComponent(f.source,"Card");
+  saved=parseProject(captureProject(f.project.id,f.project.name));
+  assert.equal(saved.editor.elementsById[f.children[1]],undefined);
+  assert.equal(saved.editor.elementsById[copy].props.content,"Independent duplicate");
+  f.store.toggleLock(f.children[0]); const locked=useEditorStore.getState().elementsById;
+  f.store.resetComponentStructure(f.instance); assert.equal(useEditorStore.getState().elementsById,locked);
+});
+test("publishing a local structure deliberately updates shared definitions and unmodified instances",()=>{
+  const f=fixture(); const added=f.store.addElement({...templates.text,props:{content:"Published addition"}},f.instance);
+  f.store.saveComponent(f.instance,"Card");
+  const nodes=useEditorStore.getState().elementsById;
+  assert.equal(nodes[f.instance].component!.overrides.includes("structure"),false);
+  assert.equal(nodes[added].component!.node,added);
+  assert.equal(nodes[f.source].children.length,3);
+  assert.doesNotThrow(()=>parseProject(captureProject(f.project.id,f.project.name)));
+});
+

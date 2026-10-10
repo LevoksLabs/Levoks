@@ -330,7 +330,12 @@ test(
       .collection<{ _id: string }>("levoks_deployments")
       .updateOne(
         { _id: drift._id },
-        { $set: { "job.snapshot.name": "Changed after queue" } },
+        {
+          $set: {
+            "job.snapshot": { ...driftProject, name: "Changed after queue" },
+          },
+          $unset: { "job.sourceArchived": "" },
+        },
       );
     await processDeploymentJob(store());
     const rejectedDrift = await store().require("alice", driftProject.id);

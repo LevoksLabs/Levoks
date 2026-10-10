@@ -3,9 +3,16 @@ import type { ElementNode } from "@/types";
 import type { EndpointConfig, SchemaField } from "@/types/backend";
 import { definitionFor } from "./elements/registry";
 import { buttonHref } from "./elements/native";
-import { fieldCondition } from "./form-conditions";
+import {
+  fieldCondition,
+  fieldConditions,
+  conditionRules,
+  conditionKind,
+  conditionInputId,
+} from "./form-conditions";
 import { selectionLimits } from "./elements/selection-limits";
 import { selectChoices } from "./elements/select-options";
+import {choiceGroupOwner, groupChoices} from "./elements/choice-group-values";
 
 const id = z
   .string()
@@ -92,8 +99,8 @@ export function isSubmitControl(element: ElementNode) {
       (element.type === "button" ? "submit" : "button")) === "submit"
   );
 }
-export function isFormInput(element: ElementNode, parent?: ElementNode) {
-  if (parent?.definitionId === "checkboxGroup") return false;
+export function isFormInput(element: ElementNode, parent?: ElementNode, nodes?: Record<string,ElementNode>) {
+  if ((nodes ? choiceGroupOwner(element,nodes) : parent)?.definitionId === "checkboxGroup") return false;
   return (
     element.definitionId === "checkboxGroup" ||
     element.type === "input" ||
@@ -109,10 +116,12 @@ export function compatibleFormField(
   element: ElementNode,
   field: { type: SchemaField["type"]; location: RequestMapping["location"] },
 ) {
-  if (String(element.props.inputType || element.props.type) === "file") return field.type === "object" && field.location === "body";
+  if (String(element.props.inputType || element.props.type) === "file")
+    return field.type === (element.props.multiple ? "array" : "object") && field.location === "body";
   const multiple =
     element.definitionId === "checkboxGroup" ||
-    definitionFor(element)?.tag === "select" && Boolean(element.props.multiple);
+    (definitionFor(element)?.tag === "select" &&
+      Boolean(element.props.multiple));
   return (
     field.type !== "object" &&
     (multiple
@@ -142,7 +151,7 @@ export function resolveContract(
       message,
     });
   const fields = endpointFields(config);
-  const nodes = Object.fromEntries(elements.map(node => [node.id, node]));
+  const nodes = Object.fromEntries(elements.map((node) => [node.id, node]));
   if (
     !connection.requestMappings &&
     config.requestHeaders?.some((field) => field.required)
@@ -172,20 +181,75 @@ export function resolveContract(
       const element = elements.find((el) => el.id === source.elementId);
       const condition = element && fieldCondition(element, nodes);
       if (condition) {
-        if (field.required || mapping.location !== "body") error(`Conditional field ${field.name} must map to an optional request body field. Enforce Required in its active backend branch.`);
-        const controllerMapping = connection.requestMappings?.find(item => item.source.kind === "element" && item.source.elementId === condition.sourceId && item.location === "body");
-        const controllerField = controllerMapping && fields.find(item => item.location === "body" && fieldIdentity(item) === controllerMapping.fieldId);
-        if (!controllerField || controllerField.type !== "boolean" || !controllerField.required) error(`Conditional field ${field.name} needs its controlling checkbox mapped to a required Boolean request body field.`);
+        if (field.required || mapping.location !== "body")
+          error(
+            `Conditional field ${field.name} must map to an optional request body field. Enforce Required in its active backend branch.`,
+          );
+        for (const rule of fieldConditions(element!, nodes).flatMap(
+          conditionRules,
+        )) {
+          const controller = nodes[rule.sourceId];
+          const controllerMapping =
+            controller &&
+            connection.requestMappings?.find(
+              (item) =>
+                item.source.kind === "element" &&
+                item.source.elementId === conditionInputId(controller, nodes) &&
+                item.location === "body",
+            );
+          const controllerField =
+            controllerMapping &&
+            fields.find(
+              (item) =>
+                item.location === "body" &&
+                fieldIdentity(item) === controllerMapping.fieldId,
+            );
+          const kind = controller && conditionKind(controller);
+          if (
+            !controllerField ||
+            controllerField.type !== kind ||
+            (kind === "boolean" &&
+              !fieldCondition(controller, nodes) &&
+              !controllerField.required)
+          )
+            error(
+              `Conditional field ${field.name} needs its controlling choice mapped to a compatible request body field; unconditional checkboxes must be required Boolean fields.`,
+            );
+        }
       }
       if (element?.definitionId === "checkboxGroup") {
-        const min = Math.max(field.required ? 1 : 0, selectionLimits(element.props).min);
-        if (min > 0 && (element.props.disabled || elements.filter(choice => choice.parentId === element.id && choice.definitionId === "checkbox" && !choice.props.disabled).length < min))
-          error(`Field ${field.name} needs an enabled checkbox group with at least ${min} enabled choice${min === 1 ? "" : "s"}.`);
+        const min = Math.max(
+          field.required ? 1 : 0,
+          selectionLimits(element.props).min,
+        );
+        if (
+          min > 0 &&
+          (element.props.disabled ||
+            groupChoices(element,Object.fromEntries(elements.map(n=>[n.id,n]))).filter(choice=>!choice.props.disabled).length < min)
+        )
+          error(
+            `Field ${field.name} needs an enabled checkbox group with at least ${min} enabled choice${min === 1 ? "" : "s"}.`,
+          );
       }
-      if (element && definitionFor(element)?.tag === "select" && element.props.multiple) {
-        const min = Math.max(field.required ? 1 : 0, selectionLimits(element.props).min);
-        if (min > 0 && (element.props.disabled || selectChoices(element.props).filter(choice => !choice.disabled && !choice.groupDisabled).length < min))
-          error(`Field ${field.name} needs an enabled multiple select with at least ${min} enabled choice${min === 1 ? "" : "s"}.`);
+      if (
+        element &&
+        definitionFor(element)?.tag === "select" &&
+        element.props.multiple
+      ) {
+        const min = Math.max(
+          field.required ? 1 : 0,
+          selectionLimits(element.props).min,
+        );
+        if (
+          min > 0 &&
+          (element.props.disabled ||
+            selectChoices(element.props).filter(
+              (choice) => !choice.disabled && !choice.groupDisabled,
+            ).length < min)
+        )
+          error(
+            `Field ${field.name} needs an enabled multiple select with at least ${min} enabled choice${min === 1 ? "" : "s"}.`,
+          );
       }
       if (element && !compatibleFormField(element, field))
         error(
@@ -193,7 +257,11 @@ export function resolveContract(
         );
       if (
         !element ||
-        !isFormInput(element, elements.find(node => node.id === element.parentId)) ||
+        !isFormInput(
+          element,
+          elements.find((node) => node.id === element.parentId),
+          Object.fromEntries(elements.map(node=>[node.id,node])),
+        ) ||
         formOwner(element, elements)?.id !== triggerId
       )
         error(

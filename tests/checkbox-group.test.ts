@@ -21,6 +21,7 @@ import {
 import { compatibleFormField } from "../src/lib/contracts";
 import { formValueRuntime } from "../src/lib/codegen/form-values";
 import { VALIDATION_RUNTIME } from "../src/lib/backend/validation";
+import { deepCloneSubtree } from "../src/lib/idGenerator";
 
 test("checkbox groups keep independent defaults, stable array mappings and snapshots through edits, history and copies", () => {
   const project = emptyProject();
@@ -188,9 +189,13 @@ test("checkbox groups keep independent defaults, stable array mappings and snaps
   );
   store.toggleLock(group);
   store.saveComponent(group, "Interests");
-  assert.throws(
-    () => editChoiceGroup(group, { type: "remove", id: disabled }),
-    /Detach/,
+  assert.doesNotThrow(() =>
+    editChoiceGroup(group, { type: "remove", id: disabled }),
+  );
+  assert.ok(
+    useEditorStore
+      .getState()
+      .elementsById[group].component!.overrides.includes("structure"),
   );
   store.detachComponent(group);
   const corrupt = structuredClone(saved);
@@ -277,4 +282,60 @@ test("shared checkbox runtime excludes disabled choices, omits empty optional gr
     assert.equal(valid(rule, invalid), false);
   assert.equal(valid(rule, ["web", "app"]), true);
   assert.equal(valid({ type: "required" }, []), false);
+});
+
+test("wrapped checkbox choices and descriptive content remain one array field across edits and conditions", () => {
+  const project = emptyProject();
+  restoreProject(project);
+  const store = useEditorStore.getState(),
+    form = store.addElement(templates.form);
+  const group = store.addElement(elementTemplate("checkboxGroup"), form);
+  editChoiceGroup(group, { type: "group", name: "interests", required: true });
+  const first = editChoiceGroup(group, {
+    type: "add",
+    label: "First",
+    value: "first",
+  })!;
+  const second = editChoiceGroup(group, {
+    type: "add",
+    label: "Second",
+    value: "second",
+  })!;
+  const wrapper = store.addElement(
+    {
+      ...templates.container,
+      layout: { position: "static" },
+      styles: { height: "auto", width: "100%" },
+    },
+    group,
+  );
+  assert.equal(store.moveElement(first, wrapper, 0), null);
+  store.addElement(
+    { ...templates.text, props: { content: "Details for this choice" } },
+    wrapper,
+  );
+  editChoiceGroup(group, { type: "move", id: first, offset: -1 });
+  editChoiceGroup(group, { type: "default", id: second, checked: true });
+  const fields = submissionFields(form, useEditorStore.getState().elementsById);
+  assert.deepEqual(fields.problems, []);
+  assert.equal(
+    fields.fields.filter((f) => f.field.name === "interests").length,
+    1,
+  );
+  assert.equal(
+    fields.fields.find((f) => f.field.name === "interests")!.choices,
+    "first\nsecond",
+  );
+  const nodes = useEditorStore.getState().elementsById;
+  const copy = deepCloneSubtree(nodes[group], nodes);
+  const copiedChoices = Object.values(copy.allCloned).filter(node => node.definitionId === "checkbox");
+  assert.equal(copiedChoices.length, 2);
+  assert.ok(copiedChoices.every(node => node.props.name === copy.allCloned[copy.clonedRootId].props.name));
+  assert.notEqual(copy.allCloned[copy.clonedRootId].props.name, "interests");
+  createSubmissionDestination(form, "Wrapped choices");
+  const saved = parseProject(captureProject(project.id, project.name));
+  assert.deepEqual(
+    compileProject(saved).diagnostics.filter((d) => d.severity === "error"),
+    [],
+  );
 });

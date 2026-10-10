@@ -31,6 +31,15 @@ const bodySchema = z.discriminatedUnion("action", [
     operationId: z.uuid(),
   }),
   z.object({
+    action: z.literal("replay"),
+    ownerId: z.string().min(1),
+    projectId: deploymentProjectId,
+    sourceOperationId: z.uuid(),
+    version: z.number().int().positive(),
+    sequence: z.number().int().nonnegative(),
+    operationId: z.uuid(),
+  }),
+  z.object({
     action: z.enum(["cancel", "refresh"]),
     ownerId: z.string().min(1),
     projectId: deploymentProjectId,
@@ -93,9 +102,18 @@ export async function POST(request: Request) {
               b.sequence,
               b.operationId,
             )
-          : b.action === "cancel"
-            ? await store.cancel(owner, b.projectId, b.operationId)
-            : await store.resume(owner, b.projectId, b.operationId);
+          : b.action === "replay"
+            ? await store.replay(
+                owner,
+                b.projectId,
+                b.sourceOperationId,
+                b.version,
+                b.sequence,
+                b.operationId,
+              )
+            : b.action === "cancel"
+              ? await store.cancel(owner, b.projectId, b.operationId)
+              : await store.resume(owner, b.projectId, b.operationId);
     return NextResponse.json(deploymentMetadata(c), {
       headers: { "Cache-Control": "no-store" },
     });

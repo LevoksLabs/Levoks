@@ -13,7 +13,7 @@ import TabsWidget from "./design/TabsWidget";
 import { widgetNumber, choiceCSS } from "@/lib/widgets";
 import { orderedStyles, semanticStyleParts } from "@/lib/property-values";
 import { embedAttributes } from "@/lib/elements/embed";
-import { safeElementUrl } from "@/lib/elements/native";
+import { safeElementUrl, nativeFieldStyles } from "@/lib/elements/native";
 import { ICON_PATHS } from "@/lib/icon-paths";
 import VectorShape from "./design/VectorShape";
 import { useDroppable } from "@dnd-kit/core";
@@ -92,7 +92,8 @@ const VisibleElement: React.FC<ElementRendererProps & { element: ElementNode }> 
     const mergedStyles: React.CSSProperties = {
         ...(["native", "button", "input"].includes(element.type) ? semanticStyleParts(element.styles).box : orderedStyles(element.styles) as React.CSSProperties),
         ...positionStyles,
-        ...(!isRoot && resolvedPosition === "static" ? { maxWidth: "100%", minWidth: 0, flexShrink: 0 } : {}),
+        ...nativeFieldStyles(element),
+        ...(!isRoot && (resolvedPosition === "static" || resolvedPosition === "relative") ? { maxWidth: "100%", minWidth: 0, flexShrink: 0 } : {}),
         ...(isContainer && element.children.length && !element.styles.height ? { height: "auto" } : {}),
         ...(element.type === "shape" && element.props.shapeType && element.props.shapeType !== "rectangle" ? { backgroundColor: "transparent" } : {}),
         fontFamily: fontFamily(element.styles.fontFamily),

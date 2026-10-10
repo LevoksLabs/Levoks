@@ -269,7 +269,7 @@ for (const [id, name, type] of [
       required: false,
       disabled: false,
       ...(!["checkbox", "radio", "file", "range", "color"].includes(type) ? { label: "", helperText: "", error: "", readOnly: false, pattern: "" } : {}),
-      ...(["text", "email", "url", "search", "tel", "password"].includes(type) ? {minLength:"",maxLength:""} : {}),
+      ...(["text", "email", "url", "search", "tel", "password"].includes(type) ? {minLength:"",maxLength:"",formatMask:""} : {}),
       ...(type === "checkbox" || type === "radio"
         ? {
             label: type === "radio" ? "Option" : name,
@@ -278,7 +278,7 @@ for (const [id, name, type] of [
             ...(id === "switch" ? { role: "switch" } : {}),
           }
         : type === "file"
-          ? { accept: "", multiple: false, maxFileKB: 256, label: "", helperText: "", error: "" }
+          ? { accept: "", multiple: false, maxFileKB: 256, minFiles: 0, maxFiles: 5, maxTotalKB: 1024, label: "", helperText: "", error: "" }
           : {
               placeholder: name,
               value: type === "color" ? "#2563eb" : "",
@@ -583,12 +583,14 @@ for (const [id, name, heading, copy] of [
     {
       ...legacyTemplates.title,
       props: { content: heading, level: 2 },
-      layout: { position: "relative", w: 580, h: 50 },
+      layout: { position: "static", w: 580, h: 50 },
+      styles: {...legacyTemplates.title.styles,width:"100%",height:"auto"},
     },
     {
       ...legacyTemplates.paragraph,
       props: { content: copy },
-      layout: { position: "relative", w: 580, h: 80 },
+      layout: { position: "static", w: 580, h: 80 },
+      styles: {...legacyTemplates.paragraph.styles,width:"100%",height:"auto"},
     },
   ];
 }

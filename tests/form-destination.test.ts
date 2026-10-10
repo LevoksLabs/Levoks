@@ -66,9 +66,14 @@ test("working contact template creates ordinary validated blocks and wires, all 
   )!;
   useEditorStore
     .getState()
-    .updateElement(input.id, { props: { inputType: "file", multiple: true } });
+    .updateElement(input.id, {
+      props: { inputType: "file", multiple: true, maxFiles: 11 },
+    });
   const before = captureProject(initial.id, initial.name);
-  assert.throws(() => createSubmissionDestination(id, "Uploads"), /one file/);
+  assert.throws(
+    () => createSubmissionDestination(id, "Uploads"),
+    /maximum from 1 to 5 files/,
+  );
   assert.deepEqual(
     captureProject(initial.id, initial.name).backend,
     before.backend,

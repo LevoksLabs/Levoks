@@ -130,15 +130,15 @@ test("radio-group edits preserve defaults and child identity with bounded valida
   );
   store.toggleLock(group);
   store.saveComponent(group, "Attendance choices");
-  assert.throws(
+  assert.doesNotThrow(
     () => editRadioGroup(group, { type: "add", label: "New", value: "new" }),
-    /Detach/,
   );
+  assert.ok(useEditorStore.getState().elementsById[group].component!.overrides.includes("structure"));
   store.detachComponent(group);
   const mixed = store.addElement(elementTemplate("textInput"), group);
   assert.throws(
     () => editRadioGroup(group, { type: "add", label: "New", value: "new" }),
-    /mixed/,
+    /other controls/,
   );
   store.deleteElement(mixed);
   assert.doesNotThrow(() =>

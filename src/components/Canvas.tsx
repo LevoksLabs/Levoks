@@ -30,6 +30,7 @@ import { useEditorUIStore } from "@/store/editorUIStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { useCanvasNavigation } from "./useCanvasNavigation";
 import { canvasSize } from "@/lib/design";
+import { localDelta, childPosition } from "@/lib/canvas-geometry";
 import ResponsiveControls from "./design/ResponsiveControls";
 
 const MIN_ZOOM = 10;
@@ -53,7 +54,7 @@ type DragElement = {
 
 // Measure in the parent's padding box, which is the origin for absolute children.
 // Stored layout dimensions can differ from CSS widths, auto heights and breakpoints.
-function dragElement(element: ElementNode, scale: number): DragElement {
+function dragElement(element: ElementNode): DragElement {
   const result: DragElement = {
     id: element.id, x: element.layout.x, y: element.layout.y,
     w: element.layout.w, h: element.layout.h,
@@ -61,25 +62,23 @@ function dragElement(element: ElementNode, scale: number): DragElement {
   const parent = element.parentId
     ? useEditorStore.getState().getElement(element.parentId)
     : undefined;
-  if (parent?.type !== "container") return result;
+  if (!parent) return result;
   const node = document.querySelector<HTMLElement>(`.canvas-page [data-element-id="${element.id}"]`);
   const parentNode = document.querySelector<HTMLElement>(`.canvas-page [data-element-id="${parent.id}"]`);
   if (!node || !parentNode) return result;
-  const rect = node.getBoundingClientRect();
-  const parentRect = parentNode.getBoundingClientRect();
   const styles = getComputedStyle(node);
   const marginX = parseFloat(styles.marginLeft) || 0;
   const marginY = parseFloat(styles.marginTop) || 0;
-  result.w = rect.width / scale;
-  result.h = rect.height / scale;
+  result.w = node.offsetWidth;
+  result.h = node.offsetHeight;
   result.maxX = Math.max(0, parentNode.clientWidth - result.w - marginX - (parseFloat(styles.marginRight) || 0));
   result.maxY = Math.max(0, parentNode.clientHeight - result.h - marginY - (parseFloat(styles.marginBottom) || 0));
   if (styles.position !== "absolute") {
-    result.x = (rect.left - parentRect.left) / scale - parentNode.clientLeft + parentNode.scrollLeft - marginX;
-    result.y = (rect.top - parentRect.top) / scale - parentNode.clientTop + parentNode.scrollTop - marginY;
+    const position = childPosition(node, parentNode);
+    result.x = position.x; result.y = position.y;
     result.position = "absolute";
     if (!parent.styles.height || parent.styles.height === "auto") {
-      result.autoHeightParent = { id: parent.id, minHeight: parentRect.height / scale };
+      result.autoHeightParent = { id: parent.id, minHeight: parentNode.offsetHeight };
     }
   }
   return result;
@@ -308,21 +307,6 @@ const Canvas: React.FC = () => {
     fitCanvasToView();
   }, [workspaceReady, projectId, canvasWidth, canvasHeight, fitCanvasToView]);
 
-  useEffect(() => {
-    const workspace = workspaceRef.current;
-    if (!workspace || !workspaceReady) return;
-    let frame = 0;
-    const observer = new ResizeObserver(() => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        setWorkspaceWidth(workspace.clientWidth);
-        fitCanvasToView();
-      });
-    });
-    observer.observe(workspace);
-    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
-  }, [workspaceReady, fitCanvasToView]);
-
   // Drag state for moving elements
   const dragState = useRef<{
     dragging: boolean;
@@ -346,6 +330,20 @@ const Canvas: React.FC = () => {
     moved?: boolean;
   } | null>(null);
   const handlePointerUpRef = useRef<((e: PointerEvent) => void) | null>(null);
+  useEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace || !workspaceReady) return;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        setWorkspaceWidth(workspace.clientWidth);
+        if (!dragState.current) fitCanvasToView();
+      });
+    });
+    observer.observe(workspace);
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [workspaceReady, fitCanvasToView]);
   const rafRef = useRef<number | null>(null);
   const latestPointRef = useRef<{
     x: number;
@@ -483,6 +481,13 @@ const Canvas: React.FC = () => {
     const scale = scaleRef.current;
     let dx = (latest.x - ds.startX) / scale;
     let dy = (latest.y - ds.startY) / scale;
+    const editedNode = document.querySelector<HTMLElement>(`.canvas-page [data-element-id="${ds.elementId}"]`);
+    const coordinateNode = ds.resizing ? editedNode : editedNode?.parentElement;
+    if (coordinateNode) {
+      const delta = localDelta(coordinateNode, latest.x-ds.startX, latest.y-ds.startY);
+      dx = delta.x; dy = delta.y;
+    }
+
     if (latest.shiftKey && ds.dragging) {
       if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
       else dx = 0;
@@ -513,6 +518,15 @@ const Canvas: React.FC = () => {
         } else updateElementPosition(element.id, x, y);
       };
       if (ds.group && ds.group.length > 1) {
+        const parents = ds.group.map(el=>useEditorStore.getState().elementsById[el.id]?.parentId);
+        if (new Set(parents).size > 1) {
+          ds.group.forEach(el=>{
+            const node = document.querySelector<HTMLElement>(`.canvas-page [data-element-id="${el.id}"]`);
+            const delta = node?.parentElement ? localDelta(node.parentElement,latest.x-ds.startX,latest.y-ds.startY) : {x:dx,y:dy};
+            positionElement(el,Math.max(0,Math.min(el.maxX ?? Infinity,el.x+delta.x)),Math.max(0,Math.min(el.maxY ?? Infinity,el.y+delta.y)));
+          });
+          return;
+        }
         const minX = Math.min(...ds.group.map((el) => el.x)),
           minY = Math.min(...ds.group.map((el) => el.y));
         const maxDx = Math.min(...ds.group.map((el) => el.maxX === undefined ? Infinity : el.maxX - el.x));
@@ -528,7 +542,7 @@ const Canvas: React.FC = () => {
         const parentEl = useEditorStore
           .getState()
           .getElement(ds.parentContainerId);
-        if (!parentEl || parentEl.type !== "container") {
+        if (!parentEl) {
           dragState.current = { ...ds, parentContainerId: null };
           return;
         }
@@ -570,6 +584,7 @@ const Canvas: React.FC = () => {
             guideY = snap.guideY.map((y) => y + offsetY);
           }
         }
+        if (coordinateNode && getComputedStyle(coordinateNode).transform !== "none") { guideX = []; guideY = []; }
         const x = Math.min(maxX, Math.max(0, snap.x));
         const y = Math.min(maxY, Math.max(0, snap.y));
         setSnapGuides({ x: x === snap.x ? guideX : [], y: y === snap.y ? guideY : [] });
@@ -610,6 +625,15 @@ const Canvas: React.FC = () => {
         newY = ds.startElY + (ds.startElH - newH);
       }
 
+      if (editedNode) {
+        const transform = getComputedStyle(editedNode).transform;
+        if (transform !== "none") {
+          const matrix = new DOMMatrix(transform);
+          const halfW = (newW-ds.startElW)/2, halfH = (newH-ds.startElH)/2;
+          const shift = new DOMPoint(newX-ds.startElX+halfW,newY-ds.startElY+halfH).matrixTransform(new DOMMatrix([matrix.a,matrix.b,matrix.c,matrix.d,0,0]));
+          newX = ds.startElX+shift.x-halfW; newY = ds.startElY+shift.y-halfH;
+        }
+      }
       updateElementPosition(ds.elementId, newX, newY);
       updateElementSize(ds.elementId, newW, newH);
       setSnapGuides({ x: [], y: [] });
@@ -731,8 +755,6 @@ const Canvas: React.FC = () => {
       if (ds.dragging) {
         const state = useEditorStore.getState();
         const draggedEl = state.getElement(ds.elementId);
-        const scale = scaleRef.current;
-
         if (draggedEl) {
           // Moving a child edits its position, never its owning tree. Use Layers
           // for explicit reparenting, including moving a child back to the page.
@@ -784,21 +806,9 @@ const Canvas: React.FC = () => {
                   `[data-element-id="${ds.elementId}"]`,
                 ) as HTMLElement | null;
                 if (containerNode && draggedNode) {
-                  const containerRect = containerNode.getBoundingClientRect();
-                  const draggedRect = draggedNode.getBoundingClientRect();
-                  const maxX = Math.max(
-                    0,
-                    containerNode.clientWidth - draggedRect.width / scale,
-                  );
-                  const maxY = Math.max(
-                    0,
-                    containerNode.clientHeight - draggedRect.height / scale,
-                  );
-                  const styles = getComputedStyle(draggedNode);
-                  const relX = (draggedRect.left - containerRect.left) / scale - containerNode.clientLeft + containerNode.scrollLeft - (parseFloat(styles.marginLeft) || 0);
-                  const relY = (draggedRect.top - containerRect.top) / scale - containerNode.clientTop + containerNode.scrollTop - (parseFloat(styles.marginTop) || 0);
-                  nextX = Math.min(maxX, Math.max(0, relX));
-                  nextY = Math.min(maxY, Math.max(0, relY));
+                  const position = childPosition(draggedNode, containerNode);
+                  nextX = Math.min(Math.max(0, containerNode.clientWidth-draggedNode.offsetWidth), Math.max(0,position.x));
+                  nextY = Math.min(Math.max(0, containerNode.clientHeight-draggedNode.offsetHeight), Math.max(0,position.y));
                 }
 
                 const issue = moveElement(
@@ -1096,8 +1106,8 @@ const Canvas: React.FC = () => {
           startY: e.clientY,
           startElX: el.layout.x,
           startElY: el.layout.y,
-          startElW: el.layout.w,
-          startElH: el.layout.h,
+          startElW: elementWrapper.offsetWidth,
+          startElH: elementWrapper.offsetHeight,
           handle,
           parentContainerId: null,
           pointerId: e.pointerId,
@@ -1127,6 +1137,8 @@ const Canvas: React.FC = () => {
         if (!useEditorStore.getState().selectedElementIds.includes(elId))
           selectElement(elId);
         const state = useEditorStore.getState();
+        const wrapper = document.querySelector<HTMLElement>(`.canvas-page [data-element-id="${elId}"]`);
+        if (el.parentId && state.getBreadcrumbPath(elId).some(node=>node.type === "form") && wrapper && getComputedStyle(wrapper).position === "static") return;
         const group = state.selectedElementIds
           .filter((id) => {
             let p = state.elementsById[id]?.parentId;
@@ -1136,14 +1148,13 @@ const Canvas: React.FC = () => {
             }
             return !state.elementsById[id]?.layout.locked;
           })
-          .map((id) => dragElement(state.getElement(id)!, scaleRef.current));
+          .map((id) => dragElement(state.getElement(id)!));
         state.beginInteraction();
         const parentEl = el.parentId
           ? state.getElement(el.parentId)
           : undefined;
-        const parentContainerId =
-          parentEl?.type === "container" ? el.parentId : null;
-        const moving = group.find((item) => item.id === elId) ?? dragElement(el, scaleRef.current);
+        const parentContainerId = parentEl ? el.parentId : null;
+        const moving = group.find((item) => item.id === elId) ?? dragElement(el);
 
         dragState.current = {
           dragging: true,

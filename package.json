@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "test:point4-export": "tsx scripts/verify-point4-export.ts",
     "worker:deployment": "tsx scripts/deployment-worker.ts",
     "worker:github": "tsx scripts/github-worker.ts",
     "dev": "node scripts/local-dev.mjs",

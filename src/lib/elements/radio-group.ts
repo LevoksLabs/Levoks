@@ -38,10 +38,6 @@ export function editChoiceGroup(groupId: string, edit: ChoiceEdit) {
     )
   )
     throw new Error("Unlock this group and its choices before editing them.");
-  if ([group, ...choices].some((node) => node.component))
-    throw new Error(
-      "Detach the component instance before editing its choices.",
-    );
   const name =
     edit.type === "group"
       ? edit.name
@@ -193,11 +189,19 @@ export function editChoiceGroup(groupId: string, edit: ChoiceEdit) {
         },
       });
     else if (edit.type === "move") {
-      const index = group.children.indexOf(edit.id),
+      const index = choices.findIndex(choice=>choice.id === edit.id),
         next = index + edit.offset;
       if (next < 0 || next >= choices.length)
         throw new Error("Choose a position inside this group.");
-      store.reorderElements(groupId, index, next);
+      const source = store.elementsById[edit.id], target = choices[next];
+      if (source.parentId === target.parentId) {
+        const siblings = store.elementsById[source.parentId!].children;
+        store.reorderElements(source.parentId!,siblings.indexOf(source.id),siblings.indexOf(target.id));
+      } else {
+        const siblings = store.elementsById[target.parentId!].children;
+        const issue = store.moveElement(source.id,target.parentId,siblings.indexOf(target.id)+(edit.offset>0 ? 1 : 0));
+        if (issue) throw new Error(issue);
+      }
     } else if (edit.type === "remove") {
       for (const wire of checkbox ? [] : wires)
         useRoutingStore.getState().updateConnection(wire.id, {

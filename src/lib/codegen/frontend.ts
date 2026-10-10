@@ -1,5 +1,5 @@
 import { ElementNode, Page, DesignToken, DesignAsset } from "@/types";
-import { nativeMarkup, nativeTree } from "@/lib/elements/native";
+import { nativeMarkup, nativeTree, nativeFieldStyles } from "@/lib/elements/native";
 import { customIdentifier, type CustomDefinition } from "@/lib/elements/custom";
 import { FlowGraph, Flow, ApiCallStep, NavigateStep } from "@/types/ir";
 import { ElementWiring, EndpointTarget, PageTarget } from "./connectionResolver";
@@ -189,7 +189,7 @@ function elementStyles(el: ElementNode, isRoot: boolean): Record<string, string 
             baseStyles.top = `${el.layout.y}px`;
         }
         baseStyles.width = el.styles?.width || `${el.layout.w}px`;
-        if (baseStyles.position === "static") { baseStyles.maxWidth = "100%"; baseStyles.minWidth = "0"; baseStyles.flexShrink = "0"; }
+        if (["static", "relative"].includes(String(baseStyles.position))) { baseStyles.maxWidth = "100%"; baseStyles.minWidth = "0"; baseStyles.flexShrink = "0"; }
         baseStyles.minHeight = `${el.layout.h}px`;
     }
 
@@ -237,7 +237,7 @@ function elementStyles(el: ElementNode, isRoot: boolean): Record<string, string 
     if (!["title", "text", "paragraph"].includes(el.type)) baseStyles.height = `${el.layout.h}px`;
     if (["form", "section", "container", "stack", "columns"].includes(el.type) && el.children.length) baseStyles.height = "auto";
     if (el.styles.height && !el.styles.minHeight) delete baseStyles.minHeight;
-    return { ...baseStyles, ...(el.type === "image" ? { objectFit: String(el.props.objectFit || "cover"), objectPosition: String(el.props.objectPosition || "50% 50%") } : {}), ...(el.type === "button" && el.props.hoverBg ? { "--button-hover": String(el.props.hoverBg) } : {}), ...(el.styles || {}), ...(!el.layout.visible ? { display: "none" } : {}), opacity: el.layout.opacity, ...(el.layout.rotation ? { transform: `rotate(${el.layout.rotation}deg)` } : {}) };
+    return { ...baseStyles, ...(el.type === "image" ? { objectFit: String(el.props.objectFit || "cover"), objectPosition: String(el.props.objectPosition || "50% 50%") } : {}), ...(el.type === "button" && el.props.hoverBg ? { "--button-hover": String(el.props.hoverBg) } : {}), ...(el.styles || {}), ...nativeFieldStyles(el), ...(!el.layout.visible ? { display: "none" } : {}), opacity: el.layout.opacity, ...(el.layout.rotation ? { transform: `rotate(${el.layout.rotation}deg)` } : {}) };
 }
 
 const renderElementBody = (
@@ -300,7 +300,7 @@ const renderElementBody = (
     }).join("");
     const clsAttr = mode === "jsx" ? "className" : "class";
 
-    if (["native", "button", "input"].includes(el.type)) { cssOut.add(choiceCSS); const native = nativeMarkup(nativeTree(el, conditionDefault(el, elementsById)), mode, children, ` ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}`); return mode === "jsx" && recordFields ? native.replace(`id="${escapeMarkup(el.id)}"`, `id={record._id + ${JSON.stringify("-" + el.id)}}`) : native; }
+    if (["native", "button", "input"].includes(el.type)) { cssOut.add(choiceCSS); const native = nativeMarkup(nativeTree(el, conditionDefault(el, elementsById),elementsById), mode, children, ` ${clsAttr}="${className}"${wiringAttr(el, flowMap, mode)}`); return mode === "jsx" && recordFields ? native.replace(`id="${escapeMarkup(el.id)}"`, `id={record._id + ${JSON.stringify("-" + el.id)}}`) : native; }
     if (el.type === "custom") {
         if (mode === "html") return `<div ${clsAttr}="${className}">${escapeMarkup(el.label)} — custom source runs in the exported application.</div>`;
         return `<div className="${className}"><${customIdentifier(el.definitionId!)} {...${JSON.stringify(el.props)}}${wiringAttr(el, flowMap, mode)}>${children}</${customIdentifier(el.definitionId!)}></div>`;

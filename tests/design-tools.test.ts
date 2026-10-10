@@ -378,3 +378,20 @@ test("asset references persist independently of placed images and freeze safely 
   invalid.editor.assets!.logo.source = "data:image/svg+xml;base64,PHN2Zz4=";
   assert.throws(() => parseProject(invalid));
 });
+
+test("ungrouping a rotated nested group preserves child center and angle at every saved breakpoint",()=>{
+ const project=emptyProject();restoreProject(project);const store=useEditorStore.getState();
+ const a=store.addElement({...templates.container,layout:{x:20,y:20,w:100,h:80,rotation:15}});
+ const b=store.addElement({...templates.container,layout:{x:200,y:30,w:100,h:80}});
+ store.selectElements([a,b]);store.groupSelection();const group=useEditorStore.getState().selectedElementId!;
+ store.updateElement(group,{layout:{...useEditorStore.getState().elementsById[group].layout,rotation:90},responsive:{tablet:{layout:{rotation:45}},mobile:{layout:{rotation:-30}}}});
+ const before=useEditorStore.getState();store.ungroupSelection();const after=useEditorStore.getState();
+ for (const bp of ['base','tablet','mobile'] as const) for (const id of [a,b]) {
+  const g=resolveElement(before.elementsById[group],bp).layout,c=resolveElement(before.elementsById[id],bp).layout,n=resolveElement(after.elementsById[id],bp).layout;
+  const angle=g.rotation*Math.PI/180,dx=c.x+c.w/2-g.w/2,dy=c.y+c.h/2-g.h/2;
+  assert.ok(Math.abs(n.x+n.w/2-(g.x+g.w/2+dx*Math.cos(angle)-dy*Math.sin(angle)))<1e-6);
+  assert.ok(Math.abs(n.y+n.h/2-(g.y+g.h/2+dx*Math.sin(angle)+dy*Math.cos(angle)))<1e-6);
+  assert.equal(n.rotation,c.rotation+g.rotation);
+ }
+ assert.doesNotThrow(()=>parseProject(captureProject(project.id,project.name)));
+});

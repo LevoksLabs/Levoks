@@ -37,6 +37,7 @@ export default function DeploymentPanel({
   const [connection, setConnection] = useState<DeploymentMetadata | null>(null);
   const [workerOnline, setWorkerOnline] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [observedAt, setObservedAt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -51,6 +52,7 @@ export default function DeploymentPanel({
   const operation = useRef(false);
   const pending = useRef<unknown>(null);
   const [retryQueue, setRetryQueue] = useState(false);
+  const [pendingSource, setPendingSource] = useState<string>();
   const url = `/api/deploy?projectId=${encodeURIComponent(projectId)}`;
 
   async function refresh(signal?: AbortSignal) {
@@ -58,6 +60,7 @@ export default function DeploymentPanel({
     const data = await request(url, undefined, signal);
     if (!alive.current || revision !== epoch.current) return;
     setConnection(data.connection);
+    setObservedAt(Date.now());
     if (
       pending.current &&
       data.connection?.history.some(
@@ -68,6 +71,7 @@ export default function DeploymentPanel({
     ) {
       pending.current = null;
       setRetryQueue(false);
+      setPendingSource(undefined);
     }
     setWorkerOnline(data.workerOnline);
     setLoaded(true);
@@ -279,7 +283,13 @@ export default function DeploymentPanel({
               ))}
               <button
                 className="primary"
-                disabled={busy || blocked || connection.active || !validOrigins}
+                disabled={
+                  busy ||
+                  blocked ||
+                  connection.active ||
+                  !validOrigins ||
+                  !!pendingSource
+                }
                 onClick={() =>
                   void run(async () => {
                     if (!pending.current)
@@ -302,6 +312,7 @@ export default function DeploymentPanel({
                     setConnection(result);
                     pending.current = null;
                     setRetryQueue(false);
+                    setPendingSource(undefined);
                     setNotice(
                       "Snapshot queued. The worker will submit a frontend preview.",
                     );
@@ -361,6 +372,11 @@ export default function DeploymentPanel({
                 </div>
               )}
               <h3>Release history</h3>
+              <p>
+                Source archives last up to 30 days within the latest 30
+                releases. Requeuing uses saved source and API addresses to build
+                a new preview. Backend data and live traffic are unchanged.
+              </p>
               {!connection.history.length ? (
                 <p>
                   No releases yet. Save your API addresses, then queue a
@@ -380,6 +396,103 @@ export default function DeploymentPanel({
                         </time>
                       </div>
                       <p>{release.message}</p>
+                      {release.sourceOperationId && (
+                        <small>Built from archived release source.</small>
+                      )}
+                      {release.archiveExpiresAt &&
+                        Date.parse(release.archiveExpiresAt) > observedAt && (
+                          <>
+                            <small>
+                              Source available until{" "}
+                              {new Date(
+                                release.archiveExpiresAt,
+                              ).toLocaleDateString()}
+                            </small>
+                            <div className="deployment-actions">
+                              <button
+                                disabled={busy}
+                                aria-label={`Download source for release ${release.sequence}`}
+                                onClick={() =>
+                                  void run(async () => {
+                                    const response = await fetch(
+                                      `/api/deploy/archive?projectId=${encodeURIComponent(projectId)}&operationId=${encodeURIComponent(release.operationId)}`,
+                                      { cache: "no-store" },
+                                    );
+                                    if (!response.ok) {
+                                      const data = await response.json();
+                                      throw new Error(
+                                        data.error ||
+                                          "Source is unavailable. Refresh release history.",
+                                      );
+                                    }
+                                    const blob = await response.blob();
+                                    if (!alive.current) return;
+                                    const download = URL.createObjectURL(blob);
+                                    const anchor = document.createElement("a");
+                                    anchor.href = download;
+                                    anchor.download = `levoks-release-${release.sequence}.zip`;
+                                    document.body.appendChild(anchor);
+                                    anchor.click();
+                                    anchor.remove();
+                                    setTimeout(
+                                      () => URL.revokeObjectURL(download),
+                                      1000,
+                                    );
+                                    setNotice(
+                                      `Source for release ${release.sequence} downloaded.`,
+                                    );
+                                  })
+                                }
+                              >
+                                Download source
+                              </button>
+                              {release.state === "ready" && (
+                                <button
+                                  aria-label={`${pendingSource === release.operationId ? "Retry archived preview for" : "Requeue source from"} release ${release.sequence}`}
+                                  disabled={
+                                    busy ||
+                                    connection.active ||
+                                    (retryQueue &&
+                                      pendingSource !== release.operationId)
+                                  }
+                                  onClick={() =>
+                                    void run(async () => {
+                                      setPendingSource(release.operationId);
+                                      if (!pending.current)
+                                        pending.current = {
+                                          action: "replay",
+                                          ownerId,
+                                          projectId,
+                                          sourceOperationId:
+                                            release.operationId,
+                                          version: connection.version,
+                                          sequence: connection.sequence,
+                                          operationId: crypto.randomUUID(),
+                                        };
+                                      setRetryQueue(true);
+                                      const result = await request(
+                                        "/api/deploy",
+                                        pending.current,
+                                      );
+                                      if (!alive.current) return;
+                                      setConnection(result);
+                                      pending.current = null;
+                                      setRetryQueue(false);
+                                      setPendingSource(undefined);
+                                      setNotice(
+                                        "Archived source queued as a new frontend preview. Saved API addresses were reused.",
+                                      );
+                                    })
+                                  }
+                                >
+                                  {pendingSource === release.operationId
+                                    ? "Retry archived preview"
+                                    : "Requeue archived preview"}
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
                       {release.state === "ready" &&
                         release.url &&
                         /^[A-Za-z0-9][A-Za-z0-9.-]*\.vercel\.app$/.test(

@@ -31,7 +31,7 @@ async function drag(
   await page.mouse.up();
 }
 
-test("native global layers keep one owning tree and linked children explain rejected moves through save/preview/export", async ({
+test("native global layers keep one owning tree and component structure overrides persist through save/preview/export", async ({
   page,
 }) => {
   test.setTimeout(120000);
@@ -132,19 +132,18 @@ test("native global layers keep one owning tree and linked children explain reje
     .getByRole("button", { name: "Unlock Global B", exact: true })
     .click();
   await drag(page, row("Linked note"), row("Page group"));
-  await expect(page.locator(".layers-panel").getByRole("alert")).toContainText(
-    "Detach the component",
-  );
+  await expect(row("Linked note")).toHaveAttribute("data-parent-id", group);
+  await page.getByRole("button", {name:"Undo",exact:true}).click();
   await expect(row("Linked note")).toHaveAttribute("data-parent-id", card);
   await drag(page, row("Page group"), row("Linked card"));
-  await expect(page.locator(".layers-panel").getByRole("alert")).toContainText(
-    "Detach the component",
-  );
-  await expect(row("Page group")).toHaveAttribute("data-parent-id", "");
+  await expect(row("Page group")).toHaveAttribute("data-parent-id", card);
   await row("Linked card").click();
-  await page
-    .getByRole("button", { name: "Detach instance", exact: true })
-    .click();
+  await page.getByRole("button", {name:"Restore shared structure",exact:true}).click();
+  await expect(row("Page group")).toHaveCount(0);
+  await page.getByRole("button", {name:"Undo",exact:true}).click();
+  await expect(row("Page group")).toHaveAttribute("data-parent-id", card);
+  await page.getByRole("button", {name:"Undo",exact:true}).click();
+  await expect(row("Page group")).toHaveAttribute("data-parent-id", "");
   await drag(page, row("Linked note"), row("Page group"));
   await expect(row("Linked note")).toHaveAttribute("data-parent-id", group);
   await expect(page.locator(".layers-panel").getByRole("alert")).toHaveCount(0);
@@ -186,6 +185,7 @@ test("native global layers keep one owning tree and linked children explain reje
   expect(saved.editor.elementsById[note].parentId).toBe(b);
   expect(saved.editor.elementsById[child].parentId).toBe(group);
   expect(saved.editor.elementsById[child].component).toBeUndefined();
+  expect(saved.editor.elementsById[card].component!.overrides).toContain("structure");
   const compiled = compileProject(saved);
   expect(compiled.diagnostics.filter((d) => d.severity === "error")).toEqual(
     [],

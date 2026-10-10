@@ -84,7 +84,7 @@ async function proxy(request, context) {
     let body;
     if (!['GET', 'HEAD'].includes(method) && request.body) {
       const reader = request.body.getReader(), chunks = []; let total = 0;
-      try {while (true) {const {done, value} = await reader.read(); if (done) break; total += value.length; if (total > 1048576) {await reader.cancel(); return Response.json({error: 'Request exceeds 1 MB'}, {status: 413});} chunks.push(value);}} finally {reader.releaseLock();}
+      try {while (true) {const {done, value} = await reader.read(); if (done) break; total += value.length; if (total > 2097152) {await reader.cancel(); return Response.json({error: 'Request exceeds 2 MiB'}, {status: 413});} chunks.push(value);}} finally {reader.releaseLock();}
       body = Buffer.concat(chunks);
     }
     const response = await fetch(url, {method, headers, body, redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(30000)});

@@ -6,8 +6,8 @@ import { z } from "zod";
 import { databaseSchema } from "@/lib/backend/database";
 import { validationChoices } from "@/lib/backend/validation";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
-import { textConfigError, textFormats } from "@/lib/backend/text-validation";
-import { fileConfigError } from "@/lib/backend/files";
+import { textConfigError, textFormats, textLimits } from "@/lib/backend/text-validation";
+import { fileConfigError, fileLimits } from "@/lib/backend/files";
 import { definitionFor } from "@/lib/elements/registry";
 import { validateSelectMetadata } from "@/lib/elements/select-options";
 import { customDefinitionSchema } from "@/lib/elements/custom";
@@ -162,9 +162,10 @@ const configs = {
             minLength: z.number().int().min(0).max(10000).optional(),
             maxLength: z.number().int().min(0).max(10000).optional(),
             pattern: z.string().max(120).refine(value => textFormats.some(format => format.pattern === value)).optional(),
+            mask: z.string().min(1).max(120).optional(),
           }).optional(),
           message: text,
-          file: z.object({maxBytes: z.number().int().min(1).max(262144).optional(), extensions: z.string().max(300).optional()}).optional(),
+          file: z.object({maxBytes: z.number().int().min(1).max(1048576).optional(), extensions: z.string().max(300).optional(), multiple: z.boolean().optional(), minFiles: z.number().int().min(0).max(5).optional(), maxFiles: z.number().int().min(1).max(5).optional(), maxTotalBytes: z.number().int().min(1).max(1048576).optional()}).optional(),
         }).refine(rule => {
           if (rule.type === "file") return !rule.temporal && !rule.text && !fileConfigError(rule.file);
           if (rule.file) return false;
@@ -326,8 +327,9 @@ const animationEffectSchema = z.object({
       stagger: finite.min(0).max(10).optional(),
 });
 const validAnimationEffect = (effect: z.infer<typeof animationEffectSchema>) => (effect.type !== "custom" || !!effect.keyframes) && (effect.scrollMode !== "scrub" || (effect.scrollStart ?? 80) > (effect.scrollEnd ?? 20));
+const formConditionRule = z.object({sourceId: id, checked: z.boolean(), operator: z.enum(["eq", "ne", "includes", "excludes"]).optional(), value: z.string().min(1).max(1000).optional()}).strict();
 export const elementSchema = z.object({
-  formCondition: z.object({ sourceId: id, checked: z.boolean() }).strict().optional(),
+  formCondition: formConditionRule.extend({match: z.enum(["all", "any"]).optional(), rules: z.array(formConditionRule).max(7).optional()}).strict().optional(),
   dataSource: z.object({serviceId: id, endpointId: id, columns: z.array(z.object({fieldId: id, label: z.string().min(1).max(120)})).max(32), emptyMessage: z.string().max(500)}).optional(),
   dataField: id.optional(),
   definitionId: id.optional(),
@@ -507,6 +509,13 @@ export function parseProject(value: unknown): ProjectDocument {
       if (!definition.children && node.children.length) throw new Error("This custom component does not accept children.");
       for (const event of Object.keys(node.events || {})) if (!definition.events.includes(event)) throw new Error(`Undeclared custom event: ${event}`);
     } else {
+      if (String(node.props.type || node.props.inputType) === "file") {
+        const error = fileConfigError(fileLimits(node.props)); if (error) throw new Error(error);
+      }
+      if (node.props.formatMask) {
+        const error = textConfigError(textLimits(node.props));
+        if (error) throw new Error(error);
+      }
       const definition = definitionFor(node);
       if (!definition || definition.template.type !== node.type || (node.definitionVersion !== undefined && node.definitionVersion !== definition.version)) throw new Error("Unknown or incompatible element definition.");
       if (node.type === "native") {

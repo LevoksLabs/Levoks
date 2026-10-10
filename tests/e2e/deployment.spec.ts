@@ -77,6 +77,8 @@ test("managed deployment authoring, queue recovery, cancellation and history sur
   let saved: DeploymentMetadata | null = null;
   let queueFailure = true;
   let queuedOperation = "";
+  let replayFailure = true;
+  let replayOperation = "";
   await context.route("**/api/deploy*", async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({ json: { connection: saved, workerOnline: false } });
@@ -122,6 +124,33 @@ test("managed deployment authoring, queue recovery, cancellation and history sur
       saved!.history.at(-1)!.state = "canceled";
       saved!.history.at(-1)!.message =
         "Queued release canceled before submission.";
+    } else if (body.action === "replay") {
+      expect(body.sourceOperationId).toBe(saved!.history[0].operationId);
+      expect(body.project).toBeUndefined();
+      expect(body.environment).toBeUndefined();
+      if (replayFailure) {
+        replayFailure = false;
+        replayOperation = body.operationId;
+        await route.fulfill({
+          status: 503,
+          json: { error: "Archive queue interrupted. Retry this request." },
+        });
+        return;
+      }
+      expect(body.operationId).toBe(replayOperation);
+      saved!.sequence++;
+      saved!.active = true;
+      saved!.history.push({
+        ...saved!.history[0],
+        operationId: body.operationId,
+        sequence: saved!.sequence,
+        sourceOperationId: body.sourceOperationId,
+        state: "queued",
+        providerId: undefined,
+        providerState: undefined,
+        url: undefined,
+        message: "Archived source queued.",
+      });
     }
     await route.fulfill({ json: saved });
   });
@@ -196,13 +225,40 @@ test("managed deployment authoring, queue recovery, cancellation and history sur
     url: "preview.vercel.app",
     message:
       "Frontend preview ready. Verify the website and its backend connections.",
+    archiveExpiresAt: "2099-01-01T00:00:00Z",
   };
   await panel.getByRole("button", { name: "Refresh releases" }).click();
   await expect(
     panel.getByRole("link", { name: "Open frontend preview" }),
   ).toHaveAttribute("href", "https://preview.vercel.app");
+  const archiveZip = new JSZip();
+  archiveZip.file("frontend/README.md", "Archived release fixture");
+  const archiveBytes = await archiveZip.generateAsync({ type: "nodebuffer" });
+  await context.route("**/api/deploy/archive?*", (route) =>
+    route.fulfill({ body: archiveBytes, contentType: "application/zip" }),
+  );
+  const archiveDownload = page.waitForEvent("download");
+  await panel
+    .getByRole("button", { name: "Download source for release 1", exact: true })
+    .click();
+  const downloadedSource = await archiveDownload;
+  const downloadedZip = await JSZip.loadAsync(
+    await readFile((await downloadedSource.path())!),
+  );
+  expect(await downloadedZip.file("frontend/README.md")!.async("string")).toBe(
+    "Archived release fixture",
+  );
+  await panel
+    .getByRole("button", { name: "Requeue source from release 1", exact: true })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: ".verification/deployment-desktop.png",
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 1024, height: 768 });
-  await panel.scrollIntoViewIfNeeded();
+  await panel
+    .getByRole("button", { name: "Requeue source from release 1", exact: true })
+    .scrollIntoViewIfNeeded();
   await page.screenshot({
     path: ".verification/deployment-compact.png",
     fullPage: true,
@@ -212,6 +268,34 @@ test("managed deployment authoring, queue recovery, cancellation and history sur
     content: element.scrollWidth,
   }));
   expect(bounds.content).toBeLessThanOrEqual(bounds.width + 1);
+  await panel
+    .getByRole("button", { name: "Requeue source from release 1", exact: true })
+    .click();
+  await expect(panel.getByRole("alert")).toContainText(
+    "Archive queue interrupted",
+  );
+  await expect(
+    panel.getByRole("button", { name: "Retry queue request", exact: true }),
+  ).toBeDisabled();
+  await panel
+    .getByRole("button", {
+      name: "Retry archived preview for release 1",
+      exact: true,
+    })
+    .click();
+  await expect(
+    panel.getByText(
+      "Archived source queued as a new frontend preview. Saved API addresses were reused.",
+    ),
+  ).toBeVisible();
+  await expect(
+    panel.getByText("Release 2 · queued", { exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  panel = await open();
+  await expect(
+    panel.getByText("Release 2 · queued", { exact: true }),
+  ).toBeVisible();
   const storage = await page.evaluate(() =>
     JSON.stringify([localStorage, sessionStorage]),
   );

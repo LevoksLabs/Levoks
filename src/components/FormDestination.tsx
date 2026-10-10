@@ -90,7 +90,7 @@ function FormDestinationSettings({ form }: { form: ElementNode }) {
         : undefined;
   const fields = config ? endpointFields(config) : [];
   const inputs = formControls(form.id, elements).filter(
-    (node) => isFormInput(node, elements[node.parentId || ""]) && !node.props.disabled,
+    (node) => isFormInput(node, elements[node.parentId || ""], elements) && !node.props.disabled,
   );
   const analysis = submissionFields(form.id, elements);
   const missing = fields.filter(

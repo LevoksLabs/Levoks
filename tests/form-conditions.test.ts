@@ -160,10 +160,7 @@ test("conditional form sections preserve history and copy references, reject uns
     layout: { ...nodes[section].layout, locked: false },
   });
   const nested = store.addElement(elementTemplate("formField"), section);
-  assert.throws(
-    () => editFormCondition(nested, { sourceId: source, checked: false }),
-    /nested/,
-  );
+  assert.doesNotThrow(() => editFormCondition(nested, { sourceId: source, checked: false }));
   store.deleteElement(nested);
   createSubmissionDestination(form, "Conditional enquiries");
   const result = parseProject(captureProject(project.id, project.name));

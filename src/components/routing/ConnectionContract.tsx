@@ -39,7 +39,7 @@ export function ConnectionContract({
       ? formOwner(trigger, elements)
       : trigger;
   const inputs = elements.filter(
-    (el) => isFormInput(el, editor.elementsById[el.parentId || ""]) && formOwner(el, elements)?.id === form?.id,
+    (el) => isFormInput(el, editor.elementsById[el.parentId || ""], editor.elementsById) && formOwner(el, elements)?.id === form?.id,
   );
   const previous = services
     .find((service) => service.id === source?.refId)

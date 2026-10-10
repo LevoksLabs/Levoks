@@ -28,8 +28,8 @@ export const choiceCSS = `[data-choice] { display:flex; align-items:center; gap:
 [data-button]:active:not(:disabled):not([aria-disabled=true]) { filter:brightness(.92); }
 [data-button][data-button-hover]:hover:not(:disabled):not([aria-disabled=true]) { background:var(--button-hover); }
 [data-field] { display:flex; flex-direction:column; gap:4px; }
-[data-field] > label, [data-field] > small { flex:none; font-size:.85em; }
-[data-field] > input, [data-field] > textarea, [data-field] > select { width:100%; min-width:0; flex:1; min-height:20px; font:inherit; color:inherit; background:transparent; border:0; }
+[data-field] > label, [data-field] > small { flex:none; font-size:.85em; overflow-wrap:anywhere; }
+[data-field] > input, [data-field] > textarea, [data-field] > select { width:100%; min-width:0; flex:1; min-height:32px; font:inherit; color:inherit; background:transparent; border:0; }
 [data-field] [aria-invalid=true] { outline:2px solid #b91c1c; }
 [data-field] > [role=alert] { color:#b91c1c; }
 [data-field] :focus-visible { outline:2px solid currentColor; outline-offset:2px; }

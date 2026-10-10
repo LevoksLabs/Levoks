@@ -28,10 +28,10 @@ test("dragged form authors attachment limits and private inbox through history, 
     .click();
   await page.getByLabel("Name", { exact: true }).fill("attachment");
   await page.getByLabel("Label", { exact: true }).fill("Attachment");
-  await page.getByLabel("Maximum file size (KiB)", { exact: true }).fill("257");
+  await page.getByLabel("Maximum file size (KiB)", { exact: true }).fill("1025");
   await expect(
     page.locator(".semantic-properties").getByRole("alert"),
-  ).toContainText("256");
+  ).toContainText("1024");
   await page.getByLabel("Maximum file size (KiB)", { exact: true }).fill("4");
   await page
     .getByLabel("Allowed file extensions", { exact: true })
@@ -67,6 +67,17 @@ test("dragged form authors attachment limits and private inbox through history, 
     .locator(".layer-name")
     .filter({ hasText: /^Form$/ })
     .click();
+  await page.getByRole("button", {name:"Content",exact:true}).click();
+  await page.getByLabel("New form control",{exact:true}).selectOption("fileUpload");
+  await page.getByRole("button",{name:"Add form control",exact:true}).click();
+  await page.getByRole("button",{name:"Edit File Upload",exact:true}).click();
+  await page.getByLabel("Name",{exact:true}).fill("evidence");
+  await page.getByLabel("Label",{exact:true}).fill("Evidence");
+  await page.getByLabel("Multiple",{exact:true}).check();
+  await page.getByLabel("Maximum file size (KiB)",{exact:true}).fill("512");
+  await page.getByLabel("Maximum files",{exact:true}).fill("3");
+  await page.getByLabel("Allowed file extensions",{exact:true}).fill(".txt");
+  await page.locator(".layer-name").filter({hasText:/^Form$/}).click();
   await page
     .getByLabel("Collection name", { exact: true })
     .fill("Attachment leads");
@@ -198,7 +209,7 @@ test("attachment backend limits are editable with error recovery, history and sa
   await page.getByLabel("Rule 1 maximum file bytes", { exact: true }).fill("0");
   await expect(
     page.getByRole("alert").filter({ hasText: "File size" }),
-  ).toContainText("256 KiB");
+  ).toContainText("1024 KiB");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(
     page.getByLabel("Rule 1 maximum file bytes", { exact: true }),

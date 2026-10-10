@@ -17,6 +17,7 @@ export default function SemanticElement({
   const definition = useEditorStore(
     (s) => s.customElements[element.definitionId || ""],
   );
+  const elements = useEditorStore(s=>s.elementsById);
   if (element.type === "custom")
     return (
       <div className="semantic-boundary">
@@ -88,5 +89,5 @@ export default function SemanticElement({
           ...tree.children.map((child, index) => render(child, index)),
         );
   };
-  return render(nativeTree(element), 0, true);
+  return render(nativeTree(element,undefined,elements), 0, true);
 }

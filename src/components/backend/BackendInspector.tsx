@@ -1067,7 +1067,7 @@ const ValidationEditor: React.FC<{
               <>
                 <FieldRow label={`Rule ${idx + 1} maximum file bytes`}>
                   <input
-                    className="bi-input" type="number" min={1} max={262144} step={1}
+                    className="bi-input" type="number" min={1} max={1048576} step={1}
                     value={rule.file?.maxBytes ?? 262144}
                     onChange={(e) => onChange({
                       rules: config.rules.map((item, i) => i === idx
@@ -1087,8 +1087,12 @@ const ValidationEditor: React.FC<{
                     })}
                   />
                 </FieldRow>
+                <FieldRow label={`Rule ${idx + 1} multiple files`}>
+                  <input type="checkbox" checked={Boolean(rule.file?.multiple)} onChange={e=>onChange({rules:config.rules.map((item,i)=>i===idx ? {...item,file:{maxBytes:item.file?.maxBytes,extensions:item.file?.extensions,...(e.target.checked ? {multiple:true,minFiles:0,maxFiles:5,maxTotalBytes:1048576} : {})}} : item)})}/>
+                </FieldRow>
+                {rule.file?.multiple && ([['minFiles','minimum files',0,5,0],['maxFiles','maximum files',1,5,5],['maxTotalBytes','combined file bytes',1,1048576,1048576]] as const).map(([key,label,min,max,fallback])=><FieldRow key={key} label={`Rule ${idx+1} ${label}`}><input className="bi-input" type="number" min={min} max={max} value={rule.file?.[key] ?? fallback} onChange={e=>onChange({rules:config.rules.map((item,i)=>i===idx ? {...item,file:{...item.file,[key]:Number(e.target.value)}} : item)})}/></FieldRow>)}
                 <p className="panel-caption">
-                  Stores name, size and encoded bytes with the record, up to 256 KiB.
+                  Stores name, size and encoded bytes with the record, up to 1024 KiB.
                   Extension rules check the filename. Downloads from the private
                   inbox use attachment data and never a server path.
                 </p>
@@ -1133,14 +1137,14 @@ const ValidationEditor: React.FC<{
                 <FieldRow label={`Rule ${idx + 1} text format`}>
                   <select
                     className="bi-select"
-                    value={rule.text?.pattern || ""}
+                    value={rule.text?.mask ? "custom-mask" : rule.text?.pattern || ""}
                     onChange={(e) =>
                       onChange({
                         rules: config.rules.map((item, i) =>
                           i === idx
                             ? {
                                 ...item,
-                                text: { ...item.text, pattern: e.target.value },
+                                text: { ...item.text, pattern: e.target.value === "custom-mask" ? "" : e.target.value, mask: e.target.value === "custom-mask" ? item.text?.mask || "AA-0000" : undefined },
                               }
                             : item,
                         ),
@@ -1152,6 +1156,7 @@ const ValidationEditor: React.FC<{
                         {format.label}
                       </option>
                     ))}
+                    <option value="custom-mask">Custom format mask</option>
                     {!textFormats.some(
                       (format) => format.pattern === (rule.text?.pattern || ""),
                     ) && (
@@ -1161,6 +1166,7 @@ const ValidationEditor: React.FC<{
                     )}
                   </select>
                 </FieldRow>
+                {rule.text?.mask !== undefined && <FieldRow label={`Rule ${idx + 1} format mask`}><input className="bi-input" aria-label={`Rule ${idx + 1} format mask`} maxLength={120} value={rule.text.mask} onChange={event => onChange({rules: config.rules.map((item, i) => i === idx ? {...item, text: {...item.text, mask: event.target.value}} : item)})} /></FieldRow>}
                 <p className="panel-caption">
                   Lengths use UTF-16 units. Blank values are optional; add
                   Required to make them mandatory. Formats match the entire

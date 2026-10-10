@@ -9,9 +9,11 @@ import { isTextInput, textLimits, textConfigError, textFormats } from "@/lib/bac
 import { ParameterControl } from "./ParameterControl";
 import SelectOptionsEditor from "./SelectOptionsEditor";
 import { validateSelectMetadata } from "@/lib/elements/select-options";
+import {nativeControlId} from "@/lib/elements/native";
 import { fileLimits, fileConfigError } from "@/lib/backend/files";
 import ChoiceGroupEditor from "./ChoiceGroupEditor";
 import FormConditionEditor from "./FormConditionEditor";
+import TextMaskEditor from "./TextMaskEditor";
 
 export default function ElementProperties({
   element,
@@ -169,14 +171,16 @@ export default function ElementProperties({
         ["native", "custom", "button", "input"].includes(element.type) && (
           <fieldset>
             <legend>{custom?.name || definition?.name} properties</legend>
+            {definition?.tag === "label" && <label><span>Associated field</span><select aria-label="Associated field" value={String(element.props.htmlFor || "")} onChange={e=>updateElement(element.id,{props:{htmlFor:e.target.value}})}><option value="">No association</option>{Object.values(elementsById).filter(node=>{const store=useEditorStore.getState(),root=store.getBreadcrumbPath(node.id)[0]?.id;return nativeControlId(node) && (store.rootIds.includes(root) || store.globalRootIds.includes(root));}).map(node=><option key={node.id} value={node.id}>{node.props.label || node.label || node.props.name || node.id}</option>)}{element.props.htmlFor && !elementsById[String(element.props.htmlFor)] && <option value={String(element.props.htmlFor)}>Unavailable field — choose another</option>}</select></label>}
             {Object.entries(fields)
               .filter(
                 ([key]) =>
                     (key !== "type" || element.type === "button") &&
+                    !(definition?.tag === "label" && key === "htmlFor") &&
                     !(["radioGroup", "checkboxGroup"].includes(definition?.id || "") && ["name", "legend", "required", "minSelections", "maxSelections"].includes(key)) &&
-                  !(fileInput && ["maxFileKB", "accept"].includes(key)) &&
+                  !(fileInput && ["maxFileKB", "accept", "minFiles", "maxFiles", "maxTotalKB"].includes(key)) &&
                   !(element.type === "native" && definition?.tag === "select" && ["options", "optionLabels", "disabledValues", "optionGroups", "disabledGroups", "value", "selectedValues", "minSelections", "maxSelections"].includes(key)) &&
-                  !(textInput && ["pattern", "minLength", "maxLength"].includes(key)) &&
+                  !(textInput && ["pattern", "formatMask", "minLength", "maxLength"].includes(key)) &&
                   !(element.type === "native" && key === "pattern" && !textInput) &&
                   (element.type === "button"
                     ? !["label"].includes(key)
@@ -236,9 +240,14 @@ export default function ElementProperties({
               {element.type === "native" && definition?.tag === "select" && <>{selectError?.props === element.props && <p role="alert" className="property-error">{selectError.message}</p>}<SelectOptionsEditor key={element.id} element={element}/></>}
               {["radioGroup", "checkboxGroup"].includes(definition?.id || "") && <ChoiceGroupEditor key={element.id} element={element}/>}
             {fileInput && <>
-              <label><span>Maximum file size (KiB)</span><input aria-label="Maximum file size (KiB)" type="number" min={1} max={256} step={1} value={Number(element.props.maxFileKB ?? 256)} onChange={e=>set("maxFileKB",Number(e.target.value))}/></label>
+              <label><span>Maximum file size (KiB)</span><input aria-label="Maximum file size (KiB)" type="number" min={1} max={1024} step={1} value={Number(element.props.maxFileKB ?? 256)} onChange={e=>set("maxFileKB",Number(e.target.value))}/></label>
               <label><span>Allowed file extensions</span><input aria-label="Allowed file extensions" value={String(element.props.accept || "")} placeholder="Any, or .pdf, .png, .txt" onChange={e=>set("accept",e.target.value)}/></label>
-              <p className="panel-caption">Guided submissions store one attachment per collection, up to 256 KiB. Turn off Multiple. Extensions restrict filenames; they do not inspect content. Download attachments from a private inbox. Review backend file rules after edits.</p>
+              <p className="panel-caption">Store up to five upload controls per collection. Each file can be up to 1024 KiB; the whole encoded request must fit within 2 MiB. Extensions restrict filenames. Download saved files from the private inbox. Review copied backend rules after edits.</p>
+              {element.props.multiple && <>
+                <label><span>Minimum files</span><input aria-label="Minimum files" type="number" min={0} max={5} value={Number(element.props.minFiles ?? 0)} onChange={e=>set("minFiles",Number(e.target.value))}/></label>
+                <label><span>Maximum files</span><input aria-label="Maximum files" type="number" min={1} max={5} value={Number(element.props.maxFiles ?? 5)} onChange={e=>set("maxFiles",Number(e.target.value))}/></label>
+                <label><span>Combined file size (KiB)</span><input aria-label="Combined file size (KiB)" type="number" min={1} max={1024} value={Number(element.props.maxTotalKB ?? 1024)} onChange={e=>set("maxTotalKB",Number(e.target.value))}/></label>
+              </>}
               {fileError && <p role="alert" className="property-error">{fileError}</p>}
             </>}
             {textInput && <>
@@ -246,11 +255,13 @@ export default function ElementProperties({
                 <input aria-label={key === "minLength" ? "Minimum length" : "Maximum length"} type="number" min={0} max={10000} step={1} value={String(element.props[key] ?? "")} onChange={e=>set(key,e.target.value === "" ? "" : String(Number(e.target.value)))} placeholder="Unset" />
               </label>)}
               {inputType !== "textarea" && <label><span>Text format</span>
-                <select aria-label="Text format" value={String(element.props.pattern || "")} onChange={e=>set("pattern",e.target.value)}>
+                <select aria-label="Text format" value={element.props.formatMask ? "custom-mask" : String(element.props.pattern || "")} onChange={e=>updateElement(element.id,{props: e.target.value === "custom-mask" ? {pattern:"",formatMask:"AA-0000"} : {pattern:e.target.value,formatMask:""}})}>
                   {textFormats.map(format=><option key={format.pattern} value={format.pattern}>{format.label}</option>)}
+                  <option value="custom-mask">Custom format mask</option>
                   {!textFormats.some(format=>format.pattern===String(element.props.pattern || "")) && <option value={String(element.props.pattern)}>Custom pattern (review required)</option>}
                 </select>
               </label>}
+              {element.props.formatMask && <TextMaskEditor key={`${element.id}:${element.props.formatMask}`} element={element} />}
               <p className="panel-caption">Some emoji count as two characters. Blank optional fields are allowed. Guided storage copies these settings into backend rules and caps unset maximums at {Math.max(Number(element.props.minLength) || 0,inputType === "email" ? 320 : 2000)} characters. Review connected rules after edits.</p>
               {textError && <p className="property-error" role="alert">{textError}</p>}
             </>}

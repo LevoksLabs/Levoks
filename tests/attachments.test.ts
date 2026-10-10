@@ -77,7 +77,7 @@ test("attachment validation bounds canonical bytes, size, names and extensions w
   );
   for (const file of [
     { maxBytes: 0 },
-    { maxBytes: 262145 },
+    { maxBytes: 1048577 },
     { maxBytes: 1.5 },
     { extensions: "image/*" },
     { extensions: ".txt\n.exe" },
@@ -123,17 +123,17 @@ test("guided attachments retain object mappings, atomic history, server rules an
   assert.ok(compatibleFormField(node, { type: "object", location: "body" }));
   assert.ok(!compatibleFormField(node, { type: "string", location: "body" }));
   assert.ok(!compatibleFormField(node, { type: "object", location: "query" }));
-  editor.updateElement(id, { props: { multiple: true } });
+  editor.updateElement(id, { props: { multiple: true, maxFiles: 6 } });
   const before = captureProject(project.id, project.name);
   assert.throws(
     () => createSubmissionDestination(form, "Attachments"),
-    /one file/,
+    /maximum from 1 to 5/,
   );
   const after = captureProject(project.id, project.name);
   assert.deepEqual(after.editor, before.editor);
   assert.deepEqual(after.backend, before.backend);
   assert.deepEqual(after.routing, before.routing);
-  editor.updateElement(id, { props: { multiple: false } });
+  editor.updateElement(id, { props: { multiple: false, maxFiles: 5 } });
   const destination = createSubmissionDestination(form, "Attachments");
   const service = useBackendStore.getState().services[0];
   const validation = service.blocks.find(
@@ -197,4 +197,78 @@ test("guided attachments retain object mappings, atomic history, server rules an
     assert.equal(status, expected);
     assert.equal(called, expected === 200);
   }
+});
+
+test("multiple attachments enforce counts, total bytes and typed persistence contracts", () => {
+  const file = { name: "proof.txt", size: 1, data: "YQ==" };
+  const limits = {
+    multiple: true,
+    maxBytes: 524288,
+    minFiles: 1,
+    maxFiles: 3,
+    maxTotalBytes: 1048576,
+    extensions: ".txt",
+  };
+  const valid = (value: unknown) =>
+    runInNewContext(
+      `${VALIDATION_RUNTIME}\nvalidationRuleValid({type:'file',file:limits},value)`,
+      { value, limits, atob, btoa },
+    );
+  assert.equal(valid([file, file]), true);
+  for (const value of [
+    [],
+    file,
+    [file, file, file, file],
+    [{ ...file, name: "x.exe" }],
+    [{ ...file, size: 2 }],
+  ])
+    assert.equal(valid(value), false);
+  const large = {
+    name: "large.txt",
+    size: 524288,
+    data: Buffer.alloc(524288).toString("base64"),
+  };
+  assert.equal(valid([large, large]), true);
+  assert.equal(valid([large, large, file]), false);
+  const project = emptyProject();
+  restoreProject(project);
+  const editor = useEditorStore.getState(),
+    form = editor.addElement(templates.form);
+  const id = editor.addElement(
+    {
+      ...elementTemplate("fileUpload")!,
+      props: {
+        ...elementTemplate("fileUpload")!.props,
+        name: "evidence",
+        multiple: true,
+        minFiles: 1,
+        maxFiles: 3,
+        maxFileKB: 512,
+        accept: ".txt",
+      },
+    },
+    form,
+  );
+  assert.equal(
+    compatibleFormField(useEditorStore.getState().elementsById[id], {
+      type: "array",
+      location: "body",
+    }),
+    true,
+  );
+  const dest = createSubmissionDestination(form, "Multiple attachments");
+  createSubmissionInbox(dest.serviceId, dest.endpointId);
+  const compiled = compileProject(
+    parseProject(captureProject(project.id, project.name)),
+  );
+  assert.deepEqual(
+    compiled.diagnostics.filter((d) => d.severity === "error"),
+    [],
+  );
+  assert.match(
+    Object.values(compiled.files).find((s) =>
+      s.includes("function attachmentList"),
+    )!,
+    /attachmentList\(record\[field\]\)\.map/,
+  );
 });

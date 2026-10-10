@@ -183,6 +183,26 @@ test(
         mimeType: "text/plain",
         buffer: bytes,
       });
+      const evidenceBytes = Buffer.alloc(450 * 1024, 42);
+      const evidence = page.getByLabel("Evidence", { exact: true });
+      await evidence.setInputFiles(
+        Array.from({ length: 4 }, (_, i) => ({
+          name: `extra${i}.txt`,
+          mimeType: "text/plain",
+          buffer: Buffer.from("x"),
+        })),
+      );
+      await submit.click();
+      await expect(page.getByRole("status")).toContainText("at most 3");
+      assert.equal(posts, 0);
+      await evidence.setInputFiles([
+        { name: "large.txt", mimeType: "text/plain", buffer: evidenceBytes },
+        {
+          name: "second.txt",
+          mimeType: "text/plain",
+          buffer: evidenceBytes,
+        },
+      ]);
       const savedResponse = page.waitForResponse(
         (response) =>
           response.request().method() === "POST" &&
@@ -197,6 +217,16 @@ test(
         size: bytes.length,
         data: bytes.toString("base64"),
       });
+      assert.equal(body.evidence.length, 2);
+      assert.equal(body.evidence[0].size, evidenceBytes.length);
+      assert.equal(
+        Buffer.from(body.evidence[0].data, "base64").equals(evidenceBytes),
+        true,
+      );
+      assert.deepEqual(
+        (await records.findOne({ email: body.email }))!.evidence,
+        body.evidence,
+      );
       assert.deepEqual(await saved.json(), { message: "Submission received." });
       await expect(page.getByRole("status")).toHaveText("Done");
       await expect.poll(() => records.countDocuments()).toBe(1);
@@ -231,6 +261,32 @@ test(
         });
         assert.equal(rejected.status, 400, JSON.stringify(patch));
       }
+      for (const evidence of [
+        body.attachment,
+        Array(4).fill(body.evidence[1]),
+        [{ ...body.evidence[1], name: "bad.exe" }],
+        Array(3).fill({
+          ...body.evidence[0],
+          size: 512 * 1024,
+          data: Buffer.alloc(512 * 1024).toString("base64"),
+        }),
+      ]) {
+        const response = await fetch(apiOrigin + "/api/submissions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...body, evidence }),
+        });
+        assert.ok([400, 413].includes(response.status));
+      }
+      const oversized = await fetch(
+        origin + "/__levoks/api/3001/api/submissions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Origin: origin },
+          body: JSON.stringify({ ...body, evidence: "x".repeat(2097152) }),
+        },
+      );
+      assert.equal(oversized.status, 413);
       assert.equal(await records.countDocuments(), 1);
       assert.equal(
         (await fetch(apiOrigin + "/api/submissions/inbox")).status,
@@ -297,6 +353,24 @@ test(
           );
         });
         assert.ok(fits, `file containment at ${width}px`);
+        assert.ok(
+          await page.locator("[data-field]").evaluateAll((fields) =>
+            fields.every((field) => {
+              const box = field.getBoundingClientRect();
+              return Array.from(
+                field.querySelectorAll("input,label,small"),
+              ).every((child) => {
+                const content = child.getBoundingClientRect();
+                return (
+                  content.left >= box.left &&
+                  content.right <= box.right &&
+                  content.bottom <= box.bottom
+                );
+              });
+            }),
+          ),
+          `file labels and instructions fit at ${width}px`,
+        );
         assert.ok(
           await page.locator("form").evaluate((form) => {
             const boxes = Array.from(form.children)
@@ -368,6 +442,17 @@ test(
       const downloaded = await download;
       assert.equal(downloaded.suggestedFilename(), filename);
       assert.deepEqual(await readFile((await downloaded.path())!), bytes);
+      const multiDownload = page.waitForEvent("download");
+      await page
+        .getByRole("button", {
+          name: `Download large.txt (${evidenceBytes.length} bytes)`,
+          exact: true,
+        })
+        .click();
+      assert.deepEqual(
+        await readFile((await (await multiDownload).path())!),
+        evidenceBytes,
+      );
       const fixtures = await records.insertMany(
         Array.from({ length: 5 }, (_, i) => ({
           name: `Pagination fixture ${i}`,

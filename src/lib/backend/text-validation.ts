@@ -1,4 +1,5 @@
-/** Fixed, linear formats match native pattern semantics without executing authored regexes. */
+import { maskPattern, TEXT_MASK_RUNTIME } from "./text-mask";
+/** Native formats and bounded masks never execute authored regular expressions. */
 export const textFormats = [
   { label: "Any text", pattern: "" },
   { label: "Numbers only", pattern: "[0-9]+" },
@@ -11,6 +12,7 @@ export interface TextLimits {
   minLength?: number;
   maxLength?: number;
   pattern?: string;
+  mask?: string;
 }
 
 export function isTextInput(kind: string) {
@@ -45,6 +47,10 @@ export function textConfigError(limits: TextLimits = {}): string {
     !textFormats.some((format) => format.pattern === limits.pattern)
   )
     return "Choose a supported text format for guided storage. Custom patterns require a reviewed validation workflow.";
+  if (limits.mask !== undefined) {
+    if (limits.pattern) return "Choose either a preset format or a custom mask.";
+    try { maskPattern(limits.mask); } catch (error) { return (error as Error).message; }
+  }
   return "";
 }
 
@@ -60,6 +66,7 @@ export function textLimits(props: Record<string, unknown>): TextLimits {
     minLength: length(props.minLength),
     maxLength: length(props.maxLength),
     pattern: String(props.pattern || ""),
+    ...(props.formatMask ? {mask: String(props.formatMask)} : {}),
   };
 }
 
@@ -79,6 +86,7 @@ function urlRuleValid(value) {
 
 export const TEXT_VALIDATION_RUNTIME = String.raw`
 ${URL_VALIDATION_RUNTIME}
+${TEXT_MASK_RUNTIME}
 const textPatterns = ${JSON.stringify(textFormats.map((format) => format.pattern))};
 function textRuleValid(rule, value) {
   if (typeof value !== 'string') return false;
@@ -86,6 +94,10 @@ function textRuleValid(rule, value) {
   if (value.length > (limits.maxLength ?? 10000)) return false;
   if (value === '') return true;
   if (value.length < (limits.minLength ?? 0)) return false;
+  if (limits.mask !== undefined) {
+    try { return new RegExp('^(?:' + textMaskPattern(limits.mask) + ')$', 'v').exec(value)?.[0] === value; }
+    catch { return false; }
+  }
   if (!limits.pattern) return true;
   if (!textPatterns.includes(limits.pattern)) return false;
   return new RegExp('^(?:' + limits.pattern + ')$(?![\\s\\S])', 'v').test(value);

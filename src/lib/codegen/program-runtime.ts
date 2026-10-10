@@ -243,9 +243,9 @@ exports.createWorkflow = (program, models, database, observability, identity, re
           } else if (block.type === 'logic_if') {
             const p = c.program;
             if (!p) throw new WorkflowError(422, 'Configure the condition');
-            const a = resolve(p.left, context), b = resolve(p.right, context);
+            const a = resolve(p.left, context), b = p.literalValue !== undefined ? p.literalValue : resolve(p.right, context);
             const numeric = typeof a === 'number' && typeof b === 'number';
-            const yes = p.operator === 'eq' ? a === b : p.operator === 'ne' ? a !== b : p.operator === 'exists' ? a !== undefined && a !== null : numeric && (p.operator === 'gt' ? a > b : p.operator === 'gte' ? a >= b : p.operator === 'lt' ? a < b : a <= b);
+            const yes = p.operator === 'eq' ? a === b : p.operator === 'ne' ? a !== b : p.operator === 'includes' ? Array.isArray(a) && a.includes(b) : p.operator === 'excludes' ? a === undefined || Array.isArray(a) && !a.includes(b) : p.operator === 'exists' ? a !== undefined && a !== null : numeric && (p.operator === 'gt' ? a > b : p.operator === 'gte' ? a >= b : p.operator === 'lt' ? a < b : a <= b);
             await run(yes ? p.thenSteps : p.elseSteps, session, depth + 1);
           } else if (block.type === 'logic_loop') {
             const p = c.program;

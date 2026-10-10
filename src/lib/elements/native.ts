@@ -4,6 +4,7 @@ import { embedAttributes } from "./embed";
 import { ICON_PATHS } from "@/lib/icon-paths";
 import { selectChoices } from "./select-options";
 import { selectionLimits, selectionHelp } from "./selection-limits";
+import { maskPattern, maskHelp } from "@/lib/backend/text-mask";
 
 export type SemanticTree =
   | string
@@ -41,7 +42,7 @@ export function buttonHref(element: ElementNode) {
 }
 
 /** An allowlisted tree, never raw HTML or executable project source. */
-export function nativeTree(element: ElementNode, conditionVisible?: boolean): SemanticTree {
+export function nativeTree(element: ElementNode, conditionVisible?: boolean, elements: Record<string,ElementNode> = {}): SemanticTree {
   if (element.type === "button") {
     const p = element.props, disabled = Boolean(p.disabled || p.loading), href = buttonHref(element);
     const attrs: Record<string, string | number | boolean> = { id: element.id, "data-button": "true", "aria-busy": Boolean(p.loading) };
@@ -93,7 +94,14 @@ export function nativeTree(element: ElementNode, conditionVisible?: boolean): Se
   for (const key of ["src", "href"])
     if (p[key] !== undefined && safeElementUrl(p[key])) attrs[key] = safeElementUrl(p[key]);
   attrs.id = element.id;
+  if (d.tag === "label" && elements[String(p.htmlFor)]) attrs.htmlFor = nativeControlId(elements[String(p.htmlFor)]) || String(p.htmlFor);
+  if (p.formatMask) { try { attrs.pattern = maskPattern(String(p.formatMask)); } catch { attrs.pattern = "(?!)"; } }
   if (d.tag === "input" && p.type === "file") attrs["data-levoks-file-max-bytes"] = Number(p.maxFileKB ?? 256) * 1024;
+  if (d.tag === "input" && p.type === "file" && p.multiple) {
+    attrs["data-file-min"] = Math.max(Number(p.minFiles ?? 0), p.required ? 1 : 0);
+    attrs["data-file-max"] = Number(p.maxFiles ?? 5);
+    attrs["data-file-total"] = Number(p.maxTotalKB ?? 1024) * 1024;
+  }
   if (p.ariaLabel) attrs["aria-label"] = String(p.ariaLabel);
   if (p.ariaBusy) attrs["aria-busy"] = "true";
   if (element.accessibility?.label)
@@ -127,6 +135,7 @@ export function nativeTree(element: ElementNode, conditionVisible?: boolean): Se
       attrs["data-form-condition"] = "true";
       attrs["data-condition-source"] = element.formCondition.sourceId;
       attrs["data-condition-checked"] = String(element.formCondition.checked);
+      attrs["data-condition-rules"] = JSON.stringify(element.formCondition);
       attrs["data-condition-disabled"] = String(Boolean(p.disabled));
       if (conditionVisible !== undefined) {
         attrs.hidden = !conditionVisible;
@@ -262,7 +271,7 @@ export function nativeTree(element: ElementNode, conditionVisible?: boolean): Se
     if (p.content !== undefined) children.push(String(p.content));
     if (d.children) children.push({ slot: true });
   }
-  const help = [p.error || p.helperText, d.tag === "select" && p.multiple ? selectionHelp(selectionLimits(p)) : ""].filter(Boolean).join(" ");
+  const help = [p.error || p.helperText, p.formatMask ? maskHelp(String(p.formatMask)) : "", d.tag === "select" && p.multiple ? selectionHelp(selectionLimits(p)) : "", d.tag === "input" && p.type === "file" ? `Files: up to ${Number(p.maxFileKB ?? 256)} KiB each${p.multiple ? `, ${Math.max(Number(p.minFiles ?? 0), p.required ? 1 : 0)}–${Number(p.maxFiles ?? 5)} files, ${Number(p.maxTotalKB ?? 1024)} KiB combined` : ""}${p.accept ? `; ${p.accept}` : ""}.` : ""].filter(Boolean).join(" ");
   if (["input", "textarea", "select"].includes(d.tag!) && (p.label || help)) {
     if (help) attrs["aria-describedby"] = `${element.id}-help`;
     if (p.label && !element.accessibility?.label) delete attrs["aria-label"];
@@ -273,6 +282,28 @@ export function nativeTree(element: ElementNode, conditionVisible?: boolean): Se
     ]);
   }
   return node(d.tag!, attrs, children);
+}
+
+/** Labeled controls grow to contain wrapped labels and associated instructions. */
+export function nativeFieldStyles(element: ElementNode): Record<string, string | number> {
+  if (!["native", "input"].includes(element.type)) return {};
+  const tree = nativeTree(element);
+  if (typeof tree === "string" || "slot" in tree || !tree.attrs["data-field"]) return {};
+  return {
+    height: "auto" as const,
+    minHeight: element.styles.minHeight || element.styles.height || `${element.layout.h}px`,
+  };
+}
+
+/** Labels store semantic element IDs; their DOM control can gain a helper wrapper later. */
+export function nativeControlId(element: ElementNode): string | undefined {
+  if (element.type !== "input" && !["input","select","textarea"].includes(definitionFor(element)?.tag || "")) return;
+  const find = (tree: SemanticTree): string | undefined => {
+    if (typeof tree === "string" || "slot" in tree) return;
+    if (["input","select","textarea"].includes(tree.tag)) return String(tree.attrs.id);
+    for (const child of tree.children) {const id = find(child); if (id) return id;}
+  };
+  return find(nativeTree(element));
 }
 const voidTags = new Set(["input", "img", "hr", "br"]);
 /** Both output syntaxes consume exactly the tree used by the editor renderer. */

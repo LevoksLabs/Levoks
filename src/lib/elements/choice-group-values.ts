@@ -2,26 +2,37 @@ import type { ElementNode } from "@/types";
 import { validationChoices } from "@/lib/backend/validation";
 import { selectionLimits } from "./selection-limits";
 
-type ChoiceNode = Pick<ElementNode, "id" | "definitionId" | "children" | "props">;
+type ChoiceNode = Pick<ElementNode, "id" | "type" | "definitionId" | "parentId" | "children" | "props" | "formCondition">;
 
 export function groupChoices<T extends ChoiceNode>(
   group: ChoiceNode,
   nodes: Record<string, T>,
 ) {
   const checkbox = group.definitionId === "checkboxGroup";
-  const choices = group.children.map((id) => nodes[id]);
-  if (
-    choices.some(
-      (node) =>
-        !node ||
-        node.definitionId !== (checkbox ? "checkbox" : "radioButton") ||
-        node.children.length,
-    )
-  )
-    throw new Error(
-      `This editor supports direct native ${checkbox ? "checkbox" : "radio"} choices. Edit nested or mixed content individually.`,
-    );
+  const choices: T[] = [], seen = new Set<string>();
+  const visit = (id: string) => {
+    const node = nodes[id];
+    if (!node || seen.has(id)) throw new Error("Repair the choice group tree before editing.");
+    seen.add(id);
+    if (node.definitionId === (checkbox ? "checkbox" : "radioButton") && !node.children.length) choices.push(node);
+    else if (["container", "stack", "columns"].includes(node.type) && !node.props.disabled && !node.formCondition) node.children.forEach(visit);
+    else if (!["text", "title", "paragraph", "image", "icon", "divider"].includes(node.type) || node.children.length)
+      throw new Error(`Use native ${checkbox ? "checkbox" : "radio"} choices, text, images and layout wrappers in this group. Put other controls or conditional sections beside the group.`);
+  };
+  group.children.forEach(visit);
   return choices;
+}
+
+export function choiceGroupOwner<T extends Pick<ElementNode,"id"|"parentId"|"definitionId">>(node: T, nodes: Record<string,T>) {
+  let parent = node.parentId;
+  const seen = new Set<string>();
+  while (parent && !seen.has(parent)) {
+    seen.add(parent);
+    const current = nodes[parent];
+    if (!current) break;
+    if (["checkboxGroup","radioGroup"].includes(current.definitionId || "")) return current;
+    parent = current.parentId;
+  }
 }
 
 export function validateCheckboxGroup(

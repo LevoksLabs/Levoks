@@ -1,170 +1,218 @@
 "use client";
-
-import { useState } from "react";
-import { siteTemplates, SiteTemplate } from "@/templates/siteTemplates";
+import { useEffect, useRef, useState } from "react";
+import {
+  SITE_STARTERS,
+  applySiteStarter,
+  starterPreview,
+  type SiteStarter,
+} from "@/lib/site-starters";
 import { useEditorStore } from "@/store/editorStore";
-import {addSubmissionFormTemplate} from "@/lib/form-destination";
-import { Eye, Download, X, ArrowLeft, ExternalLink } from "lucide-react";
+import { addSubmissionFormTemplate } from "@/lib/form-destination";
 
-// ─── Template Card ───
-const TemplateCard: React.FC<{
-    template: SiteTemplate;
-    onPreview: () => void;
-    onUse: () => void;
-}> = ({ template, onPreview, onUse }) => (
-    <div className="template-card">
-        <div className="template-thumbnail">
-            <img
-                src={template.thumbnail}
-                alt={template.name}
-                onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='240' fill='%23232329'%3E%3Crect width='400' height='240' rx='8'/%3E%3Ctext x='200' y='120' text-anchor='middle' fill='%2372728a' font-family='Inter' font-size='14'%3EPreview unavailable%3C/text%3E%3C/svg%3E";
-                }}
-            />
-            <div className="template-overlay">
-                <button className="template-overlay-btn" onClick={onPreview} title="Preview">
-                    <Eye size={16} />
-                    <span>Preview</span>
-                </button>
-                <button className="template-overlay-btn primary" onClick={onUse} title="Use Template">
-                    <Download size={16} />
-                    <span>Use</span>
-                </button>
-            </div>
-        </div>
-        <div className="template-info">
-            <span className="template-category-badge">{template.category}</span>
-            <h3 className="template-name">{template.name}</h3>
-            <p className="template-desc">{template.description}</p>
-        </div>
-    </div>
-);
-
-// ─── Preview Modal ───
-const PreviewModal: React.FC<{
-    template: SiteTemplate;
-    onClose: () => void;
-    onUse: () => void;
-}> = ({ template, onClose, onUse }) => (
-    <div className="template-preview-overlay">
-        <div className="template-preview-header">
-            <button className="template-preview-back" onClick={onClose}>
-                <ArrowLeft size={16} />
-                <span>Back to Templates</span>
-            </button>
-            <div className="template-preview-title">
-                <h3>{template.name}</h3>
-                <span className="template-category-badge">{template.category}</span>
-            </div>
-            <div className="template-preview-actions">
-                <a
-                    href={template.previewUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="template-preview-link"
-                >
-                    <ExternalLink size={14} />
-                    <span>Open Full Site</span>
-                </a>
-                <button className="template-preview-use" onClick={onUse}>
-                    <Download size={14} />
-                    <span>Use This Template</span>
-                </button>
-            </div>
-        </div>
-        <div className="template-preview-body">
-            <iframe
-                src={template.previewUrl}
-                title={`Preview: ${template.name}`}
-                className="template-preview-iframe"
-                sandbox="allow-scripts" referrerPolicy="no-referrer"
-            />
-        </div>
-    </div>
-);
-
-// ─── Main Panel ───
-const TemplatesPanel: React.FC = () => {
-    const { loadTemplate, setSidebarOpen } = useEditorStore();
-    const [previewTemplate, setPreviewTemplate] = useState<SiteTemplate | null>(null);
-    const [filter, setFilter] = useState<string>("all");
-    const [error, setError] = useState("");
-
-    const categories = ["all", ...Array.from(new Set(siteTemplates.map((t) => t.category)))];
-    const filtered = filter === "all" ? siteTemplates : siteTemplates.filter((t) => t.category === filter);
-
-    const handleUseTemplate = (template: SiteTemplate) => {
-        const confirmUse = window.confirm(
-            `This will replace your current canvas with the "${template.name}" template. Your current work will be saved to undo history.\n\nContinue?`
-        );
-        if (!confirmUse) return;
-
-        loadTemplate(template.elements);
-        setPreviewTemplate(null);
-        setSidebarOpen(null);
+function StarterPreview({
+  starter,
+  onClose,
+  onUse,
+}: {
+  starter: SiteStarter;
+  onClose: () => void;
+  onUse: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const [width, setWidth] = useState(1280);
+  const [html] = useState(() => starterPreview(starter));
+  useEffect(() => {
+    returnFocus.current ||= document.activeElement as HTMLElement;
+    const node = dialog.current;
+    if (!node?.open) node?.showModal();
+    return () => {
+      node?.close();
+      returnFocus.current?.focus();
     };
-
-    // Preview modal takes over the full viewport
-    if (previewTemplate) {
-        return (
-            <PreviewModal
-                template={previewTemplate}
-                onClose={() => setPreviewTemplate(null)}
-                onUse={() => handleUseTemplate(previewTemplate)}
-            />
-        );
+  }, []);
+  return (
+    <dialog
+      ref={dialog}
+      aria-label={`${starter.name} preview`}
+      onCancel={onClose}
+      style={{
+        width: "min(1400px,96vw)",
+        maxWidth: "96vw",
+        height: "90vh",
+        padding: "16px",
+        border: "1px solid #626276",
+        background: "#18181f",
+        color: "#eee",
+      }}
+    >
+      <div className="template-preview-header">
+        <button
+          type="button"
+          className="template-preview-back"
+          onClick={onClose}
+        >
+          Back to Templates
+        </button>
+        <h3>{starter.name}</h3>
+        <label>
+          Preview width{" "}
+          <select
+            aria-label="Starter preview width"
+            value={width}
+            onChange={(e) => setWidth(Number(e.target.value))}
+          >
+            {[320, 768, 1024, 1280].map((w) => (
+              <option key={w} value={w}>
+                {w}px
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" className="template-preview-use" onClick={onUse}>
+          Use This Template
+        </button>
+      </div>
+      <p className="panel-caption">
+        Editable layout and navigation. Submissions save after applying the
+        starter and running Local full-stack preview or the exported app.
+      </p>
+      <div style={{ height: "calc(100% - 100px)", overflow: "auto" }}>
+        <iframe
+          title={`Preview: ${starter.name}`}
+          srcDoc={html}
+          sandbox="allow-scripts"
+          style={{
+            display: "block",
+            width,
+            height: "100%",
+            border: 0,
+            margin: "0 auto",
+            background: "#f4f3ed",
+          }}
+        />
+      </div>
+    </dialog>
+  );
+}
+export default function TemplatesPanel() {
+  const [preview, setPreview] = useState<SiteStarter | null>(null),
+    [filter, setFilter] = useState("all"),
+    [error, setError] = useState("");
+  const closeSidebar = () => useEditorStore.getState().setSidebarOpen(null);
+  const handleApplyStarter = (starter: SiteStarter) => {
+    if (
+      !window.confirm(
+        `Replace this page with ${starter.name}? Undo restores the page, routing and backend together.`,
+      )
+    )
+      return;
+    try {
+      applySiteStarter(starter);
+      setPreview(null);
+      closeSidebar();
+    } catch (e) {
+      setError((e as Error).message);
+      setPreview(null);
     }
-
-    return (
-        <div className="templates-panel">
-            <div className="working-form-template">
-                <h3>Working contact form</h3>
-                <p>Editable form, database and submit workflow. Adds to this page.</p>
-                <button type="button" className="template-preview-use" onClick={() => {
-                    try {
-                        addSubmissionFormTemplate();
-                        setSidebarOpen(null);
-                    } catch (error) {
-                        setError(error instanceof Error ? error.message : "The template could not be added.");
-                    }
-                }}>Add working contact form</button>
-                {error && <p role="alert">{error}</p>}
+  };
+  return (
+    <div className="templates-panel">
+      <div className="working-form-template">
+        <h3>Working contact form</h3>
+        <p>Editable form, database and submit workflow. Adds to this page.</p>
+        <button
+          type="button"
+          className="template-preview-use"
+          onClick={() => {
+            try {
+              addSubmissionFormTemplate();
+              closeSidebar();
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
+        >
+          Add working contact form
+        </button>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      <div className="templates-filter-bar">
+        {["all", ...new Set(SITE_STARTERS.map((s) => s.category))].map(
+          (category) => (
+            <button
+              key={category}
+              className={`templates-filter-btn ${filter === category ? "active" : ""}`}
+              aria-pressed={filter === category}
+              onClick={() => setFilter(category)}
+            >
+              {category === "all" ? "All" : category}
+            </button>
+          ),
+        )}
+      </div>
+      <div className="templates-grid">
+        {SITE_STARTERS.filter(
+          (s) => filter === "all" || s.category === filter,
+        ).map((starter) => (
+          <article className="template-card" key={starter.id}>
+            <div
+              className="template-thumbnail"
+              style={{
+                background: "#f4f3ed",
+                color: "#24352d",
+                padding: "24px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                gap: "16px",
+              }}
+            >
+              <span>{starter.brand}</span>
+              <strong style={{ fontSize: "24px", lineHeight: 1.15 }}>
+                {starter.headline}
+              </strong>
             </div>
-            <div className="templates-filter-bar">
-                {categories.map((cat) => (
-                    <button
-                        key={cat}
-                        className={`templates-filter-btn ${filter === cat ? "active" : ""}`}
-                        onClick={() => setFilter(cat)}
-                    >
-                        {cat === "all" ? "All" : cat}
-                    </button>
-                ))}
+            <div className="template-info">
+              <span className="template-category-badge">
+                {starter.category}
+              </span>
+              <h3 className="template-name">{starter.name}</h3>
+              <p className="template-desc">{starter.description}</p>
+              <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
+                <button
+                  type="button"
+                  className="template-preview-back"
+                  aria-label={`Preview ${starter.name}`}
+                  onClick={() => setPreview(starter)}
+                >
+                  Preview
+                </button>
+                <button
+                  type="button"
+                  className="template-preview-use"
+                  aria-label={`Use ${starter.name}`}
+                  onClick={() => handleApplyStarter(starter)}
+                >
+                  Use
+                </button>
+              </div>
             </div>
-
-            <div className="templates-grid">
-                {filtered.map((template) => (
-                    <TemplateCard
-                        key={template.id}
-                        template={template}
-                        onPreview={() => setPreviewTemplate(template)}
-                        onUse={() => handleUseTemplate(template)}
-                    />
-                ))}
-            </div>
-
-            {filtered.length === 0 && (
-                <div className="templates-empty">
-                    <p>No templates in this category</p>
-                </div>
-            )}
-
-            <div className="templates-hint">
-                Site templates replace your canvas • Contact forms add to it • Undo to restore
-            </div>
-        </div>
-    );
-};
-
-export default TemplatesPanel;
+          </article>
+        ))}
+      </div>
+      <p className="templates-hint">
+        Starters replace this page and add connected storage and a private
+        inbox. Undo restores the previous project.
+      </p>
+      {preview && (
+        <StarterPreview
+          key={preview.id}
+          starter={preview}
+          onClose={() => setPreview(null)}
+          onUse={() => handleApplyStarter(preview)}
+        />
+      )}
+    </div>
+  );
+}

@@ -48,8 +48,8 @@ app.use(observability.context);
 
 // ─── Built-in Middleware ───
 app.disable('x-powered-by');
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: false, limit: '1mb' }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: false, limit: '2mb' }));
 app.use(observability.audit);
 app.use(require('./middleware/cors'));
 app.use(helmet());
