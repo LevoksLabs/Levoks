@@ -89,6 +89,18 @@ test("visual checkbox groups retain labels, values, defaults and stable array id
   await addChoice(page, "Website design", "website");
   await addChoice(page, "Application design", "app");
   await addChoice(page, "Unavailable option", "unavailable");
+  await addChoice(page, "Workflow automation", "automation");
+  await page.getByLabel("Minimum selections", {exact: true}).fill("2");
+  await page.getByLabel("Maximum selections", {exact: true}).fill("1");
+  await page.getByRole("button", {name: "Apply selection limits", exact: true}).click();
+  await expect(page.locator(".select-options-editor").getByRole("alert")).toContainText("Maximum selections");
+  await page.getByLabel("Maximum selections", {exact: true}).fill("2");
+  await page.getByRole("button", {name: "Apply selection limits", exact: true}).click();
+  await expect(page.getByRole("button", {name: "Apply selection limits", exact: true})).toBeFocused();
+  await page.getByRole("button", {name: "Undo", exact: true}).click();
+  await expect(page.getByLabel("Minimum selections", {exact: true})).toHaveValue("");
+  await page.getByRole("button", {name: "Redo", exact: true}).click();
+  await expect(page.getByLabel("Minimum selections", {exact: true})).toHaveValue("2");
   await page
     .getByLabel("Default checkbox choice: Website design", { exact: true })
     .check();
@@ -102,7 +114,7 @@ test("visual checkbox groups retain labels, values, defaults and stable array id
   await expect(
     page.locator(".select-options-editor").getByRole("alert"),
   ).toContainText("unique");
-  await expect(page.locator(".select-choice-row")).toHaveCount(3);
+  await expect(page.locator(".select-choice-row")).toHaveCount(4);
   await page
     .getByLabel("Checkbox group field name", { exact: true })
     .fill("9invalid");
@@ -154,7 +166,7 @@ test("visual checkbox groups retain labels, values, defaults and stable array id
   for (const width of [1600, 1100]) {
     await page.setViewportSize({ width, height: 1000 });
     await page
-      .getByLabel("Checkbox choice 1 label", { exact: true })
+      .getByLabel("Minimum selections", { exact: true })
       .scrollIntoViewIfNeeded();
     expect(
       await page
@@ -173,6 +185,8 @@ test("visual checkbox groups retain labels, values, defaults and stable array id
     "Call me to discuss the project and next steps",
     "phone",
   );
+  await page.getByLabel("Maximum selections", {exact: true}).fill("1");
+  await page.getByRole("button", {name: "Apply selection limits", exact: true}).click();
   await selectForm(page);
   await page
     .getByLabel("New form control", { exact: true })
@@ -222,11 +236,30 @@ test("visual checkbox groups retain labels, values, defaults and stable array id
   await page
     .getByLabel("Default checkbox choice: Website design", { exact: true })
     .check();
+  const inspectLimits = async () => {
+    await page.getByRole("button", {name: "Backend", exact: true}).click();
+    await page.locator(".backend-block").filter({has: page.locator(".backend-block-label", {hasText: /^Check interests$/})}).click();
+    await expect(page.getByLabel("Rule 2 type", {exact: true})).toHaveValue("minItems");
+    await expect(page.getByLabel("Rule 3 type", {exact: true})).toHaveValue("maxItems");
+    await expect(page.getByLabel("Rule 2 value", {exact: true})).toHaveValue("2");
+    await expect(page.getByLabel("Rule 3 value", {exact: true})).toHaveValue("2");
+  };
+  await inspectLimits();
+  await page.getByLabel("Rule 2 value", {exact: true}).fill("-1");
+  await expect(page.locator(".bi-rules-list").getByRole("alert")).toContainText("whole numbers");
+  await page.getByRole("button", {name: "Undo", exact: true}).click();
+  await expect(page.getByLabel("Rule 2 value", {exact: true})).toHaveValue("2");
+  await page.getByLabel("Rule 3 value", {exact: true}).fill("3");
+  await page.getByRole("button", {name: "Undo", exact: true}).click();
+  await expect(page.getByLabel("Rule 3 value", {exact: true})).toHaveValue("2");
+  await page.getByRole("button", {name: "General", exact: true}).click();
   await page.getByRole("button", { name: "Save project", exact: true }).click();
   await expect(page.locator(".workspace-status-text")).toHaveText(
     "Saved on this device",
   );
   await page.reload();
+  await inspectLimits();
+  await page.getByRole("button", {name: "General", exact: true}).click();
   await selectForm(page);
   await page
     .getByRole("button", { name: "Edit Checkbox Group", exact: true })
@@ -238,6 +271,8 @@ test("visual checkbox groups retain labels, values, defaults and stable array id
   await expect(
     page.getByLabel("Checkbox group required", { exact: true }),
   ).toBeChecked();
+  await expect(page.getByLabel("Minimum selections", {exact: true})).toHaveValue("2");
+  await expect(page.getByLabel("Maximum selections", {exact: true})).toHaveValue("2");
   await expect(
     page.getByLabel("Checkbox choice 1 value", { exact: true }),
   ).toHaveValue("web");
@@ -261,12 +296,21 @@ test("visual checkbox groups retain labels, values, defaults and stable array id
   await expect(
     group.getByRole("checkbox", { name: "Unavailable option", exact: true }),
   ).toBeDisabled();
+  await expect(group.getByText("Select exactly 2 options.", {exact: true})).toBeVisible();
+  await frame.getByPlaceholder("Your name", {exact: true}).fill("Preview visitor");
+  await frame.getByPlaceholder("Your email", {exact: true}).fill("preview@example.test");
+  await frame.getByRole("checkbox", {name: "Accept project terms", exact: true}).check();
+  await frame.getByRole("button", {name: "Submit", exact: true}).click();
+  await expect(frame.getByRole("status")).toContainText("Choose at least 2 options");
   await group
     .getByRole("checkbox", { name: "Application design", exact: true })
     .check();
   await expect(
     group.getByRole("checkbox", { name: "Website design", exact: true }),
   ).toBeChecked();
+  await group.getByRole("checkbox", {name: "Workflow automation", exact: true}).check();
+  await frame.getByRole("button", {name: "Submit", exact: true}).click();
+  await expect(frame.getByRole("status")).toContainText("Choose at most 2 options");
   await expect(
     frame.getByRole("group", { name: "Optional followups", exact: true }),
   ).toBeVisible();

@@ -126,6 +126,7 @@ test(
         name: "Unavailable option",
         exact: true,
       });
+      const automation = group.getByRole("checkbox", {name: "Workflow automation", exact: true});
       const reply = page.getByRole("group", {
         name: "Optional followups",
         exact: true,
@@ -143,6 +144,8 @@ test(
         exact: true,
       });
       const submit = page.getByRole("button", { name: "Submit", exact: true });
+      await expect(group).toHaveAccessibleDescription("Select exactly 2 options.");
+      await expect(reply).toHaveAccessibleDescription("Select at most 1 option.");
       await expect(web).toBeChecked();
       await expect(app).not.toBeChecked();
       await expect(unavailable).toBeDisabled();
@@ -165,14 +168,28 @@ test(
       await web.uncheck();
       await submit.click();
       await expect(page.getByRole("status")).toContainText(
-        "Choose at least one option",
+        "Choose at least 2 options",
       );
       assert.equal(posts, 0);
       await expect(web).toBeFocused();
       await web.press("Space");
+      await submit.click();
+      await expect(page.getByRole("status")).toContainText("Choose at least 2 options");
+      assert.equal(posts, 0);
       await app.check();
+      await automation.check();
+      await submit.click();
+      await expect(page.getByRole("status")).toContainText("Choose at most 2 options");
+      await expect(web).toBeFocused();
+      assert.equal(posts, 0);
+      await automation.uncheck();
       await email.check();
       await phone.check();
+      await submit.click();
+      await expect(page.getByRole("status")).toContainText("Choose at most 1 option");
+      await expect(email).toBeFocused();
+      assert.equal(posts, 0);
+      await phone.uncheck();
       // The parent disable check must ignore even a forged checked default.
       await unavailable.evaluate((node) => {
         (node as HTMLInputElement).checked = true;
@@ -187,7 +204,7 @@ test(
       assert.equal(saved.status(), 201);
       const body = saved.request().postDataJSON();
       assert.deepEqual(body.interests, ["web", "app"]);
-      assert.deepEqual(body.followups, ["email", "phone"]);
+      assert.deepEqual(body.followups, ["email"]);
       assert.equal(body.consent, true);
       assert.deepEqual(await saved.json(), { message: "Submission received." });
       await expect.poll(() => records.countDocuments()).toBe(1);
@@ -203,6 +220,8 @@ test(
       const invalidBodies = [
         ...[
           [],
+          ["web"],
+          ["web", "app", "automation"],
           ["Website design"],
           ["unavailable"],
           ["forged"],
@@ -215,6 +234,7 @@ test(
           undefined,
         ].map((interests) => ({ ...body, interests })),
         { ...body, followups: ["forged"] },
+        { ...body, followups: ["email", "phone"] },
         { ...body, consent: false },
         { ...body, consent: "true" },
       ];
@@ -233,7 +253,7 @@ test(
       await page
         .getByPlaceholder("Your email", { exact: true })
         .fill("retry@example.test");
-      await web.uncheck();
+      await web.check();
       await app.check();
       await phone.check();
       await consent.check();
@@ -261,7 +281,7 @@ test(
       const retryRecord = await records.findOne({
         email: "retry@example.test",
       });
-      assert.deepEqual(retryRecord!.interests, ["app"]);
+      assert.deepEqual(retryRecord!.interests, ["web", "app"]);
       assert.deepEqual(
         retryRecord!.followups,
         [],
@@ -279,6 +299,7 @@ test(
         .getByPlaceholder("Your email", { exact: true })
         .fill("empty@example.test");
       await consent.check();
+      await app.check();
       const optional = page.waitForResponse(
         (response) =>
           response.request().method() === "POST" &&

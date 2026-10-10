@@ -3,6 +3,7 @@ import { definitionFor } from "./registry";
 import { embedAttributes } from "./embed";
 import { ICON_PATHS } from "@/lib/icon-paths";
 import { selectChoices } from "./select-options";
+import { selectionLimits, selectionHelp } from "./selection-limits";
 
 export type SemanticTree =
   | string
@@ -133,16 +134,20 @@ export function nativeTree(element: ElementNode, conditionVisible?: boolean): Se
       }
     }
     if (element.definitionId === "checkboxGroup") {
+      const limits = selectionLimits(p);
       attrs["data-checkbox-group"] = "true";
       attrs["data-checkbox-required"] = String(Boolean(p.required));
+      attrs["data-checkbox-min"] = limits.min;
+      if (limits.max !== undefined) attrs["data-checkbox-max"] = limits.max;
     }
     if (p.legend) {
       children.push(node("legend", {}, [String(p.legend)]));
       if (!element.accessibility?.label) delete attrs["aria-label"];
     }
-    if (element.definitionId === "checkboxGroup" && p.required) {
+    const help = element.definitionId === "checkboxGroup" ? selectionHelp(selectionLimits(p)) : "";
+    if (help) {
       attrs["aria-describedby"] = `${element.id}-choices-help`;
-      children.push(node("small", { id: `${element.id}-choices-help` }, ["Select at least one option."]));
+      children.push(node("small", { id: `${element.id}-choices-help` }, [help]));
     }
   }
   if (d.generate === "dialog") {
@@ -192,6 +197,12 @@ export function nativeTree(element: ElementNode, conditionVisible?: boolean): Se
       ),
     );
   } else if (d.generate === "select") {
+    if (p.multiple) {
+      const limits = selectionLimits(p);
+      attrs["data-selection-min"] = limits.min;
+      if (limits.max !== undefined) attrs["data-selection-max"] = limits.max;
+      if (limits.min) attrs.required = true;
+    }
     if (p.placeholder) children.push(node("option", { value: "", disabled: true }, [String(p.placeholder)]));
     if (p.value !== undefined && !p.multiple) attrs.defaultValue = String(p.value);
     if (p.multiple) attrs.defaultValue = String(p.selectedValues || "").split("\n").filter(Boolean);
@@ -251,12 +262,14 @@ export function nativeTree(element: ElementNode, conditionVisible?: boolean): Se
     if (p.content !== undefined) children.push(String(p.content));
     if (d.children) children.push({ slot: true });
   }
-  if (["input", "textarea", "select"].includes(d.tag!) && (p.label || p.helperText || p.error)) {
+  const help = [p.error || p.helperText, d.tag === "select" && p.multiple ? selectionHelp(selectionLimits(p)) : ""].filter(Boolean).join(" ");
+  if (["input", "textarea", "select"].includes(d.tag!) && (p.label || help)) {
+    if (help) attrs["aria-describedby"] = `${element.id}-help`;
     if (p.label && !element.accessibility?.label) delete attrs["aria-label"];
     return node("div", { id: element.id, "data-field": "true" }, [
       ...(p.label ? [node("label", { htmlFor: `${element.id}-control` }, [String(p.label)])] : []),
       node(d.tag!, { ...attrs, id: `${element.id}-control` }, children),
-      ...(p.error || p.helperText ? [node("small", { id: `${element.id}-help`, ...(p.error ? { role: "alert" } : {}) }, [String(p.error || p.helperText)])] : []),
+      ...(help ? [node("small", { id: `${element.id}-help`, ...(p.error ? { role: "alert" } : {}) }, [help])] : []),
     ]);
   }
   return node(d.tag!, attrs, children);

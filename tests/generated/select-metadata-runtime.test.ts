@@ -113,9 +113,18 @@ test(
       const session = page.getByLabel("Appointment session", { exact: true }),
         topics = page.getByLabel("Project topics", { exact: true }),
         followup = page.getByLabel("Preferred follow-up", { exact: true }),
+        channels = page.getByLabel("Optional contact channels", {
+          exact: true,
+        }),
         submit = page.getByRole("button", { name: "Submit", exact: true });
       await expect(session).toHaveValue("morning");
       await expect(topics).toHaveValues(["design", "data"]);
+      await expect(topics).toHaveAccessibleDescription(
+        "Choose your priorities. Select exactly 2 options.",
+      );
+      await expect(channels).toHaveAccessibleDescription(
+        "Select at most 1 option.",
+      );
       await expect(followup).toHaveValue("");
       await expect(session.locator("optgroup")).toHaveCount(2);
       await expect(
@@ -179,6 +188,30 @@ test(
         "required multiple select must not post an empty selection",
       );
       await topics.selectOption(["automation", "data"]);
+      await topics.selectOption(["automation"]);
+      await submit.click();
+      await expect(page.getByRole("status")).toContainText(
+        "Choose at least 2 options for Project topics",
+      );
+      await expect(topics).toBeFocused();
+      assert.equal(posts, 0);
+      await topics.selectOption(["design", "automation", "data"]);
+      await submit.click();
+      await expect(page.getByRole("status")).toContainText(
+        "Choose at most 2 options for Project topics",
+      );
+      await expect(topics).toBeFocused();
+      await expect(topics).toHaveValues(["design", "automation", "data"]);
+      assert.equal(posts, 0);
+      await topics.selectOption(["automation", "data"]);
+      await channels.selectOption(["email", "phone"]);
+      await submit.click();
+      await expect(page.getByRole("status")).toContainText(
+        "Choose at most 1 option for Optional contact channels",
+      );
+      await expect(channels).toBeFocused();
+      assert.equal(posts, 0);
+      await channels.selectOption([]);
       await session.focus();
       await session.press("ArrowUp");
       await expect(session).toHaveValue("morning");
@@ -197,17 +230,19 @@ test(
       assert.equal(body.session, "pm");
       assert.deepEqual(body.topics, ["automation", "data"]);
       assert.equal(body.followup, "call");
+      assert.deepEqual(body.channels, []);
       assert.deepEqual(await saved.json(), { message: "Submission received." });
       await expect.poll(() => records.countDocuments()).toBe(1);
       const stored = await records.findOne({ email: body.email });
       assert.equal(stored!.session, "pm");
       assert.deepEqual(stored!.topics, ["automation", "data"]);
       assert.equal(stored!.followup, "call");
+      assert.deepEqual(stored!.channels, []);
       await expect(page.getByRole("status")).toHaveText("Done");
       await expect(session).toHaveValue("morning");
       await expect(topics).toHaveValues(["design", "data"]);
       await expect(followup).toHaveValue("");
-      for (const patch of [
+      const invalidPatches = [
         { session: "Morning visit" },
         { session: "closed" },
         { session: "forged" },
@@ -221,9 +256,25 @@ test(
         { topics: ["design", 1] },
         { topics: "design" },
         { topics: [] },
+        { topics: ["design"] },
+        { topics: ["design", "automation", "data"] },
+        { topics: undefined },
+        { topics: null },
+        { topics: false },
+        { channels: ["email", "phone"] },
+        { channels: "email" },
+        { channels: ["email", "email"] },
         { followup: "closed" },
         { followup: "Call to discuss the project and next steps" },
-      ]) {
+      ];
+      for (const [index, patch] of invalidPatches.entries()) {
+        // Exercise every validator without bypassing the production 20/minute policy.
+        if (index === 12) {
+          assert.equal(await records.countDocuments(), 1);
+          await stop(backend);
+          backend = startBackend();
+          await ready(apiOrigin + "/health");
+        }
         const rejected = await fetch(apiOrigin + "/api/submissions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -232,6 +283,7 @@ test(
         assert.equal(rejected.status, 400, JSON.stringify(patch));
       }
       assert.equal(await records.countDocuments(), 1);
+      console.info(`${invalidPatches.length} invalid requests rejected without database writes; rate limits remain enabled.`);
       await page
         .getByPlaceholder("Your name", { exact: true })
         .fill("Retry visitor");
@@ -273,6 +325,23 @@ test(
       });
       backend = startBackend();
       await ready(apiOrigin + "/health");
+      const beforeFilteredInvalid = posts;
+      await submit.click();
+      await expect(page.getByRole("status")).toContainText(
+        "Choose at least 2 options",
+      );
+      assert.equal(
+        posts,
+        beforeFilteredInvalid,
+        "Disabled group choices do not count towards the minimum.",
+      );
+      await topics.evaluate((node) => {
+        for (const option of (node as HTMLSelectElement).options)
+          option.selected = ["automation", "data", "closed"].includes(
+            option.value,
+          );
+      });
+      await channels.selectOption("phone");
       const retried = page.waitForResponse(
         (response) =>
           response.request().method() === "POST" &&
@@ -284,18 +353,24 @@ test(
       assert.equal(retryResponse.request().postDataJSON().followup, undefined);
       assert.deepEqual(retryResponse.request().postDataJSON().topics, [
         "automation",
+        "data",
+      ]);
+      assert.deepEqual(retryResponse.request().postDataJSON().channels, [
+        "phone",
       ]);
       await expect.poll(() => records.countDocuments()).toBe(2);
       const retryRecord = await records.findOne({
         email: "retry@example.test",
       });
       assert.equal(retryRecord!.session, "pm");
-      assert.deepEqual(retryRecord!.topics, ["automation"]);
+      assert.deepEqual(retryRecord!.topics, ["automation", "data"]);
+      assert.deepEqual(retryRecord!.channels, ["phone"]);
       assert.equal(retryRecord!.followup, undefined);
       await page.reload();
       await expect(session).toHaveValue("morning");
       await expect(topics).toHaveValues(["design", "data"]);
       await expect(followup).toHaveValue("");
+      await expect(channels).toHaveValues([]);
       await mkdir(".verification/select-metadata", { recursive: true });
       for (const width of [320, 768, 1024, 1440]) {
         await page.setViewportSize({ width, height: 1100 });
@@ -310,6 +385,7 @@ test(
           session,
           topics,
           followup,
+          channels,
         ]) {
           assert.ok(
             await container.evaluate((node) => {

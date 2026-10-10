@@ -4,6 +4,7 @@ import type { ElementNode } from "@/types";
 import { useEditorStore } from "@/store/editorStore";
 import { editChoiceGroup } from "@/lib/elements/radio-group";
 import { groupChoices } from "@/lib/elements/choice-group-values";
+import SelectionLimitsEditor from "./SelectionLimitsEditor";
 
 function ChoiceRow({
   choice,
@@ -155,6 +156,7 @@ export default function ChoiceGroupEditor({
     try {
       editChoiceGroup(element.id, edit);
       setError("");
+      if (edit.type === "limits") requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>("[data-selection-limits-apply]")?.focus());
       if (focus !== undefined)
         requestAnimationFrame(() => {
           const rows =
@@ -237,6 +239,7 @@ export default function ChoiceGroupEditor({
               field.
             </p>
           )}
+          {kind === "Checkbox" && <SelectionLimitsEditor key={`${element.props.minSelections}:${element.props.maxSelections}`} element={element} apply={(limits) => apply({ type: "limits", ...limits })} />}
           <ol className="select-choice-list">
             {choices.map((choice, index) => (
               <ChoiceRow

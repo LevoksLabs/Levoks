@@ -1,6 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { openEditor } from "../helpers/open-editor";
 import type { DeploymentMetadata } from "../../src/lib/deployment";
+import JSZip from "jszip";
+import { readFile } from "node:fs/promises";
+import { parse } from "yaml";
 
 test("guests see the deployment sign-in boundary and the real API denies access", async ({
   page,
@@ -19,6 +22,41 @@ test("guests see the deployment sign-in boundary and the real API denies access"
     data: { action: "deploy" },
   });
   expect(denied.status()).toBe(401);
+  await page
+    .getByText("Run the full application on your server", { exact: true })
+    .click();
+  await expect(
+    page.getByText("node deploy.mjs check", { exact: true }),
+  ).toBeVisible();
+  const downloaded = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Download full-stack ZIP", exact: true })
+    .click();
+  const download = await downloaded;
+  const zip = await JSZip.loadAsync(await readFile((await download.path())!));
+  const compose = parse(await zip.file("compose.yaml")!.async("string"));
+  expect(compose.services["levoks-frontend"].ports).toEqual([
+    "127.0.0.1:${FRONTEND_PORT:-3000}:3000",
+  ]);
+  expect(zip.file("deploy.mjs")).toBeTruthy();
+  expect(zip.file("DEPLOYMENT.md")).toBeTruthy();
+  expect(compose.services["levoks-proxy"].profiles).toEqual(["https"]);
+  expect(compose.services["levoks-proxy"].ports).toEqual([
+    "80:80",
+    "443:443",
+    "443:443/udp",
+  ]);
+  expect(await zip.file("deployment/Caddyfile")!.async("string")).toContain(
+    "reverse_proxy {$LEVOKS_FRONTEND}",
+  );
+  expect(await zip.file("DEPLOYMENT.md")!.async("string")).toContain(
+    "node deploy.mjs verify",
+  );
+  expect(
+    Object.keys(zip.files).filter((path) =>
+      /(^|\/)\.env(?!\.example$)/.test(path),
+    ),
+  ).toEqual([]);
 });
 
 test("managed deployment authoring, queue recovery, cancellation and history survive reload", async ({

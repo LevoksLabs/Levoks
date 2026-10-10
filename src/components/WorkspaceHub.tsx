@@ -1317,9 +1317,9 @@ export default function WorkspaceHub() {
                 <section>
                   <h2>Export the complete application</h2>
                   <p>
-                    Download all pages, Express services, Docker configuration,
-                    and the visual project. Secret values are replaced with
-                    environment placeholders.
+                    Download all pages, Express services, databases, and optional
+                    email workers as one Docker Compose release. Runtime secrets
+                    are configured on your server using the included examples.
                   </p>
                   <button
                     className="primary"
@@ -1333,6 +1333,21 @@ export default function WorkspaceHub() {
                   >
                     <Download size={16} /> Download full-stack ZIP
                   </button>
+                  <details>
+                    <summary>Run the full application on your server</summary>
+                    <p>
+                      Use an existing Docker server with Compose 2.30 or newer.
+                      Follow DEPLOYMENT.md in the ZIP to configure runtime values
+                      and your HTTPS proxy, then run <code>node deploy.mjs check</code>
+                      {" "}and <code>node deploy.mjs up</code> from the release folder.
+                      Startup waits for database, API, and frontend health.
+                    </p>
+                    <p>
+                      Enable identity email or submission notification workers
+                      after configuring their provider credentials. Cloud server
+                      creation and live email verification remain separate steps.
+                    </p>
+                  </details>
                   {blocked && (
                     <p className="workspace-error">
                       Export checks need attention. Open Source &amp; checks for

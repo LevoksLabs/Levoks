@@ -1,5 +1,6 @@
 import type { ElementNode } from "@/types";
 import { validationChoices } from "@/lib/backend/validation";
+import { selectionLimits } from "./selection-limits";
 
 type ChoiceNode = Pick<ElementNode, "id" | "definitionId" | "children" | "props">;
 
@@ -28,6 +29,9 @@ export function validateCheckboxGroup(
   nodes: Record<string, ChoiceNode>,
 ) {
   const choices = groupChoices(group, nodes);
+  const limits = selectionLimits(group.props);
+  if (limits.max !== undefined && choices.filter(choice => choice.props.checked && !choice.props.disabled).length > limits.max)
+    throw new Error("Clear selected defaults before reducing the maximum selections.");
   const name = String(group.props.name || "");
   if (!choices.length && !name) return;
   if (

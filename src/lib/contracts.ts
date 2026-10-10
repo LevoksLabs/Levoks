@@ -4,6 +4,8 @@ import type { EndpointConfig, SchemaField } from "@/types/backend";
 import { definitionFor } from "./elements/registry";
 import { buttonHref } from "./elements/native";
 import { fieldCondition } from "./form-conditions";
+import { selectionLimits } from "./elements/selection-limits";
+import { selectChoices } from "./elements/select-options";
 
 const id = z
   .string()
@@ -175,9 +177,16 @@ export function resolveContract(
         const controllerField = controllerMapping && fields.find(item => item.location === "body" && fieldIdentity(item) === controllerMapping.fieldId);
         if (!controllerField || controllerField.type !== "boolean" || !controllerField.required) error(`Conditional field ${field.name} needs its controlling checkbox mapped to a required Boolean request body field.`);
       }
-      if (element?.definitionId === "checkboxGroup" && (field.required || element.props.required) &&
-          (element.props.disabled || !elements.some(choice => choice.parentId === element.id && choice.definitionId === "checkbox" && !choice.props.disabled)))
-        error(`Field ${field.name} needs an enabled checkbox group with at least one enabled choice.`);
+      if (element?.definitionId === "checkboxGroup") {
+        const min = Math.max(field.required ? 1 : 0, selectionLimits(element.props).min);
+        if (min > 0 && (element.props.disabled || elements.filter(choice => choice.parentId === element.id && choice.definitionId === "checkbox" && !choice.props.disabled).length < min))
+          error(`Field ${field.name} needs an enabled checkbox group with at least ${min} enabled choice${min === 1 ? "" : "s"}.`);
+      }
+      if (element && definitionFor(element)?.tag === "select" && element.props.multiple) {
+        const min = Math.max(field.required ? 1 : 0, selectionLimits(element.props).min);
+        if (min > 0 && (element.props.disabled || selectChoices(element.props).filter(choice => !choice.disabled && !choice.groupDisabled).length < min))
+          error(`Field ${field.name} needs an enabled multiple select with at least ${min} enabled choice${min === 1 ? "" : "s"}.`);
+      }
       if (element && !compatibleFormField(element, field))
         error(
           `Field ${field.name} requires compatible structured data; multiple selections map to an array in the request body.`,

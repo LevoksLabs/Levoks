@@ -333,9 +333,13 @@ for (const [id, name, multiple] of [
       optionGroups: "",
       disabledGroups: "",
       multiple,
+      minSelections: "",
+      maxSelections: "",
+      value: multiple ? "" : "Option one",
+      selectedValues: "",
       required: false,
       disabled: false,
-      label: "", helperText: "", error: "", ...(!multiple ? { value: "Option one", placeholder: "Choose an option" } : {selectedValues: ""}),
+      label: "", helperText: "", error: "", ...(!multiple ? { placeholder: "Choose an option" } : {}),
     },
     inputStyles,
     false,
@@ -355,7 +359,7 @@ native(
 );
 native(
   "checkboxGroup", "Checkbox Group", "Form / Inputs", "fieldset",
-  { ariaLabel: "Choose options", name: "", legend: "Choose options", required: false, disabled: false },
+  { ariaLabel: "Choose options", name: "", legend: "Choose options", required: false, disabled: false, minSelections: "", maxSelections: "" },
   box, true, "tag", [320, 120],
 );
 for (const [id, name, tag] of [

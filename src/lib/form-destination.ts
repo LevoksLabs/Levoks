@@ -24,6 +24,7 @@ import { validationChoices } from "@/lib/backend/validation";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { isTextInput, textLimits, textConfigError } from "@/lib/backend/text-validation";
 import { groupChoices, validateCheckboxGroup } from "@/lib/elements/choice-group-values";
+import { selectionLimits } from "@/lib/elements/selection-limits";
 import { fileLimits, fileConfigError } from "@/lib/backend/files";
 import { useEditorStore } from "@/store/editorStore";
 import { useBackendStore } from "@/store/backendStore";
@@ -154,14 +155,25 @@ export function submissionFields(
     for (let suffix = 2; used.has(name); suffix++) name = `${base}_${suffix}`;
     used.add(name);
     let choices: string | undefined;
+    let selections: ReturnType<typeof selectionLimits> | undefined;
     if (definitionFor(input)?.tag === "select") {
-      try { validateSelectMetadata(input.props); }
+      try {
+        validateSelectMetadata(input.props);
+        if (input.props.multiple) {
+          selections = selectionLimits(input.props);
+          if (selectChoices(input.props).filter(choice => !choice.disabled && !choice.groupDisabled).length < selections.min)
+            problems.push(`${input.props.label || input.label}: add enough enabled choices to meet the minimum of ${selections.min}.`);
+        }
+      }
       catch (error) { problems.push(`${input.label || name}: ${(error as Error).message}`); }
       choices = selectChoices(input.props).filter(choice => !choice.disabled && !choice.groupDisabled).map(choice => choice.value).join("\n");
     }
     if (inputType === "checkbox-group") {
       try {
         validateCheckboxGroup(input, elements);
+        selections = selectionLimits(input.props);
+        if (groupChoices(input, elements).filter(choice => !choice.props.disabled).length < selections.min)
+          problems.push(`${input.props.legend || input.label}: add enough enabled choices to meet the minimum of ${selections.min}.`);
         choices = groupChoices(input, elements).filter(choice => !choice.props.disabled).map(choice => String(choice.props.value)).join("\n");
       } catch (error) { problems.push(`${input.props.legend || input.label}: ${(error as Error).message}`); }
     }
@@ -195,6 +207,7 @@ export function submissionFields(
       temporal,
       text,
       file,
+      selections,
       condition: fieldCondition(input, elements),
       field: {
         id: input.id,
@@ -209,6 +222,7 @@ export function submissionFields(
                 : "string",
         required:
           Boolean(input.props.required) ||
+          Boolean(selections?.min) ||
           (inputType === "radio" &&
             Boolean(input.props.name) &&
             controls.some(
@@ -454,7 +468,7 @@ export function createSubmissionDestination(
         position: { x: 0, y: 0 },
       }) as BackendBlock;
     const validations = analysis.fields.flatMap(
-      ({ field, input, inputType, choices, temporal, text, file, condition }) => {
+      ({ field, input, inputType, choices, temporal, text, file, condition, selections }) => {
         const rules: ValidationRule[] = [];
         if (condition && field.required && field.type !== "array") rules.push({type: "required", message: `Complete ${field.name} when its section is shown.`});
         if (file) rules.push({type:"file",file,message:`Choose a valid ${field.name} within the allowed file size and extensions.`});
@@ -474,11 +488,15 @@ export function createSubmissionDestination(
             type: "accepted",
             message: `Confirm ${field.name} before submitting.`,
           });
-        if (field.type === "array" && field.required)
+        if (field.type === "array" && field.required && (!selections || selections.min <= 1))
           rules.push({
             type: "required",
             message: `Choose at least one ${field.name} option.`,
           });
+        if (selections) {
+          if (selections.min > 1) rules.push({type: "minItems", value: selections.min, message: `Choose at least ${selections.min} ${field.name} options.`});
+          if (selections.max !== undefined) rules.push({type: "maxItems", value: selections.max, message: `Choose at most ${selections.max} ${field.name} options.`});
+        }
         if (text) rules.push({
           type: "text", text: {...text, maxLength: text.maxLength ?? Math.max(text.minLength ?? 0, inputType === "email" ? 320 : 2000)},
           message: `Enter ${field.name} in the allowed format and length.`,

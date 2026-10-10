@@ -10,6 +10,7 @@ import { generateProject } from "@/lib/codegen";
 import { gatewaySource, apiClientSource } from "@/lib/codegen/gateway";
 import { accountPageSource, ACCOUNT_CSS } from "@/lib/codegen/account-page";
 import { submissionNotificationGuide } from "@/lib/codegen/submission-notifications";
+import { deploymentFiles } from "@/lib/codegen/deployment";
 import { submissionInboxSource, INBOX_CSS } from "@/lib/codegen/submission-inbox";
 import { validateFiles } from "@/lib/codegen/files";
 import { dataOwner, isDataText, resolveDataSource, type ResolvedDataSource } from "@/lib/live-data";
@@ -106,12 +107,11 @@ export function compileProject(value: ProjectDocument) {
         );
   const files: Record<string, string> = {};
   if (
-    backend.services.length &&
     editor.pages.some((p) => p.route.startsWith("/__levoks"))
   )
     problem(
       project.id,
-      "The /__levoks path is reserved for generated API and account routes. Choose another canvas page route.",
+      "The /__levoks path is reserved for generated API, account and deployment health routes. Choose another canvas page route.",
     );
   for (const page of editor.pages) {
     const elements = elementsByPage[page.id];
@@ -273,6 +273,10 @@ export function compileProject(value: ProjectDocument) {
         project,
       };
     }
+  }
+  if (!diagnostics.some(diagnostic => diagnostic.severity === "error")) {
+    Object.assign(files, deploymentFiles(backend.services, files));
+    files["README.md"] += "\n## Full-stack container release\n\nSee DEPLOYMENT.md for the root compose.yaml, runtime configuration and checked startup command: node deploy.mjs check, then node deploy.mjs up. The frontend, APIs, databases and optional email workers run together on your existing Docker server.\n";
   }
   return { files: validateFiles(files), graph, diagnostics, project };
 }

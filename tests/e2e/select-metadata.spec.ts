@@ -62,7 +62,7 @@ async function assignGroup(page: Page, index: number, group: string) {
 test("select labels, option groups, disabled options and defaults survive visual edits, text lists, history, reload, preview and the actual ZIP", async ({
   page,
 }) => {
-  test.setTimeout(150000);
+  test.setTimeout(210000);
   await openEditor(page);
   await page.getByLabel("Search elements", { exact: true }).fill("Form");
   const tile = page.getByRole("button", { name: "Add Form", exact: true }),
@@ -253,10 +253,59 @@ test("select labels, option groups, disabled options and defaults survive visual
   await expect(page.getByLabel("Default: data", { exact: true })).toBeChecked();
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await mkdir(".verification/select-metadata", { recursive: true });
+  await page
+    .getByLabel("Helper Text", { exact: true })
+    .fill("Choose your priorities.");
+  await page.getByLabel("Minimum selections", { exact: true }).fill("3");
+  await page.getByLabel("Maximum selections", { exact: true }).fill("2");
+  await page
+    .getByRole("button", { name: "Apply selection limits", exact: true })
+    .click();
+  await expect(
+    page.locator(".select-options-editor").getByRole("alert"),
+  ).toContainText("Maximum selections");
+  await page.getByLabel("Minimum selections", { exact: true }).fill("2");
+  await page
+    .getByRole("button", { name: "Apply selection limits", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Apply selection limits", exact: true }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(
+    page.getByLabel("Minimum selections", { exact: true }),
+  ).toHaveValue("");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(
+    page.getByLabel("Maximum selections", { exact: true }),
+  ).toHaveValue("2");
+  await page.getByLabel("Default: automation", { exact: true }).click();
+  await expect(
+    page.locator(".select-options-editor").getByRole("alert"),
+  ).toContainText("Default selections");
+  await expect(
+    page.getByLabel("Default: automation", { exact: true }),
+  ).not.toBeChecked();
+  await page.getByText("Edit lists as text", { exact: true }).click();
+  await page
+    .getByLabel("Selected Values", { exact: true })
+    .fill("design\ndata\nautomation");
+  await page
+    .getByRole("button", { name: "Apply text lists", exact: true })
+    .click();
+  await expect(
+    page.locator(".select-options-editor details").getByRole("alert"),
+  ).toContainText("Default selections");
+  await page
+    .getByLabel("Selected Values", { exact: true })
+    .fill("design\ndata");
+  await page
+    .getByRole("button", { name: "Apply text lists", exact: true })
+    .click();
   for (const width of [1600, 1100]) {
     await page.setViewportSize({ width, height: 1000 });
     await page
-      .getByLabel("Disable group: Creative", { exact: true })
+      .getByLabel("Minimum selections", { exact: true })
       .scrollIntoViewIfNeeded();
     expect(
       await page
@@ -264,7 +313,7 @@ test("select labels, option groups, disabled options and defaults survive visual
         .evaluate((node) => node.scrollWidth <= node.clientWidth),
     ).toBe(true);
     await page.screenshot({
-      path: `.verification/select-metadata/groups-inspector-${width}.png`,
+      path: `.verification/select-metadata/limits-inspector-${width}.png`,
     });
   }
   await page.setViewportSize({ width: 1600, height: 1000 });
@@ -277,6 +326,33 @@ test("select labels, option groups, disabled options and defaults survive visual
   );
   await addChoice(page, "closed", "Follow-up unavailable", "Unavailable");
   await page.getByLabel("Disable group: Unavailable", { exact: true }).check();
+  await addSelect(page, "multiSelect", "channels", "Optional contact channels");
+  await addChoice(page, "email", "Email");
+  await addChoice(page, "phone", "Phone");
+  await page.getByLabel("Minimum selections", { exact: true }).fill("0");
+  await page.getByLabel("Maximum selections", { exact: true }).fill("0");
+  await page
+    .getByRole("button", { name: "Apply selection limits", exact: true })
+    .click();
+  await page.getByLabel("Required", { exact: true }).click();
+  await expect(
+    page.locator(".semantic-properties").getByRole("alert"),
+  ).toContainText("including Required");
+  await expect(page.getByLabel("Required", { exact: true })).not.toBeChecked();
+  await page.getByLabel("Maximum selections", { exact: true }).fill("1");
+  await page
+    .getByRole("button", { name: "Apply selection limits", exact: true })
+    .click();
+  // Switching mode preserves dormant limits and remains a valid saved document.
+  await expect(page.locator(".semantic-properties").getByRole("alert")).toHaveCount(0);
+  await page.getByLabel("Multiple", { exact: true }).uncheck();
+  await expect(
+    page.getByLabel("Minimum selections", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByLabel("Multiple", { exact: true }).check();
+  await expect(
+    page.getByLabel("Maximum selections", { exact: true }),
+  ).toHaveValue("1");
   await selectForm(page);
   await page
     .getByLabel("Collection name", { exact: true })
@@ -311,6 +387,16 @@ test("select labels, option groups, disabled options and defaults survive visual
   await expect(page.getByLabel("Choice 2 group", { exact: true })).toHaveValue(
     "Schedule",
   );
+  await selectForm(page);
+  await page
+    .getByRole("button", { name: "Edit Project topics", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Minimum selections", { exact: true }),
+  ).toHaveValue("2");
+  await expect(
+    page.getByLabel("Maximum selections", { exact: true }),
+  ).toHaveValue("2");
   await page.getByRole("button", { name: "Preview", exact: true }).click();
   const frame = page.frameLocator('iframe[title="Generated frontend preview"]');
   await expect(
@@ -343,6 +429,24 @@ test("select labels, option groups, disabled options and defaults survive visual
   await expect(
     frame.getByLabel("Preferred follow-up", { exact: true }),
   ).toHaveValue("");
+  const topics = frame.getByLabel("Project topics", { exact: true });
+  await expect(topics).toHaveAttribute("data-selection-min", "2");
+  await expect(topics).toHaveAccessibleDescription(
+    "Choose your priorities. Select exactly 2 options.",
+  );
+  await expect(
+    frame.getByLabel("Optional contact channels", { exact: true }),
+  ).toHaveAttribute("data-selection-max", "1");
+  await frame.getByPlaceholder("Your name", { exact: true }).fill("Preview visitor");
+  await frame.getByPlaceholder("Your email", { exact: true }).fill("preview@example.test");
+  await topics.selectOption("design");
+  await frame.getByRole("button", { name: "Submit", exact: true }).click();
+  await expect(frame.getByRole("status")).toContainText("Choose at least 2 options for Project topics");
+  await expect(topics).toBeFocused();
+  await topics.selectOption(["design", "automation", "data"]);
+  await frame.getByRole("button", { name: "Submit", exact: true }).click();
+  await expect(frame.getByRole("status")).toContainText("Choose at most 2 options for Project topics");
+  await expect(topics).toHaveValues(["design", "automation", "data"]);
   await page
     .getByRole("button", { name: "Back To Editor", exact: true })
     .click();
@@ -374,5 +478,19 @@ test("select labels, option groups, disabled options and defaults survive visual
     rules
       .filter((rule: { type: string }) => rule.type === "oneOf")
       .map((rule: { value: string }) => rule.value),
-  ).toEqual(["morning\npm", "design\nautomation\ndata", "call"]);
+  ).toEqual([
+    "morning\npm",
+    "design\nautomation\ndata",
+    "call",
+    "email\nphone",
+  ]);
+  expect(
+    rules
+      .filter((rule: { type: string }) => /Items$/.test(rule.type))
+      .map((rule: { type: string; value: number }) => [rule.type, rule.value]),
+  ).toEqual([
+    ["minItems", 2],
+    ["maxItems", 2],
+    ["maxItems", 1],
+  ]);
 });

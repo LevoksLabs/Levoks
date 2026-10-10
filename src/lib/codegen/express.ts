@@ -458,7 +458,9 @@ check(path.resolve(__dirname, '..')); console.log('Validated ' + count + ' JavaS
     }
     // 8. Dockerfile
     files[`${servicePath}/Dockerfile`] = DOCKERFILE_TEMPLATE(service.port);
-    if (service.database?.engine === "sqlite") files[`${servicePath}/Dockerfile`] = files[`${servicePath}/Dockerfile`].replace('USER node', 'RUN mkdir -p /data && chown node:node /data\nUSER node');
+    if (service.database?.engine === "sqlite") files[`${servicePath}/Dockerfile`] = files[`${servicePath}/Dockerfile`]
+        .replace('RUN npm install --package-lock-only --ignore-scripts && npm ci --omit=dev', 'RUN apk add --no-cache --virtual .native-build python3 make g++ && npm install --package-lock-only --ignore-scripts && npm ci --omit=dev && apk del .native-build')
+        .replace('USER node', 'RUN mkdir -p /data && chown node:node /data\nUSER node');
 
     return files;
 }

@@ -13,7 +13,11 @@ export function databaseFiles(
 ): Record<string, string> {
   const config = service.database || defaultDatabase();
   const name = serviceSlug(service.name).replaceAll("-", "_") + "_db";
-  const fallbackName = service.database ? name : service.port === 3001 ? "auth_db" : "app_db";
+  const fallbackName = service.database
+    ? name
+    : service.port === 3001
+      ? "auth_db"
+      : "app_db";
   if (!isSql(config))
     return {
       "database.js": `const mongoose = require('mongoose');
@@ -78,25 +82,55 @@ export function databaseCompose(
     healthOrigins?: Record<string, string>;
     operatorSetup?: boolean;
   }[],
+  deployment?: {
+    runtime: Record<
+      string,
+      {
+        apiFiles: string[];
+        jwt: boolean;
+        workers: { command: string; files: string[]; profile: string }[];
+      }
+    >;
+  },
 ) {
   const lines = ["services:"];
   const volumes: string[] = [];
   const emittedDatabases = new Set<string>();
-  const legacyReplica = services.some(service => !service.database && service.blocks.some(block => block.type === "relation"));
-  const serviceNames = new Set(services.map(service => serviceSlug(service.name)));
-  if (services.some(service => !service.database)) serviceNames.add("mongodb");
-  const volumeNames = new Set(services.some(service => !service.database) ? ["mongo-data"] : []);
+  const legacyReplica = services.some(
+    (service) =>
+      !service.database &&
+      service.blocks.some((block) => block.type === "relation"),
+  );
+  const serviceNames = new Set(
+    services.map((service) => serviceSlug(service.name)),
+  );
+  if (!deployment && services.some((service) => !service.database))
+    serviceNames.add("mongodb");
+  const volumeNames = new Set(
+    services.some((service) => !service.database) ? ["mongo-data"] : [],
+  );
   const allocate = (base: string, names: Set<string>) => {
     let name = base;
     for (let suffix = 2; names.has(name); suffix++) name = `${base}-${suffix}`;
     names.add(name);
     return name;
   };
+  const frontendName = deployment
+    ? allocate("levoks-frontend", serviceNames)
+    : undefined;
+  const legacyDatabaseName =
+    deployment && services.some((service) => !service.database)
+      ? allocate("mongodb", serviceNames)
+      : "mongodb";
   for (const service of services) {
     const config = service.database || defaultDatabase();
     const slug = serviceSlug(service.name),
-      dbService = service.database ? allocate(`${slug}-database`, serviceNames) : "mongodb",
-      volume = service.database ? allocate(`${slug}-data`, volumeNames) : "mongo-data";
+      dbService = service.database
+        ? allocate(`${slug}-database`, serviceNames)
+        : legacyDatabaseName,
+      volume = service.database
+        ? allocate(`${slug}-data`, volumeNames)
+        : "mongo-data";
     const databaseName = slug.replaceAll("-", "_") + "_db";
     const local = config.location === "local",
       sql = isSql(config),
@@ -144,11 +178,24 @@ export function databaseCompose(
     }
     const environment: Record<string, string> = {
       PORT: String(service.port),
-      JWT_SECRET: "${JWT_SECRET:-}",
-      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}",
+      ...(deployment
+        ? {
+            NODE_ENV: "production",
+            CORS_ORIGINS: "${APP_ORIGIN:?Set APP_ORIGIN}",
+          }
+        : {
+            JWT_SECRET: "${JWT_SECRET:-}",
+            CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}",
+          }),
     };
     const item = infrastructure.find((item) => item.name === service.name)!;
-    if (item.operatorSetup) environment.OPERATOR_SETUP_TOKEN = "${" + slug.replaceAll("-", "_").toUpperCase() + "_OPERATOR_SETUP_TOKEN:-}";
+    if (item.operatorSetup && !deployment)
+      environment.OPERATOR_SETUP_TOKEN =
+        "${" +
+        slug.replaceAll("-", "_").toUpperCase() +
+        "_OPERATOR_SETUP_TOKEN:-}";
+    if (deployment?.runtime[slug].jwt)
+      environment.JWT_SECRET = "${JWT_SECRET:?Set JWT_SECRET}";
     if (item.identityOrigin)
       environment.AUTH_IDENTITY_ORIGIN = item.identityOrigin;
     Object.assign(environment, item.healthOrigins);
@@ -163,36 +210,196 @@ export function databaseCompose(
         : config.engine === "mongodb"
           ? `mongodb://${dbService}:27017/${databaseName}${service.database || legacyReplica ? "?replicaSet=rs0" : ""}`
           : `${config.engine === "postgresql" ? "postgresql" : "mysql"}://levoks:${password}@${dbService}:${config.engine === "postgresql" ? 5432 : 3306}/${databaseName}`;
+    const build = deployment ? `./backend/${slug}` : `./${slug}`;
+    const runtimeFiles = (paths: string[]) =>
+      paths.length
+        ? [
+            "    env_file:",
+            ...paths.flatMap((path) => [
+              `      - path: ./${path}`,
+              "        format: raw",
+              "        required: false",
+            ]),
+          ]
+        : [];
+    const databaseDependencies =
+      local && !sqlite
+        ? [`      ${dbService}:`, "        condition: service_healthy"]
+        : [];
+    const migration =
+      deployment && sql ? allocate(`${slug}-migrate`, serviceNames) : undefined;
+    if (migration)
+      lines.push(
+        `  ${migration}:`,
+        `    build: ${build}`,
+        '    command: ["npm", "run", "db:migrate"]',
+        "    restart: 'no'",
+        "    healthcheck:",
+        "      disable: true",
+        ...runtimeFiles(deployment!.runtime[slug].apiFiles),
+        "    environment:",
+        ...Object.entries(environment).map(
+          ([key, value]) => `      ${key}: ${JSON.stringify(value)}`,
+        ),
+        ...(sqlite ? ["    volumes:", `      - ${volume}:/data`] : []),
+        ...(databaseDependencies.length
+          ? ["    depends_on:", ...databaseDependencies]
+          : []),
+      );
     lines.push(
       `  ${slug}:`,
-      `    build: ./${slug}`,
-      "    ports:",
-      `      - "${service.port}:${service.port}"`,
+      `    build: ${build}`,
+      ...(deployment
+        ? runtimeFiles(deployment.runtime[slug].apiFiles)
+        : ["    ports:", `      - "${service.port}:${service.port}"`]),
       "    environment:",
       ...Object.entries(environment).map(
         ([key, value]) => `      ${key}: ${JSON.stringify(value)}`,
       ),
     );
     if (sqlite) lines.push("    volumes:", `      - ${volume}:/data`);
-    if (local && !sqlite)
+    if (databaseDependencies.length || migration)
       lines.push(
         "    depends_on:",
-        `      ${dbService}:`,
-        "        condition: service_healthy",
+        ...databaseDependencies,
+        ...(migration
+          ? [
+              `      ${migration}:`,
+              "        condition: service_completed_successfully",
+            ]
+          : []),
       );
     lines.push("    restart: unless-stopped");
-    if (service.blocks.some(b => b.type === "submission_notification")) {
+    if (deployment)
+      for (const worker of deployment.runtime[slug].workers) {
+        const workerName = allocate(
+          `${slug}-${worker.command.replace("worker:", "")}-worker`,
+          serviceNames,
+        );
+        const databaseEnv = {
+          [config.connectionEnv]: environment[config.connectionEnv],
+          NODE_ENV: "production",
+          LEVOKS_WORKER_HEALTH_FILE: "/tmp/levoks-worker-health",
+        };
+        lines.push(
+          `  ${workerName}:`,
+          `    build: ${build}`,
+          `    profiles: ${JSON.stringify([worker.profile])}`,
+          `    command: ${JSON.stringify(["npm", "run", worker.command])}`,
+          ...runtimeFiles(worker.files),
+          "    environment:",
+          ...Object.entries(databaseEnv).map(
+            ([key, value]) => `      ${key}: ${JSON.stringify(value)}`,
+          ),
+          "    depends_on:",
+          `      ${slug}:`,
+          "        condition: service_healthy",
+          "    restart: unless-stopped",
+          "    healthcheck:",
+          '      test: ["CMD", "node", "workers/check.js"]',
+          "      interval: 15s",
+          "      timeout: 5s",
+          "      start_period: 30s",
+          "      retries: 3",
+        );
+      }
+    if (
+      !deployment &&
+      service.blocks.some((b) => b.type === "submission_notification")
+    ) {
       const prefix = slug.replaceAll("-", "_").toUpperCase();
       const workerEnvironment = {
         [config.connectionEnv]: environment[config.connectionEnv],
         NODE_ENV: "production",
-        ...Object.fromEntries(["SUBMISSION_EMAIL_FROM", "SUBMISSION_EMAIL_TO", "SUBMISSION_PUBLIC_ORIGIN", "RESEND_API_KEY"].map(key => [key, "${" + prefix + "_" + key + ":-}"])),
+        ...Object.fromEntries(
+          [
+            "SUBMISSION_EMAIL_FROM",
+            "SUBMISSION_EMAIL_TO",
+            "SUBMISSION_PUBLIC_ORIGIN",
+            "RESEND_API_KEY",
+          ].map((key) => [key, "${" + prefix + "_" + key + ":-}"]),
+        ),
       };
       const workerName = allocate(`${slug}-submission-worker`, serviceNames);
-      lines.push(`  ${workerName}:`, `    build: ./${slug}`, '    profiles: ["notifications"]', '    command: ["npm", "run", "worker:submissions"]', "    environment:", ...Object.entries(workerEnvironment).map(([key, value]) => `      ${key}: ${JSON.stringify(value)}`), "    restart: unless-stopped");
-      if (local) lines.push("    depends_on:", `      ${dbService}:`, "        condition: service_healthy");
+      lines.push(
+        `  ${workerName}:`,
+        `    build: ./${slug}`,
+        '    profiles: ["notifications"]',
+        '    command: ["npm", "run", "worker:submissions"]',
+        "    environment:",
+        ...Object.entries(workerEnvironment).map(
+          ([key, value]) => `      ${key}: ${JSON.stringify(value)}`,
+        ),
+        "    restart: unless-stopped",
+      );
+      if (local)
+        lines.push(
+          "    depends_on:",
+          `      ${dbService}:`,
+          "        condition: service_healthy",
+        );
     }
     if (local && !volumes.includes(volume)) volumes.push(volume);
+  }
+  if (deployment) {
+    lines.push(
+      `  ${frontendName}:`,
+      "    build: ./frontend",
+      "    ports:",
+      '      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"',
+      "    environment:",
+      "      NODE_ENV: production",
+      '      APP_ORIGIN: "${APP_ORIGIN:?Set APP_ORIGIN}"',
+      ...services.map(
+        (service) =>
+          `      API_ORIGIN_${service.port}: http://${serviceSlug(service.name)}:${service.port}`,
+      ),
+      ...(services.length
+        ? [
+            "    depends_on:",
+            ...services.flatMap((service) => [
+              `      ${serviceSlug(service.name)}:`,
+              "        condition: service_healthy",
+            ]),
+          ]
+        : []),
+      "    healthcheck:",
+      '      test: ["CMD", "node", "healthcheck.cjs"]',
+      "      interval: 15s",
+      "      timeout: 10s",
+      "      start_period: 30s",
+      "      retries: 3",
+      "    restart: unless-stopped",
+    );
+    const proxyName = allocate("levoks-proxy", serviceNames);
+    const certificateVolume = allocate("levoks-certificates", volumeNames);
+    const configVolume = allocate("levoks-proxy-config", volumeNames);
+    volumes.push(certificateVolume, configVolume);
+    lines.push(
+      `  ${proxyName}:`,
+      "    image: caddy:2.11.7-alpine",
+      '    profiles: ["https"]',
+      "    ports:",
+      '      - "80:80"',
+      '      - "443:443"',
+      '      - "443:443/udp"',
+      "    environment:",
+      '      LEVOKS_DOMAIN: "${LEVOKS_DOMAIN:-unconfigured.invalid}"',
+      `      LEVOKS_FRONTEND: ${frontendName}:3000`,
+      "    volumes:",
+      "      - ./deployment/Caddyfile:/etc/caddy/Caddyfile:ro",
+      `      - ${certificateVolume}:/data`,
+      `      - ${configVolume}:/config`,
+      "    depends_on:",
+      `      ${frontendName}:`,
+      "        condition: service_healthy",
+      "    healthcheck:",
+      '      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]',
+      "      interval: 15s",
+      "      timeout: 5s",
+      "      retries: 3",
+      "    restart: unless-stopped",
+    );
   }
   if (volumes.length)
     lines.push("volumes:", ...volumes.map((name) => `  ${name}:`));

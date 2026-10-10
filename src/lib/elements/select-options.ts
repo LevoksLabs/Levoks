@@ -1,4 +1,5 @@
 import { validationChoices } from "@/lib/backend/validation";
+import { selectionLimits } from "./selection-limits";
 
 export type SelectChoice = {
   value: string;
@@ -45,6 +46,11 @@ export function selectChoices(props: Record<string, unknown>): SelectChoice[] {
 /** Validate optional metadata at the import/compiler boundary, including component definitions. */
 export function validateSelectMetadata(props: Record<string, unknown>) {
   const choices = selectChoices(props);
+  if (props.multiple) {
+    const { max } = selectionLimits(props);
+    if (max !== undefined && String(props.selectedValues || "").split("\n").filter(Boolean).length > max)
+      throw new Error("Default selections exceed the maximum. Clear defaults or increase the maximum.");
+  }
   if (
     props.optionLabels ||
     props.disabledValues ||
@@ -205,8 +211,8 @@ export function selectChoiceProps(
         }
       : {}),
   };
-  if (props.multiple)
-    return {
+  if (props.multiple) {
+    const result = {
       ...patch,
       selectedValues: [
         ...new Set(
@@ -219,6 +225,9 @@ export function selectChoiceProps(
         .filter((value) => enabled.includes(value))
         .join("\n"),
     };
+    validateSelectMetadata({ ...props, ...result });
+    return result;
+  }
   const value = remap(String(props.value || ""));
   return { ...patch, value: enabled.includes(value) ? value : "" };
 }
@@ -240,8 +249,8 @@ export function selectOptionProps(
     if (options.length) validationChoices(options.join("\n"));
     const remap = (value: string) =>
       rename && value === rename[0] ? rename[1] : value;
-    if (props.multiple)
-      return {
+    if (props.multiple) {
+      const result = {
         options: options.join("\n"),
         selectedValues: [
           ...new Set(
@@ -254,6 +263,9 @@ export function selectOptionProps(
           .filter((value) => options.includes(value))
           .join("\n"),
       };
+      validateSelectMetadata({ ...props, ...result });
+      return result;
+    }
     const value = remap(String(props.value || ""));
     return {
       options: options.join("\n"),

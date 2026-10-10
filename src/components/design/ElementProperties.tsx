@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import type { ElementNode } from "@/types";
 import { definitionFor, type PropertyField } from "@/lib/elements/registry";
 import { useEditorStore } from "@/store/editorStore";
@@ -7,6 +8,7 @@ import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { isTextInput, textLimits, textConfigError, textFormats } from "@/lib/backend/text-validation";
 import { ParameterControl } from "./ParameterControl";
 import SelectOptionsEditor from "./SelectOptionsEditor";
+import { validateSelectMetadata } from "@/lib/elements/select-options";
 import { fileLimits, fileConfigError } from "@/lib/backend/files";
 import ChoiceGroupEditor from "./ChoiceGroupEditor";
 import FormConditionEditor from "./FormConditionEditor";
@@ -20,6 +22,15 @@ export default function ElementProperties({
     useEditorStore();
   const custom = customElements[element.definitionId || ""];
   const definition = definitionFor(element);
+  const [selectError, setSelectError] = useState<{ props: ElementNode["props"]; message: string } | null>(null);
+  const setBoolean = (key: string, value: boolean) => {
+    try {
+      if (element.type === "native" && definition?.tag === "select")
+        validateSelectMetadata({ ...element.props, [key]: value });
+      updateElement(element.id, { props: { [key]: value } });
+      setSelectError(null);
+    } catch (error) { setSelectError({ props: element.props, message: (error as Error).message }); }
+  };
   const fields: Record<string, PropertyField> =
     element.type === "custom"
       ? Object.fromEntries(
@@ -162,9 +173,9 @@ export default function ElementProperties({
               .filter(
                 ([key]) =>
                     (key !== "type" || element.type === "button") &&
-                    !(["radioGroup", "checkboxGroup"].includes(definition?.id || "") && ["name", "legend", "required"].includes(key)) &&
+                    !(["radioGroup", "checkboxGroup"].includes(definition?.id || "") && ["name", "legend", "required", "minSelections", "maxSelections"].includes(key)) &&
                   !(fileInput && ["maxFileKB", "accept"].includes(key)) &&
-                  !(element.type === "native" && definition?.tag === "select" && ["options", "optionLabels", "disabledValues", "optionGroups", "disabledGroups", "value", "selectedValues"].includes(key)) &&
+                  !(element.type === "native" && definition?.tag === "select" && ["options", "optionLabels", "disabledValues", "optionGroups", "disabledGroups", "value", "selectedValues", "minSelections", "maxSelections"].includes(key)) &&
                   !(textInput && ["pattern", "minLength", "maxLength"].includes(key)) &&
                   !(element.type === "native" && key === "pattern" && !textInput) &&
                   (element.type === "button"
@@ -181,11 +192,7 @@ export default function ElementProperties({
                       aria-label={field.label}
                       type="checkbox"
                       checked={Boolean(element.props[key])}
-                      onChange={(e) =>
-                        updateElement(element.id, {
-                          props: { [key]: e.target.checked },
-                        })
-                      }
+                      onChange={(e) => setBoolean(key, e.target.checked)}
                     />
                   ) : field.options ? (
                     <select
@@ -226,7 +233,7 @@ export default function ElementProperties({
                   )}
                 </label>
               ))}
-              {element.type === "native" && definition?.tag === "select" && <SelectOptionsEditor key={element.id} element={element}/>}
+              {element.type === "native" && definition?.tag === "select" && <>{selectError?.props === element.props && <p role="alert" className="property-error">{selectError.message}</p>}<SelectOptionsEditor key={element.id} element={element}/></>}
               {["radioGroup", "checkboxGroup"].includes(definition?.id || "") && <ChoiceGroupEditor key={element.id} element={element}/>}
             {fileInput && <>
               <label><span>Maximum file size (KiB)</span><input aria-label="Maximum file size (KiB)" type="number" min={1} max={256} step={1} value={Number(element.props.maxFileKB ?? 256)} onChange={e=>set("maxFileKB",Number(e.target.value))}/></label>

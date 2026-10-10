@@ -145,6 +145,8 @@ export interface ValidationRule {
     | "absent"
     | "minLength"
     | "maxLength"
+    | "minItems"
+    | "maxItems"
     | "min"
     | "max"
     | "regex"

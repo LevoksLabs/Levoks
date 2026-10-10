@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import type { ElementNode } from "@/types";
 import { useEditorStore } from "@/store/editorStore";
+import SelectionLimitsEditor from "./SelectionLimitsEditor";
 import {
   selectChoiceProps,
   selectChoices,
@@ -404,7 +405,7 @@ export default function SelectOptionsEditor({
       <h4>Choices and defaults</h4>
       <p className="panel-caption">
         {multiple
-          ? "Select any number of defaults."
+          ? "Choose defaults within the maximum selection limit."
           : "Select one default, or leave all unselected to show the placeholder."}{" "}
         Display labels can differ from submitted values. Apply drafts before
         saving. Removing or disabling a choice clears its default. Review
@@ -414,6 +415,21 @@ export default function SelectOptionsEditor({
         <p role="alert" className="property-error">
           {error || configError}
         </p>
+      )}
+      {multiple && (
+        <SelectionLimitsEditor
+          key={`${element.props.minSelections}:${element.props.maxSelections}`}
+          element={element}
+          apply={(limits) => {
+            try {
+              validateSelectMetadata({ ...element.props, ...limits });
+              updateElement(element.id, { props: limits });
+              setError("");
+              requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>("[data-selection-limits-apply]")?.focus());
+              return true;
+            } catch (err) { setError((err as Error).message); return false; }
+          }}
+        />
       )}
       {!choices.length && (
         <p className="panel-caption">No choices yet. Add a choice below.</p>

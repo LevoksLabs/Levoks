@@ -14,6 +14,7 @@
     "test": "tsx --test tests/*.test.ts",
     "test:integration": "tsx scripts/prepare-integration.ts && npm install --prefix .verification/runtime-test --omit=dev && tsx --test tests/integration/*.test.ts",
     "test:e2e": "playwright test",
+    "test:deployment-export": "tsx scripts/prepare-integration.ts && npm install --prefix .verification/runtime-test --omit=dev && tsx scripts/prepare-deployment-acceptance.ts && npm install --prefix .verification/runtime-test/container-release/frontend --ignore-scripts && npm run build --prefix .verification/runtime-test/container-release/frontend && tsx --test tests/integration/fullstack-release.test.ts tests/integration/https-proxy.test.ts tests/integration/compose-release.test.ts",
     "test:preview": "npm run build && tsx --test tests/generated/preview-build.test.ts && playwright test --config playwright.preview.config.ts fullstack-preview.spec.ts",
     "test:design-export": "tsx scripts/prepare-design-verification.ts && npm install --prefix .verification/design-app/frontend --ignore-scripts && npm run build --prefix .verification/design-app/frontend && tsx --test tests/generated/design-runtime.test.ts",
     "test:generated-e2e": "tsx scripts/prepare-account-e2e.ts && npm install --prefix .verification/account-e2e/frontend --ignore-scripts && npm install --prefix .verification/account-e2e/backend/auth-service --omit=dev --ignore-scripts && playwright test --config playwright.generated.config.ts account.spec.ts",
@@ -42,6 +43,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.563.0",
     "mongodb": "^6.21.0",
+    "mongodb-memory-server": "^11.2.0",
     "next": "^16.4.0",
     "next-auth": "^4.24.14",
     "react": "19.2.3",
@@ -49,8 +51,7 @@
     "react-dom": "19.2.3",
     "uuid": "^13.0.0",
     "zod": "^4.6.2",
-    "zustand": "^5.0.11",
-    "mongodb-memory-server": "^11.2.0"
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -64,6 +65,7 @@
     "mongoose": "^7.8.12",
     "prettier": "^3.9.6",
     "tsx": "^4.23.13",
-    "typescript": "^5"
+    "typescript": "^5",
+    "yaml": "^2.9.1"
   }
 }

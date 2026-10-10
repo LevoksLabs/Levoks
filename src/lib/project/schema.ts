@@ -1,4 +1,5 @@
 import { validateCheckboxGroup } from "@/lib/elements/choice-group-values";
+import { selectionCount } from "@/lib/elements/selection-limits";
 import { validateFormConditions } from "@/lib/form-conditions";
 import { requestMappingSchema, responseMappingSchema, failureSchema } from "@/lib/contracts";
 import { z } from "zod";
@@ -134,6 +135,8 @@ const configs = {
             "absent",
             "minLength",
             "maxLength",
+            "minItems",
+            "maxItems",
             "min",
             "max",
             "regex",
@@ -169,10 +172,14 @@ const configs = {
           if (rule.text) return false;
           if (isTemporalKind(rule.type)) return !temporalConfigError(rule.type, rule.temporal);
           if (rule.temporal) return false;
+          if (["minItems", "maxItems"].includes(rule.type)) {
+            try { return selectionCount(rule.value) !== undefined; }
+            catch { return false; }
+          }
           if (rule.type !== "oneOf") return true;
           try { validationChoices(rule.value); return true; }
           catch { return false; }
-        }, "Check allowed values, text lengths/formats or date/time limits. Lengths must be ordered; temporal bounds valid and step positive or any."),
+        }, "Check allowed values, selection counts (0–200), text lengths/formats or date/time limits. Lengths must be ordered; temporal bounds valid and step positive or any."),
       )
       .max(100),
   }),

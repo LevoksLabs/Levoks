@@ -6,10 +6,12 @@ import { elementTemplate } from "./registry";
 import type { ElementNode } from "@/types";
 
 import { groupChoices } from "./choice-group-values";
+import { selectionLimits } from "./selection-limits";
 export { groupChoices as radioChoices } from "./choice-group-values";
 
 type ChoiceEdit =
   | { type: "group"; name: string; required: boolean }
+  | { type: "limits"; minSelections: string; maxSelections: string }
   | { type: "add"; label: string; value: string }
   | { type: "choice"; id: string; label: string; value: string }
   | { type: "remove"; id: string }
@@ -130,9 +132,17 @@ export function editChoiceGroup(groupId: string, edit: ChoiceEdit) {
       : Boolean(
           group.props.required ?? choices.some((node) => node.props.required),
         );
+  if (edit.type === "limits" && !checkbox) throw new Error("Selection limits belong to checkbox groups.");
+  if (checkbox) {
+    const limits = selectionLimits({ ...group.props, required, ...(edit.type === "limits" ? edit : {}) });
+    const defaults = choices.filter(choice => !choice.props.disabled &&
+      (edit.type === "default" && edit.id === choice.id ? edit.checked : choice.props.checked)).length;
+    if (limits.max !== undefined && defaults > limits.max)
+      throw new Error("Clear selected defaults before exceeding or reducing the maximum selections.");
+  }
   return projectHistory.run("editor", () => {
     store.updateElement(groupId, {
-      props: { name, required },
+      props: { name, required, ...(edit.type === "limits" ? {minSelections: edit.minSelections, maxSelections: edit.maxSelections} : {}) },
       ...(!group.styles.height
         ? {
             styles: {

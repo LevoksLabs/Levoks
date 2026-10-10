@@ -27,6 +27,7 @@ function validationRuleValid(rule, value, coerce = false) {
   if (rule.type === 'absent') return value === undefined;
   if (rule.type === 'required') return value !== undefined && value !== '' && (!Array.isArray(value) || value.length > 0);
   if (rule.type === 'accepted') return value === true;
+  if (rule.type === 'minItems') return value === undefined ? Number(rule.value) === 0 : Array.isArray(value) && value.length >= Number(rule.value);
   if (value === undefined) return true;
   if (rule.type === 'file') return fileRuleValid(rule, value);
   if (rule.type === 'text') return textRuleValid(rule, value);
@@ -37,6 +38,7 @@ function validationRuleValid(rule, value, coerce = false) {
     const selected = Array.isArray(value) ? value : [value];
     return selected.length <= choices.length && new Set(selected).size === selected.length && selected.every(item => typeof item === 'string' && choices.includes(item));
   }
+  if (rule.type === 'maxItems') return Array.isArray(value) && value.length <= Number(rule.value);
   if (rule.type === 'email') return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   if (rule.type === 'minLength') return (coerce || typeof value === 'string') && String(value).length >= Number(rule.value);
   if (rule.type === 'maxLength') return (coerce || typeof value === 'string') && String(value).length <= Number(rule.value);

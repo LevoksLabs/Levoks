@@ -1,5 +1,6 @@
 "use client";
 import { validationChoices } from "@/lib/backend/validation";
+import { selectionCount } from "@/lib/elements/selection-limits";
 import { isTemporalKind, temporalConfigError } from "@/lib/backend/temporal";
 import { textConfigError, textFormats } from "@/lib/backend/text-validation";
 import { fileConfigError } from "@/lib/backend/files";
@@ -962,6 +963,10 @@ const ValidationEditor: React.FC<{
             choiceError = (error as Error).message;
           }
         }
+        if (["minItems", "maxItems"].includes(rule.type)) {
+          try { if (selectionCount(rule.value) === undefined) choiceError = "Enter a selection count from 0 to 200."; }
+          catch (error) { choiceError = (error as Error).message; }
+        }
         return (
           <div key={idx}>
             <div className="bi-rule-item">
@@ -987,6 +992,8 @@ const ValidationEditor: React.FC<{
                 <option value="absent">Must be omitted</option>
                 <option value="minLength">Min Length</option>
                 <option value="maxLength">Max Length</option>
+                <option value="minItems">Minimum selections</option>
+                <option value="maxItems">Maximum selections</option>
                 <option value="min">Min Value</option>
                 <option value="max">Max Value</option>
                 <option value="regex">Regex</option>
@@ -1196,6 +1203,10 @@ const ValidationEditor: React.FC<{
                   ) : (
                     <input
                       className="bi-input"
+                      type={["minItems", "maxItems"].includes(rule.type) ? "number" : "text"}
+                      min={["minItems", "maxItems"].includes(rule.type) ? 0 : undefined}
+                      max={["minItems", "maxItems"].includes(rule.type) ? 200 : undefined}
+                      step={["minItems", "maxItems"].includes(rule.type) ? 1 : undefined}
                       value={String(rule.value ?? "")}
                       onChange={(e) =>
                         onChange({
@@ -1216,6 +1227,7 @@ const ValidationEditor: React.FC<{
                 unique values from this list.
               </p>
             )}
+            {["minItems", "maxItems"].includes(rule.type) && <p className="panel-caption">Counts array items using a whole number from 0 to 200. A positive minimum requires the field; a maximum allows it to be omitted. Add Allowed values to restrict choices.</p>}
             <FieldRow label={`Rule ${idx + 1} message`}>
               <input
                 className="bi-input"

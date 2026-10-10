@@ -25,15 +25,31 @@ function formControlValue(input, form) {
   if (input.dataset?.checkboxGroup === 'true') {
     const choices = Array.from(input.querySelectorAll('input[type="checkbox"]')).filter(candidate => candidate.form === form && !candidate.disabled && !candidate.matches(':disabled'));
     const values = choices.filter(candidate => candidate.checked).map(candidate => candidate.value);
-    if (input.dataset.checkboxRequired === 'true' && !values.length) {
+    const min = Math.max(Number(input.dataset.checkboxMin || 0), input.dataset.checkboxRequired === 'true' ? 1 : 0);
+    const max = input.dataset.checkboxMax === undefined ? undefined : Number(input.dataset.checkboxMax);
+    if (values.length < min) {
       choices[0]?.focus();
-      throw new Error('Choose at least one option for ' + (input.querySelector('legend')?.textContent || input.name));
+      throw new Error('Choose at least ' + (min === 1 ? 'one option' : min + ' options') + ' for ' + (input.querySelector('legend')?.textContent || input.name));
+    }
+    if (max !== undefined && values.length > max) {
+      choices.find(candidate => candidate.checked)?.focus();
+      throw new Error('Choose at most ' + max + (max === 1 ? ' option' : ' options') + ' for ' + (input.querySelector('legend')?.textContent || input.name));
     }
     return values.length ? values : undefined;
   }
   if (input.type === 'file') return formFileValue(input);
   if (input.type === 'radio') return input.checked ? input.value : undefined;
-  if (input.tagName === 'SELECT' && input.multiple) return Array.from(input.selectedOptions).filter(option => !option.disabled && !option.closest('optgroup:disabled')).map(option => option.value);
+  if (input.tagName === 'SELECT' && input.multiple) {
+    const values = Array.from(input.selectedOptions).filter(option => !option.disabled && !option.closest('optgroup:disabled')).map(option => option.value);
+    const min = Math.max(Number(input.dataset?.selectionMin || 0), input.required ? 1 : 0);
+    const max = input.dataset?.selectionMax === undefined ? undefined : Number(input.dataset.selectionMax);
+    if (values.length < min || (max !== undefined && values.length > max)) {
+      input.focus();
+      const count = values.length < min ? min : max;
+      throw new Error('Choose ' + (values.length < min ? 'at least ' : 'at most ') + count + (count === 1 ? ' option' : ' options') + ' for ' + (input.labels?.[0]?.textContent || input.name));
+    }
+    return values;
+  }
   if (input.tagName === 'SELECT' && input.value === '' && !input.required) return undefined;
   if (input.tagName === 'SELECT' && Array.from(input.selectedOptions).some(option => option.disabled || option.closest('optgroup:disabled'))) {
     if (input.required) throw new Error('Choose an enabled option for ' + input.name);
